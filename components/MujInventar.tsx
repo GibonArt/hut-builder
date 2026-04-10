@@ -20,6 +20,7 @@ import {
 } from "@/types";
 import { useAuth } from "@/components/AuthProvider";
 import {
+  aktualizujJenAtributyKarty,
   aktualizujKartu,
   nactiKartyUzivatele,
   smazKartuPodleSlug,
@@ -58,6 +59,8 @@ import {
 import { iconUrlProEaShody } from "@/lib/xFactorIconsEa";
 import { XFactorVyber } from "@/components/XFactorVyber";
 import { HUT_POZICE, HUT_POZICE_LABEL } from "@/lib/hutPozice";
+import { nahledCtyriKaret, type RazeniKaret } from "@/lib/hutRazeniKaret";
+import { useRazeniKaret } from "@/lib/useRazeniKaret";
 
 const RUKY: Ruka[] = ["LR", "PR"];
 
@@ -213,7 +216,11 @@ export function MujInventar() {
     };
   }, [user?.id, supabase]);
 
-  /** Jednou za relaci zapisuje do DB přepočtené X-F ikony (stejné jako při načtení z `rowToHutCard`). */
+  /**
+   * Jednou po načtení inventáře zapisuje přepočtené X-F ikony jen do sloupce `atributy`.
+   * Nesmí záviset na `karty` v deps — při každé úpravě karty by jinak běžel znovu a
+   * `aktualizujKartu` se starým snapshotem přepsalo OVR/jiná pole (race s uložením).
+   */
   useEffect(() => {
     if (!user?.id || kartyLoading) return;
     if (typeof window === "undefined") return;
@@ -230,7 +237,12 @@ export function MujInventar() {
     void (async () => {
       for (const karta of sXF) {
         if (zruseno) return;
-        const { error } = await aktualizujKartu(supabase, user.id, karta.id, karta);
+        const { error } = await aktualizujJenAtributyKarty(
+          supabase,
+          user.id,
+          karta.id,
+          karta,
+        );
         if (error) {
           console.error("[hut] synchronizace X-F ikon do DB:", karta.id, error.message);
           return;
@@ -242,11 +254,14 @@ export function MujInventar() {
     return () => {
       zruseno = true;
     };
-  }, [user?.id, kartyLoading, karty, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- jen snapshot po fetchi; `karty` nesmí spouštět opakovaně
+  }, [user?.id, kartyLoading, supabase]);
 
-  const posledniCtyri = useMemo(
-    () => [...karty].slice(-4).reverse(),
-    [karty],
+  const [razeniKaret, nastavRazeniKaret] = useRazeniKaret();
+
+  const kartyKNahledu = useMemo(
+    () => nahledCtyriKaret(karty, razeniKaret),
+    [karty, razeniKaret],
   );
 
   const resetForm = useCallback(() => {
@@ -502,8 +517,8 @@ export function MujInventar() {
   return (
     <div className="space-y-10">
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight text-white">Můj Inventář</h2>
-        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[var(--hut-muted)]">
+        <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Můj Inventář</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
           Přidávej karty podle struktury{" "}
           <code className="rounded bg-[var(--hut-surface-raised)] px-1.5 py-0.5 font-mono text-xs text-[var(--hut-lime)]">
             HutCard
@@ -530,7 +545,7 @@ export function MujInventar() {
       <form
         id="form-inventar-karta"
         onSubmit={handleSubmit}
-        className="rounded-2xl border border-[var(--hut-border)] bg-[var(--hut-surface)]/52 p-6 shadow-[0_24px_48px_rgba(0,0,0,0.45)] md:p-8"
+        className="rounded-2xl border border-[var(--hut-border)] bg-[var(--hut-surface)]/52 p-4 shadow-[0_24px_48px_rgba(0,0,0,0.45)] sm:p-6 md:p-8"
       >
         <h3 className="text-lg font-medium text-white">
           {editujiSlug ? "Upravit kartu" : "Přidat kartu"}
@@ -576,7 +591,7 @@ export function MujInventar() {
               />
             </div>
 
-            <div className="min-w-0 w-full md:col-span-1 md:w-[3.75rem] md:max-w-[3.75rem] md:justify-self-start">
+            <div className="min-w-0 w-full max-w-[6rem] md:col-span-1 md:w-[3.75rem] md:max-w-[3.75rem] md:justify-self-start">
               <label htmlFor="inv-ovr" className={labelClass}>
                 OVR <OznaPovinne />
               </label>
@@ -586,7 +601,7 @@ export function MujInventar() {
                 min={0}
                 max={99}
                 required
-                className={`${inputClass} text-center tabular-nums md:px-2`}
+                className={`${inputClass} min-h-11 text-center text-base tabular-nums md:min-h-0 md:px-2 md:text-sm`}
                 value={ovr}
                 onChange={(e) => setOvr(e.target.value)}
                 placeholder="95"
@@ -800,11 +815,11 @@ export function MujInventar() {
           </fieldset>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <button
             type="submit"
             disabled={narodnostiVolby.length === 0 || formZakazany}
-            className="rounded-full border border-zinc-600 bg-[var(--hut-btn)] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-zinc-500 hover:bg-[var(--hut-btn-hover)] disabled:cursor-not-allowed disabled:opacity-45"
+            className="min-h-12 w-full touch-manipulation rounded-full border border-zinc-600 bg-[var(--hut-btn)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:border-zinc-500 hover:bg-[var(--hut-btn-hover)] disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-0 sm:w-auto sm:py-2.5"
           >
             {ukladamKartu
               ? "Ukládám…"
@@ -816,7 +831,7 @@ export function MujInventar() {
             type="button"
             onClick={resetForm}
             disabled={formZakazany}
-            className="rounded-full border border-[var(--hut-border-strong)] bg-transparent px-5 py-2.5 text-sm font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-45"
+            className="min-h-12 w-full touch-manipulation rounded-full border border-[var(--hut-border-strong)] bg-transparent px-5 py-3 text-sm font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-45 sm:min-h-0 sm:w-auto sm:py-2.5"
           >
             {editujiSlug ? "Zrušit úpravu" : "Vymazat formulář"}
           </button>
@@ -825,29 +840,69 @@ export function MujInventar() {
       </form>
 
       <section>
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h3 className="text-lg font-medium text-white">Moje karty</h3>
-            {user && !kartyLoading && karty.length > 0 ? (
-              <Link
-                href="/moje-karty"
-                className="text-sm font-medium text-[var(--hut-lime)] underline-offset-2 hover:underline"
-              >
-                Všechny karty
-              </Link>
-            ) : null}
+        <div className="mb-4 flex flex-col gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3 className="text-lg font-medium text-white">Moje karty</h3>
+              {user && !kartyLoading && karty.length > 0 ? (
+                <Link
+                  href="/moje-karty"
+                  className="text-sm font-medium text-[var(--hut-lime)] underline-offset-2 hover:underline"
+                >
+                  Všechny karty
+                </Link>
+              ) : null}
+            </div>
+            <p className="text-sm text-[var(--hut-muted)]">
+              {!user
+                ? "Nepřihlášen."
+                : kartyLoading
+                  ? "Načítám…"
+                  : karty.length === 0
+                    ? "Zatím žádné karty."
+                    : karty.length <= 4
+                      ? `${karty.length} ${karty.length === 1 ? "karta" : "karty"}`
+                      : razeniKaret === "pridani"
+                        ? `4 nejnovější z ${karty.length} karet`
+                        : razeniKaret === "ovr-asc"
+                          ? `4 nejnižší OVR z ${karty.length} karet`
+                          : `4 nejvyšší OVR z ${karty.length} karet`}
+            </p>
           </div>
-          <p className="text-sm text-[var(--hut-muted)]">
-            {!user
-              ? "Nepřihlášen."
-              : kartyLoading
-                ? "Načítám…"
-                : karty.length === 0
-                  ? "Zatím žádné karty."
-                  : karty.length <= 4
-                    ? `${karty.length} ${karty.length === 1 ? "karta" : "karty"}`
-                    : `4 nejnovější z ${karty.length} karet`}
-          </p>
+          {user && !kartyLoading && karty.length > 0 ? (
+            <div
+              className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2"
+              role="group"
+              aria-label="Řazení karet v přehledu"
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+                Řazení
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    ["pridani", "Podle přidání"] as const,
+                    ["ovr-asc", "OVR ↑ nejnižší"] as const,
+                    ["ovr-desc", "OVR ↓ nejvyšší"] as const,
+                  ] satisfies readonly (readonly [RazeniKaret, string])[]
+                ).map(([hodnota, label]) => (
+                  <button
+                    key={hodnota}
+                    type="button"
+                    onClick={() => nastavRazeniKaret(hodnota)}
+                    className={[
+                      "touch-manipulation rounded-full border px-3 py-2 text-xs font-medium transition-colors sm:py-1.5",
+                      razeniKaret === hodnota
+                        ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                        : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {kartyChyba ? (
@@ -872,8 +927,8 @@ export function MujInventar() {
             Přidej první kartu pomocí formuláře výše.
           </p>
         ) : (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {posledniCtyri.map((k) => (
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+            {kartyKNahledu.map((k) => (
               <InventarKartaPolozka
                 key={k.id}
                 karta={k}

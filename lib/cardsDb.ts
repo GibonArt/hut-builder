@@ -175,6 +175,24 @@ export async function vlozKartu(
   return { error: null };
 }
 
+/** Jen `atributy` (X-F) — bez přepisu ovr/jména; bezpečné pro jednorázovou migraci ikon. */
+export async function aktualizujJenAtributyKarty(
+  supabase: SupabaseClient,
+  userId: string,
+  cardSlug: string,
+  card: HutCard,
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase
+    .from("cards")
+    .update({ atributy: atributyZHutCard(card) })
+    .eq("user_id", userId)
+    .eq("card_slug", cardSlug);
+  if (error) {
+    return { error: new Error(error.message) };
+  }
+  return { error: null };
+}
+
 export async function aktualizujKartu(
   supabase: SupabaseClient,
   userId: string,

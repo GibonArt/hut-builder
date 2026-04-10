@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
 import {
@@ -57,6 +58,32 @@ export function HutShell({
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading, signOut } = useAuth();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  const zavritMobilniMenu = useCallback(() => setMobileNavOpen(false), []);
+
+  useEffect(() => {
+    zavritMobilniMenu();
+  }, [pathname, zavritMobilniMenu]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
+
   const naDomovske = pathname === "/";
   const naMojeKarty = pathname === "/moje-karty";
   const naNastaveniBonusu = pathname === "/nastaveni-bonusu";
@@ -64,8 +91,38 @@ export function HutShell({
 
   return (
     <div className="flex min-h-dvh w-full">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--hut-border)] bg-[var(--hut-surface)]">
-        <div className="border-b border-[var(--hut-border)] px-5 py-6">
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          aria-label="Zavřít menu"
+          className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[1px] lg:hidden"
+          onClick={zavritMobilniMenu}
+        />
+      ) : null}
+
+      <aside
+        id="hut-nav-drawer"
+        className={[
+          "fixed inset-y-0 left-0 z-50 flex h-dvh w-[min(18rem,88vw)] max-w-full shrink-0 flex-col border-r border-[var(--hut-border)] bg-[var(--hut-surface)] shadow-[8px_0_32px_rgba(0,0,0,0.45)] transition-transform duration-200 ease-out lg:relative lg:z-auto lg:h-auto lg:min-h-dvh lg:w-64 lg:max-w-none lg:translate-x-0 lg:shadow-none",
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+        ].join(" ")}
+      >
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--hut-border)] px-4 py-4 lg:hidden">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+            Menu
+          </span>
+          <button
+            type="button"
+            className="touch-manipulation rounded-lg p-2 text-zinc-300 hover:bg-white/10 hover:text-white"
+            aria-label="Zavřít menu"
+            onClick={zavritMobilniMenu}
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="border-b border-[var(--hut-border)] px-5 py-6 lg:border-b">
           <div className="w-full max-w-full">
             <Image
               src="/logos/login-hut-builder-removebg.png"
@@ -84,10 +141,14 @@ export function HutShell({
           </h1>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Hlavní navigace">
+        <nav
+          className="flex flex-1 flex-col gap-1 overflow-y-auto p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          aria-label="Hlavní navigace"
+        >
           <Link
             href="/"
             onClick={(e) => {
+              zavritMobilniMenu();
               if (naDomovske && onHomeSectionChange) {
                 e.preventDefault();
                 onHomeSectionChange("inventar");
@@ -115,6 +176,7 @@ export function HutShell({
 
           <Link
             href="/moje-karty"
+            onClick={zavritMobilniMenu}
             className={[
               "group rounded-xl px-3 py-3 text-left transition-colors",
               naMojeKarty
@@ -136,6 +198,7 @@ export function HutShell({
           {!loading && zobrazitOdkazBonusy ? (
             <Link
               href={NAV_BONUSY.href}
+              onClick={zavritMobilniMenu}
               className={[
                 "group rounded-xl px-3 py-3 text-left transition-colors",
                 naNastaveniBonusu
@@ -158,6 +221,7 @@ export function HutShell({
           <button
             type="button"
             onClick={() => {
+              zavritMobilniMenu();
               if (!naDomovske) {
                 try {
                   const next: HutPendingHomeSection = NAV_OPTIMALIZATOR.id;
@@ -191,25 +255,39 @@ export function HutShell({
           </button>
         </nav>
 
-        <div className="border-t border-[var(--hut-border)] p-4">
+        <div className="mt-auto border-t border-[var(--hut-border)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <p className="text-[11px] leading-snug text-[var(--hut-muted)]/70">
             Tmavý režim je výchozí — ladí k rozhraní Ultimate Team.
           </p>
         </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--hut-border)] bg-[var(--hut-bg)]/95 px-6 backdrop-blur-md">
-          <span className="min-w-0 truncate text-sm text-[var(--hut-muted)]">
-            Aktuální sekce:{" "}
-            <span className="font-medium text-white">{headerSectionLabel}</span>
-          </span>
-          <div className="flex shrink-0 items-center gap-2 text-sm">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-w-0">
+        <header className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-[var(--hut-border)] bg-[var(--hut-bg)]/95 px-3 pt-[max(0.25rem,env(safe-area-inset-top))] pb-3 backdrop-blur-md sm:gap-3 sm:px-6 sm:py-0">
+          <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-3">
+            <button
+              type="button"
+              className="touch-manipulation rounded-lg p-2.5 text-white hover:bg-white/10 lg:hidden"
+              aria-expanded={mobileNavOpen}
+              aria-controls="hut-nav-drawer"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <span className="sr-only">Otevřít menu</span>
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <span className="min-w-0 truncate text-xs text-[var(--hut-muted)] sm:text-sm">
+              <span className="hidden sm:inline">Aktuální sekce: </span>
+              <span className="font-medium text-white">{headerSectionLabel}</span>
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5 text-sm sm:gap-2">
             {loading ? (
               <span className="text-[var(--hut-muted)]">Účet…</span>
             ) : user ? (
               <>
-                <span className="hidden max-w-[200px] truncate text-[var(--hut-muted)] sm:inline">
+                <span className="hidden max-w-[200px] truncate text-[var(--hut-muted)] md:inline">
                   {user.email}
                 </span>
                 <button
@@ -219,7 +297,7 @@ export function HutShell({
                     router.push("/login");
                     router.refresh();
                   }}
-                  className="rounded-lg border border-[var(--hut-border)] px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:border-zinc-500 hover:text-white"
+                  className="touch-manipulation rounded-lg border border-[var(--hut-border)] px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:border-zinc-500 hover:text-white sm:py-1.5"
                 >
                   Odhlásit
                 </button>
@@ -228,13 +306,13 @@ export function HutShell({
               <>
                 <Link
                   href="/login"
-                  className="rounded-lg border border-[var(--hut-border)] px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:border-[var(--hut-lime)]/50 hover:text-white"
+                  className="touch-manipulation rounded-lg border border-[var(--hut-border)] px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:border-[var(--hut-lime)]/50 hover:text-white sm:py-1.5"
                 >
                   Přihlásit
                 </Link>
                 <Link
                   href="/register"
-                  className="rounded-lg border border-[var(--hut-lime)]/40 bg-[var(--hut-lime)]/10 px-3 py-1.5 text-xs font-medium text-[var(--hut-lime)] transition-colors hover:bg-[var(--hut-lime)]/20"
+                  className="touch-manipulation rounded-lg border border-[var(--hut-lime)]/40 bg-[var(--hut-lime)]/10 px-3 py-2 text-xs font-medium text-[var(--hut-lime)] transition-colors hover:bg-[var(--hut-lime)]/20 sm:py-1.5"
                 >
                   Registrace
                 </Link>
@@ -244,7 +322,7 @@ export function HutShell({
         </header>
 
         <main
-          className={`flex min-h-0 flex-1 flex-col overflow-auto p-6 md:p-10 ${mainClassName ?? ""}`}
+          className={`flex min-h-0 flex-1 flex-col overflow-auto px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:p-6 md:p-10 ${mainClassName ?? ""}`}
           style={mainStyle}
         >
           <div className={`min-h-full w-full ${mainInnerClassName}`}>

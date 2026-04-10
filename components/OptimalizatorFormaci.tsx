@@ -30,10 +30,10 @@ import { TymLogo } from "@/components/TymLogo";
 const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
 
 const inputClass =
-  "w-full max-w-[10rem] rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2 text-sm text-white tabular-nums outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)]";
+  "box-border min-h-11 w-full max-w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2.5 text-base text-white tabular-nums outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:max-w-[10rem] sm:min-h-0 sm:py-2 sm:text-sm";
 
 const btnFiltrClass =
-  "rounded-full border px-3 py-1.5 text-xs font-semibold tracking-wide transition-colors";
+  "touch-manipulation rounded-full border px-3 py-2 text-xs font-semibold tracking-wide transition-colors sm:py-1.5";
 
 /** Stejná velikost jako `TypKartyMiniLogo` velikost „kombinace“ (11×11, rounded-lg). */
 const PARAM_SYMBOL_BOX =
@@ -147,12 +147,12 @@ function HlavickaVysledkuKombinace({
   celkovyPlat: number;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
       <div className="min-w-0 flex-1">
         <NahledKombinace r={r} parametryPocet={parametryPocet} narodnostiVolby={narodnostiVolby} />
       </div>
       <div
-        className="shrink-0 text-right"
+        className="shrink-0 text-left sm:text-right"
         title="Součet polí plat ze všech karet v této sestavě"
       >
         <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
@@ -320,10 +320,10 @@ export function OptimalizatorFormaci() {
   const nacitani = authLoading || loadingKarty || loadingKomb;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8 sm:space-y-10">
       <header>
-        <h2 className="text-2xl font-semibold tracking-tight text-white">Optimalizátor formací</h2>
-        <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-[var(--hut-muted)]">
+        <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Optimalizátor formací</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
           Hledá kompletní sestavy podle uložených kombinací v{" "}
           <a href="/nastaveni-bonusu" className="text-[var(--hut-lime)] underline-offset-2 hover:underline">
             Nastavení bonusů
@@ -340,7 +340,7 @@ export function OptimalizatorFormaci() {
         </p>
       ) : (
         <>
-          <section className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-surface-raised)]/80 p-5 shadow-inner shadow-black/20">
+          <section className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-surface-raised)]/80 p-4 shadow-inner shadow-black/20 sm:p-5">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
               Filtry formací
             </h3>
@@ -376,8 +376,8 @@ export function OptimalizatorFormaci() {
             <h4 className="mt-6 text-xs font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
               OVR
             </h4>
-            <div className="mt-3 flex flex-wrap items-end gap-6">
-              <div>
+            <div className="mt-3 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-end sm:gap-6">
+              <div className="w-full sm:w-auto">
                 <label htmlFor="opt-min-ovr" className={labelClass}>
                   Minimální OVR
                 </label>
@@ -392,7 +392,7 @@ export function OptimalizatorFormaci() {
                   aria-invalid={minOvrStr.trim() !== "" && minOvr === null}
                 />
               </div>
-              <div>
+              <div className="w-full sm:w-auto">
                 <label htmlFor="opt-max-ovr" className={labelClass}>
                   Maximální OVR
                 </label>
@@ -470,7 +470,7 @@ export function OptimalizatorFormaci() {
                 return (
                   <li
                     key={`${v.kombinace.id}-${v.lk.id}-${v.c.id}-${v.pk.id}-${idx}`}
-                    className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-4"
+                    className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-3 sm:p-4"
                   >
                     <HlavickaVysledkuKombinace
                       r={v.kombinace}
@@ -528,7 +528,7 @@ export function OptimalizatorFormaci() {
                 return (
                   <li
                     key={`${v.kombinace.id}-${v.a.id}-${v.b.id}-${idx}`}
-                    className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-4"
+                    className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-3 sm:p-4"
                   >
                     <HlavickaVysledkuKombinace
                       r={v.kombinace}
@@ -579,7 +579,7 @@ export function OptimalizatorFormaci() {
                 return (
                   <li
                     key={`${v.kombinace.id}-${v.a.id}-${v.b.id}-${idx}`}
-                    className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-4"
+                    className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-3 sm:p-4"
                   >
                     <HlavickaVysledkuKombinace
                       r={v.kombinace}

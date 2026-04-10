@@ -4,6 +4,49 @@ Aplikace běží v kontejneru, **Supabase zůstává v cloudu** — kontejner je
 
 ---
 
+## Nový workflow: Mac → Git → NAS → Synology
+
+Jednorázově musí být na NAS naklonované repo a nastavený `.env` (viz níž). **Při každém nasazení nové verze** stačí:
+
+### A) Na Macu (v projektu HUT)
+
+```bash
+cd /cesta/k/HUT   # nebo ke klonu hut-builder
+
+git status
+git add -A
+git commit -m "Krátký popis změn v češtině"
+git push origin main
+```
+
+- Použij vlastní větev místo `main`, pokud ji máš (např. `master`).
+- Pokud push selže, nejdřív `git pull --rebase origin main` a znovu `git push`.
+
+### B) Na Synology (SSH do NAS)
+
+```bash
+ssh tvuj-uzivatel@IP-nas
+cd /volume1/docker/hut-builder
+
+git pull
+docker compose build
+docker compose up -d
+```
+
+### C) Volitelně na Synology (bez SSH — Container Manager)
+
+1. **File Station:** ověř, že ve složce projektu je aktuální kód (nebo použij **Git** v balíčku / ruční sync — nejjednodušší je ale **git pull přes SSH**).
+2. **Container Manager** → tvůj projekt / stack → **Build** (přestavění image) → **Start** / **Restart** kontejneru.
+
+**Důležité:** Změnil-li jsi v `.env` hodnoty **`NEXT_PUBLIC_*`**, musí proběhnout znovu **`docker compose build`** (ne jen restart). Čistě runtime proměnné bez `NEXT_PUBLIC_` často stačí přegenerovat kontejner (`up -d --force-recreate`) — u Next + embedovaných public env ale drž pravidlo: **po změně public env vždy build.**
+
+### Rychlá kontrola po nasazení
+
+- V prohlížeči: `https://hut.gibonart.cz` (nebo `http://IP-nas:3000`).
+- Ověř přihlášení; při chybě redirectů zkontroluj **Supabase → Auth → URL**.
+
+---
+
 ## Co potřebuješ
 
 - Synology DSM s **Container Manager** (dříve Docker).

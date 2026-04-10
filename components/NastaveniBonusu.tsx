@@ -632,8 +632,8 @@ export function NastaveniBonusu() {
     </div>
   ) : (
     <div className="w-full">
-      <h2 className="text-2xl font-semibold tracking-tight text-white">Nastavení bonusů</h2>
-      <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-[var(--hut-muted)]">
+      <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Nastavení bonusů</h2>
+      <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
         U volby <span className="font-medium text-zinc-300">Útok</span> zadej tři parametry (národnost,
         tým nebo typ karty), u <span className="font-medium text-zinc-300">Obrana</span> stačí dva. Ve
         sloupci <span className="font-medium text-zinc-300">Bonus</span> zadej číslo a typ (PLAT, CLK,
@@ -698,7 +698,7 @@ export function NastaveniBonusu() {
 
           <div
             id="bonus-kombinace-filtr"
-            className="sticky top-4 z-20 mt-8 scroll-mt-4 rounded-xl border border-[var(--hut-border)] bg-[color-mix(in_srgb,var(--hut-surface)_92%,transparent)] p-4 shadow-lg shadow-black/20 backdrop-blur-md supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--hut-surface)_85%,transparent)]"
+            className="sticky top-[max(0.5rem,env(safe-area-inset-top))] z-20 mt-8 scroll-mt-4 rounded-xl border border-[var(--hut-border)] bg-[color-mix(in_srgb,var(--hut-surface)_92%,transparent)] p-3 shadow-lg shadow-black/20 backdrop-blur-md supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--hut-surface)_85%,transparent)] sm:top-4 sm:p-4"
           >
             <p className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
               Filtr kombinace
@@ -707,7 +707,7 @@ export function NastaveniBonusu() {
               className={
                 typKombinace === "obranna"
                   ? "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
-                  : "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+                  : "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4"
               }
             >
               {(typKombinace === "obranna" ? ([1, 2] as const) : ([1, 2, 3] as const)).map(

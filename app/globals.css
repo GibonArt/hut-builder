@@ -50,6 +50,11 @@ html.dark {
   color-scheme: dark;
 }
 
+/* Menší zpoždění klepnutí na iOS; bez blokování zoomu uživatele */
+html {
+  touch-action: manipulation;
+}
+
 body {
   background-color: var(--hut-bg);
   background-image: radial-gradient(

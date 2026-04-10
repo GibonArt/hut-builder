@@ -169,7 +169,7 @@ export function EaHracNapoveda({
               }}
               onFocus={() => dotaz.trim() && setOtevreno(true)}
               onKeyDown={onKeyDown}
-              className="w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2 text-sm text-white placeholder:text-[var(--hut-muted)]/50 outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] disabled:opacity-45"
+              className="min-h-11 w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2.5 text-base text-white placeholder:text-[var(--hut-muted)]/50 outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] disabled:opacity-45 sm:min-h-0 sm:py-2 sm:text-sm"
             />
             {otevreno && vysledky.length > 0 ? (
               <ul

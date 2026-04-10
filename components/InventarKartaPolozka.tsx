@@ -154,14 +154,14 @@ export function InventarKartaPolozka({
           type="button"
           onClick={() => onEditovat(k)}
           disabled={formZakazany}
-          className="rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/80 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+          className="min-h-11 min-w-[5.5rem] touch-manipulation rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/80 px-4 py-2 text-xs font-medium text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
         >
           Editovat
         </button>
         <button
           type="button"
           onClick={() => onSmazat(k.id)}
-          className="rounded-lg border border-red-500/35 bg-red-950/30 px-3 py-1.5 text-xs font-medium text-red-200 transition-colors hover:border-red-400/50 hover:bg-red-950/50"
+          className="min-h-11 min-w-[5.5rem] touch-manipulation rounded-lg border border-red-500/35 bg-red-950/30 px-4 py-2 text-xs font-medium text-red-200 transition-colors hover:border-red-400/50 hover:bg-red-950/50"
         >
           Smazat
         </button>

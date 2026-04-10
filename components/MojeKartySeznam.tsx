@@ -14,6 +14,8 @@ import { HUT_POZICE, HUT_POZICE_ZKRATKA } from "@/lib/hutPozice";
 import { HutShell } from "@/components/HutShell";
 import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
+import { seraditKarty, type RazeniKaret } from "@/lib/hutRazeniKaret";
+import { useRazeniKaret } from "@/lib/useRazeniKaret";
 
 type FiltrPozice = Pozice | "vse";
 
@@ -32,6 +34,7 @@ export function MojeKartySeznam() {
   const [loading, setLoading] = useState(false);
   const [chyba, setChyba] = useState<string | null>(null);
   const [filtrPozice, setFiltrPozice] = useState<FiltrPozice>("vse");
+  const [razeniKaret, nastavRazeniKaret] = useRazeniKaret();
   const [mazuId, setMazuId] = useState<string | null>(null);
 
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
@@ -75,6 +78,11 @@ export function MojeKartySeznam() {
     return karty.filter((k) => k.pozice === filtrPozice);
   }, [karty, filtrPozice]);
 
+  const filtrovaneSerazene = useMemo(
+    () => seraditKarty(filtrovane, razeniKaret),
+    [filtrovane, razeniKaret],
+  );
+
   const editovat = useCallback(
     (k: HutCard) => {
       router.push(`/?edit=${encodeURIComponent(k.id)}`);
@@ -106,12 +114,42 @@ export function MojeKartySeznam() {
       mainInnerClassName="relative z-0 mx-auto max-w-6xl"
     >
       <div className="flex min-h-full w-full flex-col">
-        <h2 className="text-2xl font-semibold tracking-tight text-white">Moje karty</h2>
-        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[var(--hut-muted)]">
-          Všechny uložené karty. Rychlý filtr podle pozice na ledě.
+        <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Moje karty</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
+          Všechny uložené karty. Filtr podle pozice a řazení podle OVR nebo pořadí přidání.
         </p>
 
-        <div className="mt-6 flex w-full flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2">
+          <div
+            className="flex min-w-0 flex-wrap items-center gap-2"
+            role="group"
+            aria-label="Řazení karet"
+          >
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+              Řazení
+            </span>
+            {(
+              [
+                ["pridani", "Podle přidání"] as const,
+                ["ovr-asc", "OVR ↑ nejnižší"] as const,
+                ["ovr-desc", "OVR ↓ nejvyšší"] as const,
+              ] satisfies readonly (readonly [RazeniKaret, string])[]
+            ).map(([hodnota, label]) => (
+              <button
+                key={hodnota}
+                type="button"
+                onClick={() => nastavRazeniKaret(hodnota)}
+              className={[
+                "touch-manipulation rounded-full border px-3 py-2 text-xs font-medium transition-colors sm:py-1.5",
+                razeniKaret === hodnota
+                    ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                    : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                ].join(" ")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div
             className="flex min-w-0 flex-wrap items-center gap-2"
             role="group"
@@ -124,7 +162,7 @@ export function MojeKartySeznam() {
               type="button"
               onClick={() => setFiltrPozice("vse")}
               className={[
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                "touch-manipulation rounded-full border px-3 py-2 text-xs font-medium transition-colors sm:py-1.5",
                 filtrPozice === "vse"
                   ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
                   : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
@@ -138,7 +176,7 @@ export function MojeKartySeznam() {
                 type="button"
                 onClick={() => setFiltrPozice(p)}
                 className={[
-                  "min-w-[2.25rem] rounded-full border px-2.5 py-1.5 font-mono text-xs font-semibold tabular-nums transition-colors",
+                  "min-h-11 min-w-[2.75rem] touch-manipulation rounded-full border px-2.5 py-2 font-mono text-xs font-semibold tabular-nums transition-colors sm:min-h-0 sm:py-1.5",
                   filtrPozice === p
                     ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
                     : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
@@ -151,14 +189,14 @@ export function MojeKartySeznam() {
           </div>
           {user ? (
             <p
-              className="ml-auto shrink-0 text-sm font-medium tabular-nums text-white"
+              className="shrink-0 text-sm font-medium tabular-nums text-white sm:ml-auto"
               aria-live="polite"
               aria-atomic="true"
             >
               {loading ? (
                 <span className="text-[var(--hut-muted)]">…</span>
               ) : (
-                textPocetKaret(filtrovane.length)
+                textPocetKaret(filtrovaneSerazene.length)
               )}
             </p>
           ) : null}
@@ -181,15 +219,15 @@ export function MojeKartySeznam() {
           <p className="mt-8 rounded-xl border border-dashed border-[var(--hut-border)] bg-[var(--hut-surface)]/50 px-6 py-12 text-center text-sm text-[var(--hut-muted)]">
             Načítám karty…
           </p>
-        ) : filtrovane.length === 0 ? (
+        ) : filtrovaneSerazene.length === 0 ? (
           <p className="mt-8 rounded-xl border border-dashed border-[var(--hut-border)] bg-[var(--hut-surface)]/50 px-6 py-12 text-center text-sm text-[var(--hut-muted)]">
             {karty.length === 0
               ? "Zatím žádné karty. Přidej je v sekci Můj Inventář."
               : "Žádná karta pro zvolenou pozici."}
           </p>
         ) : (
-          <ul className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4 md:gap-3">
-            {filtrovane.map((k) => (
+          <ul className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-3">
+            {filtrovaneSerazene.map((k) => (
               <InventarKartaPolozka
                 key={k.id}
                 mrizkaCtvrtiny

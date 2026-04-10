@@ -230,6 +230,12 @@ const RADKY: HutDbTypKarty[] = [
     popisCs: "Karty nebo odměny ze zkušenostního (XP) systému HUT.",
     comboSoubor: "XP611618000.png",
   },
+  {
+    hodnotaFiltru: "26",
+    jmenoCs: "26",
+    popisCs: "Sezónní odznak / typ karty NHL 26 (štít s číslem 26).",
+    comboSoubor: "NHL26.png",
+  },
 ];
 
 /**
@@ -270,6 +276,7 @@ const PORADI_MRIZKY_CHEMISTRY: string[] = [
   "TRANSACTIONS",
   "TEAM OF THE YEAR",
   "XP",
+  "26",
 ];
 
 const PODLE_FILTRU = new Map(
@@ -328,6 +335,7 @@ const ALIAS_NA_FILTR: Record<string, string> = {
   TQ: "TRADE QUEST",
   TRAN: "TRANSACTIONS",
   XP: "XP",
+  NHL26: "26",
 };
 
 /** Seřazené podle českého názvu (pro &lt;select&gt;). */
