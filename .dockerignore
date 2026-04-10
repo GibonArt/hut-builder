@@ -1,0 +1,21 @@
+# Git a vývoj
+.git
+.gitignore
+*.md
+.env
+.env.*
+!.env.example
+
+# Závislosti a build (vzniknou znovu v image)
+node_modules
+.next
+out
+
+# Logy a IDE
+npm-debug.log*
+.DS_Store
+.idea
+.vscode
+
+# Synology / lokální deploy (nepotřebuješ v kontextu buildu)
+docker-data

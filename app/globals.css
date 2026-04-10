@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/*
+ * NHL 26 HUT – barevné tokeny (odhad z in-game UI).
+ * EA Sports nezveřejňuje veřejný „color manual“ pro HUT; hodnoty odpovídají
+ * tmavému rozhraní, limetkovým indikátorům (AP), modrému glow výběru a šedým CTA.
+ */
+:root {
+  --hut-bg: #0a0a0a;
+  --hut-bg-elevated: #0d0d0d;
+  --hut-surface: #141414;
+  --hut-surface-raised: #1a1a1a;
+  --hut-border: #2a2a2a;
+  --hut-border-strong: #3f3f46;
+
+  --foreground: #fafafa;
+  --background: var(--hut-bg);
+  --hut-muted: #a1a1aa;
+
+  /* Ability Points / pozitivní stavy (progress, důležité číslo) */
+  --hut-lime: #a3e635;
+  --hut-lime-dim: #84cc16;
+
+  /* Výběr / focus – „elektrický“ modrý lem jako u vybrané karty */
+  --hut-focus: #38bdf8;
+  --hut-focus-ring: rgba(56, 189, 248, 0.45);
+  --hut-focus-glow: rgba(56, 189, 248, 0.22);
+
+  /* Tlačítka ve stylu menu (CONTINUE / EDIT) – tmavá plocha, bílý text */
+  --hut-btn: #27272a;
+  --hut-btn-hover: #3f3f46;
+
+  /* Hvězdy / prémiové značky */
+  --hut-gold: #eab308;
+  --hut-gold-dim: #a16207;
+
+  /* Alias pro starší třídy (--hut-accent v komponentách) */
+  --hut-accent: var(--hut-lime);
+  --hut-accent-dim: var(--hut-lime-dim);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--hut-bg);
+  background-image: radial-gradient(
+    ellipse 120% 80% at 50% -20%,
+    rgba(56, 189, 248, 0.06),
+    transparent 55%
+  );
+  color: var(--foreground);
+}

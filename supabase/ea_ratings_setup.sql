@@ -1,0 +1,3 @@
+-- Zastaralé: EA ratings se ukládají do tabulky `cards` (viz cards_ea_katalog.sql).
+-- Pokud jsi dřív vytvářel tabulku ea_nhl26_ratings, můžeš ji smazat:
+-- drop table if exists public.ea_nhl26_ratings;

@@ -1,0 +1,29 @@
+# HUT na Synology (Container Manager) nebo lokálně.
+#
+# 1) Zkopíruj .env.example → .env a doplň hodnoty z Supabase (Dashboard → Settings → API).
+# 2) Soubor .env NIKDY necommituj — zůstane jen na NAS / u tebe lokálně.
+# 3) Build bere NEXT_PUBLIC_* z .env (kvůli vložení do frontendu je potřeba znovu build po změně těchto klíčů):
+#      docker compose build --no-cache
+#      docker compose up -d
+#
+# Port: aplikace uvnitř kontejneru poslouchá na 3000. Níže mapuješ host:container.
+# Na Synology v DSM často nastavíš Reverse Proxy z 443 na http://127.0.0.1:3000 (nebo jiný host port).
+
+services:
+  hut:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+    image: hut:latest
+    container_name: hut
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${HUT_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production

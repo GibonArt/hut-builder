@@ -1,0 +1,161 @@
+{
+  "ankle-breaker": {
+    "gold": "ankle-breaker/gold.avif",
+    "bronze": "ankle-breaker/bronze.png",
+    "silver": "ankle-breaker/silver.png"
+  },
+  "elite-edges": {
+    "bronze": "elite-edges/bronze.png",
+    "silver": "elite-edges/silver.png",
+    "gold": "elite-edges/gold.avif"
+  },
+  "wheels": {
+    "bronze": "wheels/bronze.png",
+    "silver": "wheels/silver.png",
+    "gold": "wheels/gold.avif"
+  },
+  "heatseeker": {},
+  "shnipe": {},
+  "make-it-snappy": {},
+  "seeing-eye": {},
+  "third-eye": {},
+  "unstoppable-force": {
+    "bronze": "unstoppable-force/bronze.png",
+    "silver": "unstoppable-force/silver.png",
+    "gold": "unstoppable-force/gold.png"
+  },
+  "truculence": {
+    "bronze": "truculence/bronze.png",
+    "silver": "truculence/silver.png",
+    "gold": "truculence/gold.avif"
+  },
+  "shutdown": {},
+  "stick-em-up": {
+    "bronze": "stick-em-up/bronze.png",
+    "silver": "stick-em-up/silver.png",
+    "gold": "stick-em-up/gold.avif"
+  },
+  "last-man-back": {},
+  "yoink": {},
+  "big-tipper": {
+    "bronze": "big-tipper/bronze.png",
+    "silver": "big-tipper/silver.png",
+    "gold": "big-tipper/gold.avif"
+  },
+  "send-it": {
+    "bronze": "send-it/bronze.png",
+    "silver": "send-it/silver.png",
+    "gold": "send-it/gold.avif"
+  },
+  "ice-queen": {},
+  "contortionist": {},
+  "post-to-post": {
+    "bronze": "post-to-post/bronze.png",
+    "silver": "post-to-post/silver.png",
+    "gold": "post-to-post/gold.avif"
+  },
+  "spinner": {},
+  "wonder-boy": {},
+  "zig-zag": {},
+  "shock-and-awe": {},
+  "relentless": {},
+  "in-reverse": {},
+  "catch-glove": {},
+  "diamond-hands": {},
+  "quick-draw": {
+    "bronze": "quick-draw/bronze.png",
+    "silver": "quick-draw/silver.png",
+    "gold": "quick-draw/gold.avif"
+  },
+  "tape-to-tape": {
+    "bronze": "tape-to-tape/bronze.png",
+    "silver": "tape-to-tape/silver.png",
+    "gold": "tape-to-tape/gold.avif"
+  },
+  "quick-pick": {
+    "bronze": "quick-pick/bronze.png",
+    "silver": "quick-pick/silver.png",
+    "gold": "quick-pick/gold.avif"
+  },
+  "no-contest": {
+    "bronze": "no-contest/bronze.png",
+    "silver": "no-contest/silver.png",
+    "gold": "no-contest/gold.avif"
+  },
+  "quick-release": {
+    "bronze": "quick-release/bronze.png",
+    "silver": "quick-release/silver.png",
+    "gold": "quick-release/gold.avif"
+  },
+  "backhand-beauty": {
+    "bronze": "backhand-beauty/bronze.png",
+    "silver": "backhand-beauty/silver.png",
+    "gold": "backhand-beauty/gold.avif"
+  },
+  "pressure": {
+    "gold": "pressure/gold.png",
+    "bronze": "pressure/bronze.png",
+    "silver": "pressure/silver.png"
+  },
+  "second-wind": {
+    "bronze": "second-wind/bronze.png",
+    "silver": "second-wind/silver.png",
+    "gold": "second-wind/gold.avif"
+  },
+  "one-tee": {
+    "bronze": "one-tee/bronze.png",
+    "silver": "one-tee/silver.png",
+    "gold": "one-tee/gold.png"
+  },
+  "dialed-in": {
+    "bronze": "dialed-in/bronze.png",
+    "silver": "dialed-in/silver.png",
+    "gold": "dialed-in/gold.avif"
+  },
+  "natural-born-leader": {
+    "bronze": "natural-born-leader/bronze.png",
+    "silver": "natural-born-leader/silver.png",
+    "gold": "natural-born-leader/gold.png"
+  },
+  "spark-plug": {
+    "gold": "spark-plug/gold.png",
+    "bronze": "spark-plug/bronze.png",
+    "silver": "spark-plug/silver.png"
+  },
+  "showstopper": {
+    "bronze": "showstopper/bronze.png",
+    "silver": "showstopper/silver.png",
+    "gold": "showstopper/gold.png"
+  },
+  "big-rig": {
+    "bronze": "big-rig/bronze.png",
+    "silver": "big-rig/silver.png",
+    "gold": "big-rig/gold.avif"
+  },
+  "energizer": {},
+  "warrior": {
+    "gold": "warrior/gold.png",
+    "bronze": "warrior/bronze.png",
+    "silver": "warrior/silver.png"
+  },
+  "sponge": {
+    "bronze": "sponge/bronze.png",
+    "silver": "sponge/silver.png",
+    "gold": "sponge/gold.avif"
+  },
+  "rocket": {
+    "bronze": "rocket/bronze.png",
+    "silver": "rocket/silver.png",
+    "gold": "rocket/gold.avif"
+  },
+  "hipster": {
+    "bronze": "hipster/bronze.png",
+    "silver": "hipster/silver.png",
+    "gold": "hipster/gold.avif"
+  },
+  "recharge": {
+    "bronze": "recharge/bronze.png",
+    "silver": "recharge/silver.png",
+    "gold": "recharge/gold.avif"
+  }
+}
