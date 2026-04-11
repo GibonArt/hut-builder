@@ -133,7 +133,7 @@ export function EaHracNapoveda({
   const syncLabel = syncedAt ? syncedAt.slice(0, 10) : "—";
 
   return (
-    <div ref={rootRef} className="sm:col-span-2">
+    <div ref={rootRef} className="w-full min-w-0">
       <label htmlFor={listId} className="mb-1.5 block text-xs font-medium text-[var(--hut-muted)]">
         Hledat hráče (EA + karty všech uživatelů)
       </label>
@@ -204,8 +204,10 @@ export function EaHracNapoveda({
           </div>
           <p className="mt-1 text-[10px] text-[var(--hut-muted)]/80">
             EA ({hraci.filter((x) => x.source === "ea").length}) + z karet DB (
-            {hraci.filter((x) => x.source === "card").length}) · sync {syncLabel}. OVR doplň ručně. U řádků z karet se
-            doplní pozice a liga z posledního záznamu v databázi.
+            {hraci.filter((x) => x.source === "card").length}) · sync {syncLabel}. U řádků{" "}
+            <span className="font-medium text-zinc-400">EA</span> doplň OVR a detaily ručně. U řádků{" "}
+            <span className="font-medium text-zinc-400">DB</span> se předvyplní údaje z poslední komunitní karty (stejné
+            jméno + tým) — před uložením ověř.
           </p>
         </>
       )}

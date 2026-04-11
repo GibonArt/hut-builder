@@ -28,10 +28,15 @@ function parsePlat(v: string | number): number {
   return Number.isFinite(n) ? n : Number.NaN;
 }
 
-function xFactoryZAtributuJsonb(raw: unknown): XFactorZaznam[] | undefined {
+/** Čte `xFactory` z JSONB sloupce `atributy` (stejná logika jako u načtení karty z DB). */
+export function xFactoryZAtributyJsonbSloupec(raw: unknown): XFactorZaznam[] | undefined {
   if (raw == null) return undefined;
   if (typeof raw !== "object" || Array.isArray(raw)) return undefined;
   return normalizujEaXFactoryZDb((raw as Record<string, unknown>).xFactory);
+}
+
+function xFactoryZAtributuJsonb(raw: unknown): XFactorZaznam[] | undefined {
+  return xFactoryZAtributyJsonbSloupec(raw);
 }
 
 function atributyZHutCard(card: HutCard): Record<string, unknown> | null {

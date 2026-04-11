@@ -151,6 +151,8 @@ export function MujInventar() {
   const [editujiSlug, setEditujiSlug] = useState<string | null>(null);
   /** Inkrementace vyčistí pole „Hledat hráče“ v `EaHracNapoveda` (po uložení / zrušení). */
   const [eaNapovedaVycistit, setEaNapovedaVycistit] = useState(0);
+  /** Po výběru z komunitní DB nápovědy — zobrazit upozornění k ověření údajů. */
+  const [upozorneniKartovaNapoveda, setUpozorneniKartovaNapoveda] = useState(false);
 
   const tymyProAktualniLigu = useMemo(() => tymyProLigu(liga), [liga]);
 
@@ -164,23 +166,71 @@ export function MujInventar() {
     [],
   );
 
-  const priVyberuEaHrace = useCallback((h: EaNhl26Hrac) => {
-    setJmeno(h.jmeno);
-    if (h.hutPreferovanaRuka) setPreferovanaRuka(h.hutPreferovanaRuka);
-    if (h.source === "card" && h.hutPozice && h.hutLiga) {
-      setPozice(h.hutPozice);
-      setLiga(h.hutLiga);
-      setTym(h.tym);
-      return;
-    }
-    const p = EA_POZICE_NA_HUT[h.positionShort];
-    if (p) setPozice(p);
-    const lt = najdiLiguATymPodleEa(h.tym);
-    if (lt) {
-      setLiga(lt.liga);
-      setTym(lt.tym);
-    }
-  }, []);
+  const priVyberuEaHrace = useCallback(
+    (h: EaNhl26Hrac) => {
+      setJmeno(h.jmeno);
+      setFormError(null);
+
+      if (h.source === "ea") {
+        setUpozorneniKartovaNapoveda(false);
+        if (h.hutPreferovanaRuka) setPreferovanaRuka(h.hutPreferovanaRuka);
+        const p = EA_POZICE_NA_HUT[h.positionShort];
+        if (p) setPozice(p);
+        const lt = najdiLiguATymPodleEa(h.tym);
+        if (lt) {
+          setLiga(lt.liga);
+          setTym(lt.tym);
+        }
+        return;
+      }
+
+      // Komunitní nápověda (karty v DB): kompletní předvyplnění z nejnovějšího řádku (jméno + tým)
+      setOvr("");
+      setPlat("");
+      setNarodnostKod("");
+      setTypKarty("");
+      setXFactory(triPrazdneXFactory());
+
+      if (h.hutPozice && h.hutLiga) {
+        setPozice(h.hutPozice);
+        setLiga(h.hutLiga);
+        setTym(h.tym);
+      }
+      if (h.hutPreferovanaRuka) setPreferovanaRuka(h.hutPreferovanaRuka);
+
+      if (h.napovedaOvr != null) {
+        setOvr(String(h.napovedaOvr));
+      }
+      if (h.napovedaPlat != null) {
+        const mil = h.napovedaPlat / 1_000_000;
+        setPlat(
+          Number.isFinite(mil)
+            ? mil.toLocaleString("cs-CZ", { maximumFractionDigits: 2 })
+            : "",
+        );
+      }
+      if (h.napovedaNarodnost) {
+        const kod =
+          narodnostiVolby.find((n) => n.label === h.napovedaNarodnost?.trim())
+            ?.code ?? "";
+        if (kod) setNarodnostKod(kod);
+      }
+      if (h.napovedaTypKarty) {
+        setTypKarty(h.napovedaTypKarty);
+      }
+      if (h.napovedaXFactory?.length) {
+        const xf = obnovIkonyXeFactoryZKatalogu(h.napovedaXFactory) ?? [];
+        setXFactory([
+          xf[0] ?? { id: "", label: "" },
+          xf[1] ?? { id: "", label: "" },
+          xf[2] ?? { id: "", label: "" },
+        ]);
+      }
+
+      setUpozorneniKartovaNapoveda(true);
+    },
+    [narodnostiVolby],
+  );
 
   useEffect(() => {
     if (!user?.id) {
@@ -277,6 +327,7 @@ export function MujInventar() {
     setXFactory(triPrazdneXFactory());
     setEditujiSlug(null);
     setFormError(null);
+    setUpozorneniKartovaNapoveda(false);
     setEaNapovedaVycistit((n) => n + 1);
   }, []);
 
@@ -306,6 +357,7 @@ export function MujInventar() {
       ]);
       setEditujiSlug(k.id);
       setFormError(null);
+      setUpozorneniKartovaNapoveda(false);
       requestAnimationFrame(() => {
         document
           .getElementById("form-inventar-karta")
@@ -568,13 +620,26 @@ export function MujInventar() {
           className="mt-6 min-w-0 border-0 p-0 disabled:opacity-55 [&:disabled]:pointer-events-none"
         >
         <div className="grid gap-5 sm:grid-cols-2">
-          <EaHracNapoveda
-            userId={user?.id ?? null}
-            inventarPocet={karty.length}
-            onVybrat={priVyberuEaHrace}
-            disabled={formZakazany}
-            vycisteniDotazuVerze={eaNapovedaVycistit}
-          />
+          <div className="sm:col-span-2 space-y-2">
+            <EaHracNapoveda
+              userId={user?.id ?? null}
+              inventarPocet={karty.length}
+              onVybrat={priVyberuEaHrace}
+              disabled={formZakazany}
+              vycisteniDotazuVerze={eaNapovedaVycistit}
+            />
+            {upozorneniKartovaNapoveda ? (
+              <p
+                className="rounded-lg border border-sky-500/35 bg-sky-950/35 px-3 py-2.5 text-sm leading-snug text-sky-100/95"
+                role="status"
+              >
+                Údaje byly doplněny z <strong className="font-semibold text-white">poslední uložené karty</strong> se
+                stejným jménem a týmem v databázi (náhled z komunity). Před uložením je{" "}
+                <strong className="font-semibold text-white">zkontroluj</strong> — může jít o jinou variantu karty (OVR,
+                typ, X-Faktory…), která se liší třeba jen v jedné hodnotě.
+              </p>
+            ) : null}
+          </div>
           <div className="sm:col-span-2 grid grid-cols-1 gap-5 md:grid-cols-6 md:items-end">
             <div className="min-w-0 md:col-span-2">
               <label htmlFor="inv-jmeno" className={labelClass}>

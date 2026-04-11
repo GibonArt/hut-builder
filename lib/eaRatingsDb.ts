@@ -2,7 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Liga, Ruka } from "@/types";
 import { LIGY_V_PORADI } from "@/lib/tymyPodleLigy";
 import type { EaNhl26Hrac } from "@/lib/eaNhl26Ratings";
+import { xFactoryZAtributyJsonbSloupec } from "@/lib/cardsDb";
 import { normalizujEaXFactoryZDb } from "@/lib/eaXFactors";
+import { obnovIkonyXeFactoryZKatalogu } from "@/lib/xFactoryKatalog";
 
 import { normalizujPozici } from "@/lib/hutPozice";
 const LIGA_SET = new Set<Liga>(LIGY_V_PORADI);
@@ -24,6 +26,11 @@ type RpcNapovedaRow = {
   liga: string;
   posledni_uprava: string;
   preferovana_ruka: string | null;
+  ovr?: number | null;
+  plat?: number | string | null;
+  narodnost?: string | null;
+  typ_karty?: string | null;
+  atributy?: unknown | null;
 };
 
 function rukaZRadekRpc(s: string | null | undefined): Ruka | undefined {
@@ -58,6 +65,29 @@ function rpcNaNapovedu(r: RpcNapovedaRow, rank: number): EaNhl26Hrac | null {
   if (!hutPozice) return null;
   if (!LIGA_SET.has(r.liga as Liga)) return null;
   const hutPreferovanaRuka = rukaZRadekRpc(r.preferovana_ruka);
+
+  const ovrNum = Number(r.ovr);
+  const napovedaOvr =
+    r.ovr != null && Number.isFinite(ovrNum) ? Math.round(ovrNum) : undefined;
+
+  let napovedaPlat: number | undefined;
+  if (r.plat != null && r.plat !== "") {
+    const p = typeof r.plat === "number" ? r.plat : Number.parseFloat(String(r.plat));
+    if (Number.isFinite(p)) napovedaPlat = p;
+  }
+
+  const nar = String(r.narodnost ?? "").trim();
+  const napovedaNarodnost = nar ? nar : undefined;
+
+  const typ = String(r.typ_karty ?? "").trim();
+  const napovedaTypKarty = typ ? typ : undefined;
+
+  const rawXf = xFactoryZAtributyJsonbSloupec(r.atributy);
+  const napovedaXFactory =
+    rawXf?.length && rawXf.some((x) => x.label.trim())
+      ? obnovIkonyXeFactoryZKatalogu(rawXf)
+      : undefined;
+
   return {
     key: klicProKartuVsechny(r.jmeno, r.tym),
     source: "card",
@@ -69,6 +99,11 @@ function rpcNaNapovedu(r: RpcNapovedaRow, rank: number): EaNhl26Hrac | null {
     hutPozice,
     hutLiga: r.liga as Liga,
     ...(hutPreferovanaRuka ? { hutPreferovanaRuka } : {}),
+    ...(napovedaOvr != null ? { napovedaOvr } : {}),
+    ...(napovedaPlat != null ? { napovedaPlat } : {}),
+    ...(napovedaNarodnost ? { napovedaNarodnost } : {}),
+    ...(napovedaTypKarty ? { napovedaTypKarty } : {}),
+    ...(napovedaXFactory?.length ? { napovedaXFactory } : {}),
   };
 }
 

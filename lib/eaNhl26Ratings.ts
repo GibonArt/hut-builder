@@ -18,6 +18,15 @@ export type EaNhl26Hrac = {
   hutPreferovanaRuka?: Ruka;
   /** Jen u `source` ea — z `ea_hraci_napoveda.x_factors`. */
   eaXFactory?: XFactorZaznam[];
+  /**
+   * Jen u `source` card — z nejnovější komunitní karty (stejné jméno + tým) v `napoveda_jmena_z_cards`.
+   * Slouží k předvyplnění formuláře; uživatel má údaje zkontrolovat.
+   */
+  napovedaOvr?: number;
+  napovedaPlat?: number;
+  napovedaNarodnost?: string;
+  napovedaTypKarty?: string;
+  napovedaXFactory?: XFactorZaznam[];
 };
 
 /** Normalizace pro porovnání týmových názvů (EA × diakritika v appce). */
