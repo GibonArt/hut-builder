@@ -45,29 +45,68 @@ export function EaHracNapoveda({
   const [dotaz, setDotaz] = useState("");
   const [vybranyIdx, setVybranyIdx] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    let zruseno = false;
-    (async () => {
-      setNacitam(true);
-      setFetchChyba(null);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const nactiSeznam = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent === true;
+      if (!silent) {
+        setNacitam(true);
+        setFetchChyba(null);
+      }
       const { data, syncedAt: st, error } = await nactiNapoveduHracu(supabase, {
         nacistAgregaciZeVsechKaret: Boolean(userId),
       });
-      if (zruseno) return;
+      if (!isMountedRef.current) return;
       if (error) {
-        setFetchChyba(error.message);
-        setHraci([]);
+        if (!silent) {
+          setFetchChyba(error.message);
+          setHraci([]);
+        }
       } else {
         setHraci(data);
         setSyncedAt(st);
+        if (!silent) setFetchChyba(null);
       }
-      setNacitam(false);
-    })();
-    return () => {
-      zruseno = true;
+      if (!silent) setNacitam(false);
+    },
+    [supabase, userId],
+  );
+
+  useEffect(() => {
+    void nactiSeznam();
+  }, [nactiSeznam, inventarPocet]);
+
+  /** Po přihlášení: obnovit agregaci z DB i bez změny vlastního inventáře (ostatní uživatelé, sync EA). */
+  useEffect(() => {
+    if (!userId) return;
+
+    const tichyRefresh = () => {
+      void nactiSeznam({ silent: true });
     };
-  }, [supabase, userId, inventarPocet]);
+
+    const intervalId = window.setInterval(tichyRefresh, 120_000);
+
+    const priViditelnosti = () => {
+      if (document.visibilityState === "visible") tichyRefresh();
+    };
+
+    window.addEventListener("focus", tichyRefresh);
+    document.addEventListener("visibilitychange", priViditelnosti);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", tichyRefresh);
+      document.removeEventListener("visibilitychange", priViditelnosti);
+    };
+  }, [userId, nactiSeznam]);
 
   const prazdny = !nacitam && !fetchChyba && hraci.length === 0;
 
@@ -204,7 +243,12 @@ export function EaHracNapoveda({
           </div>
           <p className="mt-1 text-[10px] text-[var(--hut-muted)]/80">
             EA ({hraci.filter((x) => x.source === "ea").length}) + z karet DB (
-            {hraci.filter((x) => x.source === "card").length}) · sync {syncLabel}. U řádků{" "}
+            {hraci.filter((x) => x.source === "card").length}) · sync {syncLabel}
+            <span className="text-[var(--hut-muted)]/60">
+              {" "}
+              (čísla se obnoví při návratu na záložku nebo cca každé 2 min; po uložení karty hned)
+            </span>
+            . U řádků{" "}
             <span className="font-medium text-zinc-400">EA</span> doplň OVR a detaily ručně. U řádků{" "}
             <span className="font-medium text-zinc-400">DB</span> se předvyplní údaje z poslední komunitní karty (stejné
             jméno + tým) — před uložením ověř.
