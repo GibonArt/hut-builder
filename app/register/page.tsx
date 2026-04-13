@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
+import {
+  AuthTurnstile,
+  getTurnstileSiteKey,
+  type AuthTurnstileHandle,
+} from "@/components/AuthTurnstile";
 import {
   AuthPageShell,
   authFormPanelClass,
@@ -19,11 +24,18 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<AuthTurnstileHandle>(null);
+  const captchaEnabled = Boolean(getTurnstileSiteKey());
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setInfo(null);
+    if (captchaEnabled && !captchaToken) {
+      setError("Nejdřív potvrď kontrolu (jsem člověk).");
+      return;
+    }
     setPending(true);
     try {
       const supabase = createClient();
@@ -32,17 +44,21 @@ export default function RegisterPage() {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/login`,
+          ...(captchaToken != null ? { captchaToken } : {}),
         },
       });
       if (err) {
         setError(err.message);
+        captchaRef.current?.reset();
         return;
       }
       setInfo(
         "Účet byl vytvořen. Pokud je zapnuté potvrzení e-mailem, zkontroluj schránku a odkaz v e-mailu. Jinak se můžeš hned přihlásit.",
       );
+      captchaRef.current?.reset();
     } catch {
       setError("Registrace selhala. Zkus to znovu nebo zkontroluj připojení.");
+      captchaRef.current?.reset();
     } finally {
       setPending(false);
     }
@@ -106,6 +122,8 @@ export default function RegisterPage() {
               Minimálně 6 znaků (výchozí minimum projektu).
             </p>
           </div>
+
+          <AuthTurnstile ref={captchaRef} onToken={setCaptchaToken} />
 
           <button
             type="submit"

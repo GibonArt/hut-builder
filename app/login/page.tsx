@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  AuthTurnstile,
+  getTurnstileSiteKey,
+  type AuthTurnstileHandle,
+} from "@/components/AuthTurnstile";
 import {
   AuthPageShell,
   authFormPanelClass,
@@ -19,26 +24,37 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<AuthTurnstileHandle>(null);
   const router = useRouter();
+  const captchaEnabled = Boolean(getTurnstileSiteKey());
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (captchaEnabled && !captchaToken) {
+      setError("Nejdřív potvrď kontrolu (jsem člověk).");
+      return;
+    }
     setPending(true);
     try {
       const supabase = createClient();
       const { error: err } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
+        options:
+          captchaToken != null ? { captchaToken } : undefined,
       });
       if (err) {
         setError(err.message);
+        captchaRef.current?.reset();
         return;
       }
       router.push("/");
       router.refresh();
     } catch {
       setError("Nepodařilo se přihlásit. Zkus to znovu nebo zkontroluj připojení.");
+      captchaRef.current?.reset();
     } finally {
       setPending(false);
     }
@@ -115,6 +131,8 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+
+            <AuthTurnstile ref={captchaRef} onToken={setCaptchaToken} />
 
             <button
               type="submit"

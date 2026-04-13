@@ -17,6 +17,7 @@
     "xfactor-jmena-z-hutdb": "tsx scripts/stahni-xfactory-jmena-z-hutdb.ts"
   },
   "dependencies": {
+    "@marsidev/react-turnstile": "^1.5.0",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
     "next": "16.2.2",
@@ -30,8 +31,8 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
-    "tsx": "^4.19.3",
     "tailwindcss": "^4",
+    "tsx": "^4.19.3",
     "typescript": "^5"
   }
 }

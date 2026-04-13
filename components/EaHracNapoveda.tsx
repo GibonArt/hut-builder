@@ -241,15 +241,18 @@ export function EaHracNapoveda({
               </ul>
             ) : null}
           </div>
-          <p className="mt-1 text-[10px] text-[var(--hut-muted)]/80">
+          <p className="mt-1 text-[10px] leading-snug text-[var(--hut-muted)]/80">
             EA ({hraci.filter((x) => x.source === "ea").length}) + z karet DB (
-            {hraci.filter((x) => x.source === "card").length}) · sync {syncLabel}
+            {hraci.filter((x) => x.source === "card").length}){" "}
+            <span className="text-[var(--hut-muted)]/70">
+              (unikátní jméno + tým v nápovědě, ne počet všech uložených karet; bez duplicit s EA)
+            </span>{" "}
+            · sync {syncLabel}
             <span className="text-[var(--hut-muted)]/60">
               {" "}
-              (čísla se obnoví při návratu na záložku nebo cca každé 2 min; po uložení karty hned)
+              — obnovení při návratu na záložku, cca 2 min, po uložení karty hned.
             </span>
-            . U řádků{" "}
-            <span className="font-medium text-zinc-400">EA</span> doplň OVR a detaily ručně. U řádků{" "}
+            . U řádků <span className="font-medium text-zinc-400">EA</span> doplň OVR a detaily ručně. U řádků{" "}
             <span className="font-medium text-zinc-400">DB</span> se předvyplní údaje z poslední komunitní karty (stejné
             jméno + tým) — před uložením ověř.
           </p>
