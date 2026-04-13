@@ -24,6 +24,12 @@ const NAV_BONUSY = {
   hint: "Kombinace synergií",
 };
 
+const NAV_ADMIN_UZIVATELE = {
+  href: "/admin/uzivatele" as const,
+  label: "Přehled uživatelů",
+  hint: "Statistiky registrací",
+};
+
 const NAV_OPTIMALIZATOR = {
   id: "optimalizator" as const,
   label: "Optimalizátor formací",
@@ -87,6 +93,7 @@ export function HutShell({
   const naDomovske = pathname === "/";
   const naMojeKarty = pathname === "/moje-karty";
   const naNastaveniBonusu = pathname === "/nastaveni-bonusu";
+  const naAdminUzivatele = pathname === "/admin/uzivatele";
   const zobrazitOdkazBonusy = Boolean(user && jeBonusAdmin(user.email));
 
   return (
@@ -196,26 +203,48 @@ export function HutShell({
           </Link>
 
           {!loading && zobrazitOdkazBonusy ? (
-            <Link
-              href={NAV_BONUSY.href}
-              onClick={zavritMobilniMenu}
-              className={[
-                "group rounded-xl px-3 py-3 text-left transition-colors",
-                naNastaveniBonusu
-                  ? "bg-[var(--hut-surface-raised)] text-white shadow-[0_0_28px_var(--hut-focus-glow)] ring-1 ring-[var(--hut-focus)]/55"
-                  : "text-[var(--hut-muted)] hover:bg-[var(--hut-surface-raised)]/60 hover:text-zinc-200",
-              ].join(" ")}
-            >
-              <span className="block text-sm font-medium">{NAV_BONUSY.label}</span>
-              <span
+            <>
+              <Link
+                href={NAV_BONUSY.href}
+                onClick={zavritMobilniMenu}
                 className={[
-                  "mt-0.5 block text-xs transition-colors",
-                  naNastaveniBonusu ? "text-[var(--hut-muted)]" : "text-[var(--hut-muted)]/70",
+                  "group rounded-xl px-3 py-3 text-left transition-colors",
+                  naNastaveniBonusu
+                    ? "bg-[var(--hut-surface-raised)] text-white shadow-[0_0_28px_var(--hut-focus-glow)] ring-1 ring-[var(--hut-focus)]/55"
+                    : "text-[var(--hut-muted)] hover:bg-[var(--hut-surface-raised)]/60 hover:text-zinc-200",
                 ].join(" ")}
               >
-                {NAV_BONUSY.hint}
-              </span>
-            </Link>
+                <span className="block text-sm font-medium">{NAV_BONUSY.label}</span>
+                <span
+                  className={[
+                    "mt-0.5 block text-xs transition-colors",
+                    naNastaveniBonusu ? "text-[var(--hut-muted)]" : "text-[var(--hut-muted)]/70",
+                  ].join(" ")}
+                >
+                  {NAV_BONUSY.hint}
+                </span>
+              </Link>
+              <Link
+                href={NAV_ADMIN_UZIVATELE.href}
+                onClick={zavritMobilniMenu}
+                className={[
+                  "group rounded-xl px-3 py-3 text-left transition-colors",
+                  naAdminUzivatele
+                    ? "bg-[var(--hut-surface-raised)] text-white shadow-[0_0_28px_var(--hut-focus-glow)] ring-1 ring-[var(--hut-focus)]/55"
+                    : "text-[var(--hut-muted)] hover:bg-[var(--hut-surface-raised)]/60 hover:text-zinc-200",
+                ].join(" ")}
+              >
+                <span className="block text-sm font-medium">{NAV_ADMIN_UZIVATELE.label}</span>
+                <span
+                  className={[
+                    "mt-0.5 block text-xs transition-colors",
+                    naAdminUzivatele ? "text-[var(--hut-muted)]" : "text-[var(--hut-muted)]/70",
+                  ].join(" ")}
+                >
+                  {NAV_ADMIN_UZIVATELE.hint}
+                </span>
+              </Link>
+            </>
           ) : null}
 
           <button
