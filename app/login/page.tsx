@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,11 +23,22 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<AuthTurnstileHandle>(null);
   const router = useRouter();
   const captchaEnabled = Boolean(getTurnstileSiteKey());
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("reset") === "ok") {
+      setInfo("Heslo bylo obnoveno. Můžeš se přihlásit.");
+    }
+    if (q.get("error") === "odkaz") {
+      setError("Odkaz z e-mailu vypršel nebo je neplatný. Zkus obnovu znovu.");
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,6 +112,11 @@ export default function LoginPage() {
                 {error}
               </p>
             ) : null}
+            {info ? (
+              <p className="rounded-lg border border-[var(--hut-lime)]/35 bg-[var(--hut-lime)]/8 px-3 py-2 text-sm text-[var(--hut-lime)]">
+                {info}
+              </p>
+            ) : null}
 
             <div>
               <label htmlFor="login-email" className={authLabelClass}>
@@ -131,6 +147,12 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+
+            <p className="text-right text-sm">
+              <Link href="/obnova-hesla" className={authLinkClass}>
+                Zapomněli jste heslo?
+              </Link>
+            </p>
 
             <AuthTurnstile ref={captchaRef} onToken={setCaptchaToken} />
 
