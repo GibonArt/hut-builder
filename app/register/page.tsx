@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AuthTurnstile,
   getTurnstileSiteKey,
@@ -27,6 +28,7 @@ export default function RegisterPage() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<AuthTurnstileHandle>(null);
   const captchaEnabled = Boolean(getTurnstileSiteKey());
+  const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,7 +41,7 @@ export default function RegisterPage() {
     setPending(true);
     try {
       const supabase = createClient();
-      const { error: err } = await supabase.auth.signUp({
+      const { data, error: err } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
@@ -52,9 +54,17 @@ export default function RegisterPage() {
         captchaRef.current?.reset();
         return;
       }
-      setInfo(
-        "Účet byl vytvořen. Pokud je zapnuté potvrzení e-mailem, zkontroluj schránku a odkaz v e-mailu. Jinak se můžeš hned přihlásit.",
-      );
+      /* Bez „Confirm email“ v Supabase obvykle přijde session hned → uživatel je přihlášený. */
+      if (data.session) {
+        setInfo(
+          "Účet je vytvořený. Už jsi přihlášený — můžeš pokračovat do aplikace.",
+        );
+        router.refresh();
+      } else {
+        setInfo(
+          "Účet byl vytvořen. Potvrď prosím odkaz v e-mailu, pak se můžeš přihlásit.",
+        );
+      }
       captchaRef.current?.reset();
     } catch {
       setError("Registrace selhala. Zkus to znovu nebo zkontroluj připojení.");
