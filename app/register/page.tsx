@@ -18,6 +18,7 @@ import {
   authPrimaryButtonClass,
 } from "@/components/AuthPageShell";
 import { createClient } from "@/lib/supabase/client";
+import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -50,7 +51,7 @@ export default function RegisterPage() {
         },
       });
       if (err) {
-        setError(err.message);
+        setError(ceskaZpravaAuthNeboDb(err.message));
         captchaRef.current?.reset();
         return;
       }

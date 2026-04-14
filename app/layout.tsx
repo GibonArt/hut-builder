@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import { AuthProvider } from "@/components/AuthProvider";
 import "./globals.css";
 
@@ -16,6 +17,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "HUT Builder | NHL 26",
   description: "Nástroj pro inventář, bonusy a optimalizaci formací v Ultimate Team.",
+  appleWebApp: {
+    capable: true,
+    title: "HUT Builder",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
@@ -36,7 +42,16 @@ export default function RootLayout({
       className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-dvh flex-col font-sans">
-        <AuthProvider>{children}</AuthProvider>
+        <a
+          href="#obsah-aplikace"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:border focus:border-[var(--hut-focus)] focus:bg-[var(--hut-surface)] focus:px-4 focus:py-2 focus:text-sm focus:text-white focus:outline-none"
+        >
+          Přeskočit na obsah
+        </a>
+        <AuthProvider>
+          {children}
+          <Toaster theme="dark" position="top-center" richColors closeButton />
+        </AuthProvider>
       </body>
     </html>
   );

@@ -96,12 +96,47 @@ export function HutShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileNavOpen]);
 
+  /** Po otevření mobilního menu přesuň fokus do prvního odkazu (klávesnice / čtečky). */
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const id = window.setTimeout(() => {
+      const drawer = document.getElementById("hut-nav-drawer");
+      const first = drawer?.querySelector<HTMLElement>(
+        'a[href], button[type="button"]',
+      );
+      first?.focus();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [mobileNavOpen]);
+
   const naDomovske = pathname === "/";
   const naMojeKarty = pathname === "/moje-karty";
   const naNastaveniBonusu = pathname === "/nastaveni-bonusu";
   const naNastaveniUctu = pathname === "/nastaveni-uctu";
   const naAdminUzivatele = pathname === "/admin/uzivatele";
   const zobrazitOdkazBonusy = Boolean(user && jeBonusAdmin(user.email));
+
+  const headerSectionHint = (() => {
+    if (naMojeKarty) {
+      return "Přehled tvých uložených karet — úprava probíhá v Inventáři na úvodní stránce.";
+    }
+    if (naNastaveniUctu) {
+      return "Změna hesla a odkaz na obnovu přístupu e-mailem.";
+    }
+    if (naNastaveniBonusu) {
+      return "Sdílené kombinace bonusů pro výpočty v optimalizátoru (jen správce).";
+    }
+    if (naAdminUzivatele) {
+      return "Přehled registrovaných uživatelů (jen oprávnění).";
+    }
+    if (naDomovske && homeActiveSection === "inventar") {
+      return "Inventář: přidávání a úprava karet v databázi pod tvým účtem.";
+    }
+    if (naDomovske && homeActiveSection === "optimalizator") {
+      return "Optimalizátor: hledání sestav z tvých karet a uložených bonusů.";
+    }
+    return null;
+  })();
 
   return (
     <div className="flex min-h-dvh w-full">
@@ -320,11 +355,21 @@ export function HutShell({
           <p className="text-[11px] leading-snug text-[var(--hut-muted)]/70">
             Tmavý režim je výchozí — ladí k rozhraní Ultimate Team.
           </p>
+          <p className="mt-2 text-[11px] leading-snug">
+            <Link
+              href="/o-aplikaci"
+              onClick={zavritMobilniMenu}
+              className="text-[var(--hut-muted)] underline decoration-zinc-600 underline-offset-2 transition-colors hover:text-zinc-300"
+            >
+              O aplikaci a datech
+            </Link>
+          </p>
         </div>
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:min-w-0">
-        <header className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-[var(--hut-border)] bg-[var(--hut-bg)]/95 px-3 pt-[max(0.25rem,env(safe-area-inset-top))] pb-3 backdrop-blur-md sm:gap-3 sm:px-6 sm:py-0">
+        <header className="flex shrink-0 flex-col border-b border-[var(--hut-border)] bg-[var(--hut-bg)]/95 backdrop-blur-md">
+          <div className="flex min-h-14 items-center justify-between gap-2 px-3 pt-[max(0.25rem,env(safe-area-inset-top))] pb-3 sm:gap-3 sm:px-6 sm:py-0">
           <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-3">
             <button
               type="button"
@@ -380,10 +425,18 @@ export function HutShell({
               </>
             )}
           </div>
+          </div>
+          {headerSectionHint ? (
+            <p className="border-t border-[var(--hut-border)]/80 px-3 py-2 text-[11px] leading-snug text-[var(--hut-muted)] sm:px-6">
+              {headerSectionHint}
+            </p>
+          ) : null}
         </header>
 
         <main
-          className={`flex min-h-0 flex-1 flex-col overflow-auto px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:p-6 md:p-10 ${mainClassName ?? ""}`}
+          id="obsah-aplikace"
+          tabIndex={-1}
+          className={`flex min-h-0 flex-1 flex-col overflow-auto px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none sm:p-6 md:p-10 ${mainClassName ?? ""}`}
           style={mainStyle}
         >
           <div className={`min-h-full w-full ${mainInnerClassName}`}>

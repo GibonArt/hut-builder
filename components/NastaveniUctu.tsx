@@ -12,6 +12,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { HutShell } from "@/components/HutShell";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
 import { createClient } from "@/lib/supabase/client";
+import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
+import { toast } from "sonner";
 import {
   authInputClass,
   authLabelClass,
@@ -68,7 +70,7 @@ export function NastaveniUctu() {
         setError(
           msg.includes("invalid") && msg.includes("credential")
             ? "Současné heslo není správné."
-            : signErr.message,
+            : ceskaZpravaAuthNeboDb(signErr.message),
         );
         captchaRef.current?.reset();
         return;
@@ -78,7 +80,7 @@ export function NastaveniUctu() {
         password: newPassword,
       });
       if (upErr) {
-        setError(upErr.message);
+        setError(ceskaZpravaAuthNeboDb(upErr.message));
         captchaRef.current?.reset();
         return;
       }
@@ -88,6 +90,7 @@ export function NastaveniUctu() {
       setNewPassword2("");
       captchaRef.current?.reset();
       setOk("Heslo bylo změněno.");
+      toast.success("Heslo bylo změněno.");
       router.refresh();
     } catch {
       setError("Změna hesla selhala. Zkus to znovu.");

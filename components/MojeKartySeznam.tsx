@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, startTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { HutCard, Pozice } from "@/types";
 import { useAuth } from "@/components/AuthProvider";
 import {
@@ -16,6 +18,7 @@ import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
 import { seraditKarty, type RazeniKaret } from "@/lib/hutRazeniKaret";
 import { useRazeniKaret } from "@/lib/useRazeniKaret";
+import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 
 type FiltrPozice = Pozice | "vse";
 
@@ -60,7 +63,7 @@ export function MojeKartySeznam() {
       startTransition(() => {
         setLoading(false);
         if (error) {
-          setChyba(error.message);
+          setChyba(ceskaZpravaAuthNeboDb(error.message));
           setKarty([]);
           return;
         }
@@ -90,17 +93,49 @@ export function MojeKartySeznam() {
     [router],
   );
 
+  const duplikovat = useCallback(
+    (k: HutCard) => {
+      router.push(`/?duplicate=${encodeURIComponent(k.id)}`);
+    },
+    [router],
+  );
+
+  const exportovatJson = useCallback(() => {
+    if (karty.length === 0) {
+      toast.message("Žádné karty k exportu.");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(karty, null, 2)], {
+      type: "application/json;charset=utf-8",
+    });
+    const a = document.createElement("a");
+    const d = new Date().toISOString().slice(0, 10);
+    a.href = URL.createObjectURL(blob);
+    a.download = `hut-moje-karty-${d}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast.success("Soubor JSON byl stažen.");
+  }, [karty]);
+
   const smazat = useCallback(
     async (idKarty: string) => {
       if (!user?.id) return;
+      if (
+        !window.confirm(
+          "Opravdu smazat tuto kartu? Akce je nevratná.",
+        )
+      ) {
+        return;
+      }
       setMazuId(idKarty);
       const { error } = await smazKartuPodleSlug(supabase, user.id, idKarty);
       setMazuId(null);
       if (error) {
-        setChyba(error.message);
+        setChyba(ceskaZpravaAuthNeboDb(error.message));
         return;
       }
       setKarty((prev) => prev.filter((k) => k.id !== idKarty));
+      toast.success("Karta byla smazána.");
     },
     [user?.id, supabase],
   );
@@ -118,6 +153,19 @@ export function MojeKartySeznam() {
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
           Všechny uložené karty. Filtr podle pozice a řazení podle OVR nebo pořadí přidání.
         </p>
+
+        {user ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={exportovatJson}
+              disabled={loading || karty.length === 0}
+              className="touch-manipulation rounded-full border border-[var(--hut-border)] px-4 py-2 text-xs font-medium text-zinc-200 transition-colors hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Exportovat JSON
+            </button>
+          </div>
+        ) : null}
 
         <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2">
           <div
@@ -220,11 +268,23 @@ export function MojeKartySeznam() {
             Načítám karty…
           </p>
         ) : filtrovaneSerazene.length === 0 ? (
-          <p className="mt-8 rounded-xl border border-dashed border-[var(--hut-border)] bg-[var(--hut-surface)]/50 px-6 py-12 text-center text-sm text-[var(--hut-muted)]">
-            {karty.length === 0
-              ? "Zatím žádné karty. Přidej je v sekci Můj Inventář."
-              : "Žádná karta pro zvolenou pozici."}
-          </p>
+          <div className="mt-8 rounded-xl border border-dashed border-[var(--hut-border)] bg-[var(--hut-surface)]/50 px-6 py-12 text-center text-sm text-[var(--hut-muted)]">
+            {karty.length === 0 ? (
+              <>
+                <p>Zatím žádné karty.</p>
+                <p className="mt-4">
+                  <Link
+                    href="/"
+                    className="font-medium text-[var(--hut-lime)] underline underline-offset-2 decoration-[var(--hut-lime)]/35 hover:text-[var(--hut-lime-dim)]"
+                  >
+                    Přejít do Můj Inventář a přidat první kartu
+                  </Link>
+                </p>
+              </>
+            ) : (
+              "Žádná karta pro zvolenou pozici."
+            )}
+          </div>
         ) : (
           <ul className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-3">
             {filtrovaneSerazene.map((k) => (
@@ -234,6 +294,7 @@ export function MojeKartySeznam() {
                 karta={k}
                 narodnostiVolby={narodnostiVolby}
                 onEditovat={editovat}
+                onDuplikovat={duplikovat}
                 onSmazat={smazat}
                 formZakazany={formZakazany}
               />

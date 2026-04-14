@@ -12,6 +12,7 @@ import {
   authPrimaryButtonClass,
 } from "@/components/AuthPageShell";
 import { createClient } from "@/lib/supabase/client";
+import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 
 export default function ObnovaHeslaPage() {
   const [email, setEmail] = useState("");
@@ -33,7 +34,7 @@ export default function ObnovaHeslaPage() {
         { redirectTo },
       );
       if (err) {
-        setError(err.message);
+        setError(ceskaZpravaAuthNeboDb(err.message));
         return;
       }
       setInfo(

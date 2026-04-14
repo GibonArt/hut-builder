@@ -54,6 +54,8 @@ type Props = {
   narodnostiVolby: readonly NarodnostVolba[];
   onEditovat: (k: HutCard) => void;
   onSmazat: (id: string) => void;
+  /** Volitelně — duplikace jako nová karta (Inventář). */
+  onDuplikovat?: (k: HutCard) => void;
   formZakazany: boolean;
   /** Mřížka po čtyřech na řádku (~25 % šířky kontejneru na velkém viewportu). */
   mrizkaCtvrtiny?: boolean;
@@ -64,6 +66,7 @@ export function InventarKartaPolozka({
   narodnostiVolby,
   onEditovat,
   onSmazat,
+  onDuplikovat,
   formZakazany,
   mrizkaCtvrtiny = false,
 }: Props) {
@@ -158,6 +161,16 @@ export function InventarKartaPolozka({
         >
           Editovat
         </button>
+        {onDuplikovat ? (
+          <button
+            type="button"
+            onClick={() => onDuplikovat(k)}
+            disabled={formZakazany}
+            className="min-h-11 min-w-[5.5rem] touch-manipulation rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/80 px-4 py-2 text-xs font-medium text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            Duplikovat
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => onSmazat(k.id)}

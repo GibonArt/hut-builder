@@ -17,7 +17,9 @@ export function AuthPageShell({
   return (
     <div className="relative min-h-svh w-full overflow-hidden">
       <div aria-hidden className="absolute inset-0" style={HUT_FORM_PAGE_BG} />
-      <div className={inner}>{children}</div>
+      <div id="obsah-aplikace" tabIndex={-1} className={inner}>
+        {children}
+      </div>
     </div>
   );
 }

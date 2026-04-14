@@ -10,6 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import {
   type HutCard,
   type Liga,
@@ -61,6 +62,7 @@ import { XFactorVyber } from "@/components/XFactorVyber";
 import { HUT_POZICE, HUT_POZICE_LABEL } from "@/lib/hutPozice";
 import { nahledCtyriKaret, type RazeniKaret } from "@/lib/hutRazeniKaret";
 import { useRazeniKaret } from "@/lib/useRazeniKaret";
+import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 
 const RUKY: Ruka[] = ["LR", "PR"];
 
@@ -126,6 +128,7 @@ export function MujInventar() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editZQueryZpracovan = useRef<string | null>(null);
+  const duplicitaZQueryZpracovan = useRef<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const supabase = useMemo(() => createClient(), []);
 
@@ -135,6 +138,8 @@ export function MujInventar() {
   const [kartyChyba, setKartyChyba] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [ukladamKartu, setUkladamKartu] = useState(false);
+  /** Neuložené změny ve formuláři — varování před zavřením záložky. */
+  const [formDirty, setFormDirty] = useState(false);
 
   const [jmeno, setJmeno] = useState("");
   const [ovr, setOvr] = useState("");
@@ -253,7 +258,7 @@ export function MujInventar() {
       startTransition(() => {
         setKartyLoading(false);
         if (error) {
-          setKartyChyba(error.message);
+          setKartyChyba(ceskaZpravaAuthNeboDb(error.message));
           setKarty([]);
           return;
         }
@@ -329,10 +334,11 @@ export function MujInventar() {
     setFormError(null);
     setUpozorneniKartovaNapoveda(false);
     setEaNapovedaVycistit((n) => n + 1);
+    setFormDirty(false);
   }, []);
 
   const naplnFormZKarty = useCallback(
-    (k: HutCard) => {
+    (k: HutCard, rezim: "editovat" | "kopie" = "editovat") => {
       setJmeno(k.jmeno);
       setOvr(String(k.ovr));
       setPozice(k.pozice);
@@ -355,9 +361,10 @@ export function MujInventar() {
         xf[1] ?? { id: "", label: "" },
         xf[2] ?? { id: "", label: "" },
       ]);
-      setEditujiSlug(k.id);
+      setEditujiSlug(rezim === "editovat" ? k.id : null);
       setFormError(null);
       setUpozorneniKartovaNapoveda(false);
+      setFormDirty(false);
       requestAnimationFrame(() => {
         document
           .getElementById("form-inventar-karta")
@@ -385,9 +392,56 @@ export function MujInventar() {
 
     if (editZQueryZpracovan.current === slug) return;
     editZQueryZpracovan.current = slug;
-    naplnFormZKarty(k);
+    naplnFormZKarty(k, "editovat");
     router.replace("/", { scroll: false });
   }, [searchParams, user?.id, kartyLoading, karty, naplnFormZKarty, router]);
+
+  useEffect(() => {
+    const dup = searchParams.get("duplicate");
+    if (!dup) {
+      duplicitaZQueryZpracovan.current = null;
+      return;
+    }
+    if (!user?.id || kartyLoading) return;
+
+    const k = karty.find((c) => c.id === dup);
+    if (!k) {
+      if (duplicitaZQueryZpracovan.current === dup) return;
+      duplicitaZQueryZpracovan.current = dup;
+      router.replace("/", { scroll: false });
+      return;
+    }
+
+    if (duplicitaZQueryZpracovan.current === dup) return;
+    duplicitaZQueryZpracovan.current = dup;
+    naplnFormZKarty(k, "kopie");
+    router.replace("/", { scroll: false });
+    toast.info("Zkopírované údaje — ulož jako novou kartu (uprav OVR/jméno, pokud koliduje).");
+  }, [searchParams, user?.id, kartyLoading, karty, naplnFormZKarty, router]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!formDirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [formDirty]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== "Enter") return;
+      const t = e.target as HTMLElement | null;
+      if (!t?.closest?.("#form-inventar-karta")) return;
+      e.preventDefault();
+      (
+        document.getElementById("form-inventar-karta") as HTMLFormElement | null
+      )?.requestSubmit();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const zmenXFactoryVyber = useCallback(
     (index: number, value: string) => {
@@ -536,10 +590,14 @@ export function MujInventar() {
           "Karta s tímto ID (slug z jména + OVR) už existuje. Změň OVR nebo jméno.",
         );
       } else {
-        setFormError(errUloz.message);
+        setFormError(ceskaZpravaAuthNeboDb(errUloz.message));
       }
       return;
     }
+
+    toast.success(
+      editujiSlug ? "Karta byla uložena." : "Karta byla přidána.",
+    );
 
     if (editujiSlug) {
       setKarty((prev) =>
@@ -553,15 +611,23 @@ export function MujInventar() {
 
   const smazatKartu = async (idKarty: string) => {
     if (!user?.id) return;
+    if (
+      !window.confirm(
+        "Opravdu smazat tuto kartu? Akce je nevratná.",
+      )
+    ) {
+      return;
+    }
     const { error: errSmaz } = await smazKartuPodleSlug(supabase, user.id, idKarty);
     if (errSmaz) {
-      setKartyChyba(errSmaz.message);
+      setKartyChyba(ceskaZpravaAuthNeboDb(errSmaz.message));
       return;
     }
     if (editujiSlug === idKarty) {
       resetForm();
     }
     setKarty((prev) => prev.filter((k) => k.id !== idKarty));
+    toast.success("Karta byla smazána.");
   };
 
   const formZakazany = !user || authLoading || ukladamKartu;
@@ -597,14 +663,26 @@ export function MujInventar() {
       <form
         id="form-inventar-karta"
         onSubmit={handleSubmit}
+        onChange={() => setFormDirty(true)}
         className="rounded-2xl border border-[var(--hut-border)] bg-[var(--hut-surface)]/52 p-4 shadow-[0_24px_48px_rgba(0,0,0,0.45)] sm:p-6 md:p-8"
       >
         <h3 className="text-lg font-medium text-white">
           {editujiSlug ? "Upravit kartu" : "Přidat kartu"}
         </h3>
         <p className="mt-1 text-xs text-[var(--hut-muted)]">
-          Kromě X-Faktorů jsou všechna pole povinná (<OznaPovinne />).
+          Kromě X-Faktorů jsou všechna pole povinná (<OznaPovinne />).{" "}
+          <span className="hidden sm:inline">
+            Zkratka: Ctrl+Enter (Mac ⌘+Enter) = uložit.
+          </span>
         </p>
+        {ukladamKartu ? (
+          <p
+            className="mt-2 text-xs font-medium text-[var(--hut-lime)]"
+            aria-live="polite"
+          >
+            Ukládám kartu…
+          </p>
+        ) : null}
 
         {formError ? (
           <p

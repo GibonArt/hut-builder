@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, startTransition } from "react";
+import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import { nactiKartyUzivatele } from "@/lib/cardsDb";
+import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 import {
   formatujBonusVRadkuNahled,
   nactiBonusKombinaceSdilene,
@@ -247,7 +249,7 @@ export function OptimalizatorFormaci() {
       startTransition(() => {
         setLoadingKarty(false);
         if (error) {
-          setChybaKarty(error.message);
+          setChybaKarty(ceskaZpravaAuthNeboDb(error.message));
           setKarty([]);
           return;
         }
@@ -270,7 +272,7 @@ export function OptimalizatorFormaci() {
       startTransition(() => {
         setLoadingKomb(false);
         if (error) {
-          setChybaKomb(error.message);
+          setChybaKomb(ceskaZpravaAuthNeboDb(error.message));
           setUtocneRadky([]);
           setObranneRadky([]);
           return;
@@ -338,6 +340,19 @@ export function OptimalizatorFormaci() {
         <p className="rounded-xl border border-dashed border-[var(--hut-border)] bg-[var(--hut-surface)]/50 px-6 py-10 text-center text-sm text-[var(--hut-muted)]">
           Přihlas se pro načtení inventáře a výpočet formací.
         </p>
+      ) : !loadingKarty && !chybaKarty && karty.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-[var(--hut-border)] bg-[var(--hut-surface)]/50 px-6 py-10 text-center text-sm text-[var(--hut-muted)]">
+          <p>
+            Nemáš žádné karty v inventáři — optimalizátor potřebuje alespoň jednu kartu z{" "}
+            <Link
+              href="/"
+              className="font-medium text-[var(--hut-lime)] underline underline-offset-2 hover:text-[var(--hut-lime-dim)]"
+            >
+              Můj Inventář
+            </Link>
+            .
+          </p>
+        </div>
       ) : (
         <>
           <section className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-surface-raised)]/80 p-4 shadow-inner shadow-black/20 sm:p-5">

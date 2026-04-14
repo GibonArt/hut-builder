@@ -12,6 +12,7 @@ import {
   authPrimaryButtonClass,
 } from "@/components/AuthPageShell";
 import { createClient } from "@/lib/supabase/client";
+import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 
 export default function NoveHesloPage() {
   const router = useRouter();
@@ -46,7 +47,7 @@ export default function NoveHesloPage() {
       const supabase = createClient();
       const { error: err } = await supabase.auth.updateUser({ password });
       if (err) {
-        setError(err.message);
+        setError(ceskaZpravaAuthNeboDb(err.message));
         return;
       }
       await supabase.auth.signOut();
