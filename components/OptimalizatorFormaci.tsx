@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, startTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
+import { jeBonusAdmin } from "@/lib/bonusAdmin";
 import { createClient } from "@/lib/supabase/client";
 import { nactiKartyUzivatele } from "@/lib/cardsDb";
 import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
@@ -683,15 +684,24 @@ export function OptimalizatorFormaci() {
     (sekceQuickFiltr === "obrana" && maVybranouObranu) ||
     (sekceQuickFiltr === "golmani" && maVybraneGolmany);
 
+  const nastaveniBonusuJakoOdkaz = jeBonusAdmin(user?.email);
+
   return (
     <div className="space-y-8 sm:space-y-10">
       <header>
         <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Optimalizátor formací</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
           Hledá kompletní sestavy podle uložených kombinací v{" "}
-          <a href="/nastaveni-bonusu" className="text-[var(--hut-lime)] underline-offset-2 hover:underline">
-            Nastavení bonusů
-          </a>
+          {nastaveniBonusuJakoOdkaz ? (
+            <Link
+              href="/nastaveni-bonusu"
+              className="text-[var(--hut-lime)] underline-offset-2 hover:underline"
+            >
+              Nastavení bonusů
+            </Link>
+          ) : (
+            <span>Nastavení bonusů</span>
+          )}
           : útok (LK + C + PK), obrana (LO + PO) a dvojice brankářů (G + G). Symboly z kombinace musí pokrýt
           všechny příslušné pozice v libovolném pořadí (LK nemusí odpovídat prvnímu uloženému parametru).
           Zobrazí se jen plné shody — žádné částečné trojice ani dvojice. U každého výsledku můžeš připnout
