@@ -286,7 +286,7 @@ export function MojeKartySeznam() {
             )}
           </div>
         ) : (
-          <ul className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-3">
+          <ul className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 md:gap-3">
             {filtrovaneSerazene.map((k) => (
               <InventarKartaPolozka
                 key={k.id}

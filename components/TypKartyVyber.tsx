@@ -12,7 +12,11 @@ type Props = {
   onChange: (hodnotaFiltru: string) => void;
   disabled?: boolean;
   describedBy?: string;
+  triggerHeight?: "default" | "kompaktniLg";
 };
+
+const triggerClassBase =
+  "flex w-full items-center gap-3 rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-0 text-left text-sm text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50";
 
 export function TypKartyVyber({
   id,
@@ -21,6 +25,7 @@ export function TypKartyVyber({
   onChange,
   disabled,
   describedBy,
+  triggerHeight = "default",
 }: Props) {
   const listId = useId();
   const [otevreno, setOtevreno] = useState(false);
@@ -71,7 +76,12 @@ export function TypKartyVyber({
         onKeyDown={(e) => {
           if (e.key === "Escape") setOtevreno(false);
         }}
-        className="flex h-14 min-h-14 w-full items-center gap-3 rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-0 text-left text-sm text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
+        className={[
+          triggerClassBase,
+          triggerHeight === "kompaktniLg"
+            ? "h-14 min-h-14 lg:h-11 lg:min-h-11"
+            : "h-14 min-h-14",
+        ].join(" ")}
       >
         <TypKartyIkonaVCtverci
           comboSoubor={vybrany?.comboSoubor ?? null}

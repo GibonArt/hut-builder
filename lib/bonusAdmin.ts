@@ -1,8 +1,7 @@
 /**
- * Přístup k administraci bonusů a admin stránkám (přehled uživatelů) —
- * rozšiřitelný seznam e-mailů (lowercase).
- * Server i klient: žádný import z "use client" modulů.
- * Pozn.: RPC `admin_prehled_uzivatelu_karet` v Supabase kontroluje stejný e-mail v SQL.
+ * Přístup k administraci bonusů, `/admin/*`, `/api/admin/*` a RPC v Supabase —
+ * výhradně tento seznam (lowercase). Middleware + stránky + API kontrolují stejně.
+ * Pozn.: SQL funkce `admin_prehled_uzivatelu_karet` musí mít shodný e-mail v podmínce.
  */
 const ADMIN_EMAILS_LOWER = new Set(["gibonart@gmail.com"]);
 

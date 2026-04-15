@@ -47,7 +47,7 @@ import { urlLogaTymu } from "@/lib/tymLoga";
 const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
 
 const selectClass =
-  "box-border h-14 min-h-14 w-full cursor-pointer rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-0 text-sm text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)]";
+  "box-border h-14 min-h-14 w-full cursor-pointer rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-0 text-sm text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] lg:h-11 lg:min-h-11";
 
 const DRUH_VOLBY: { id: BonusKombinaceParametrTyp; label: string }[] = [
   { id: "narodnost", label: "Národnost" },
@@ -205,13 +205,13 @@ function SloupecParametru({
   const tymy = param.typ === "tym" ? tymyProLigu(param.liga) : [];
 
   return (
-    <div className="min-w-0 rounded-lg border border-[var(--hut-border)]/80 bg-[var(--hut-bg-elevated)]/25 p-3 sm:p-4">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
+    <div className="min-w-0 rounded-lg border border-[var(--hut-border)]/80 bg-[var(--hut-bg-elevated)]/25 p-3 sm:p-4 lg:p-2.5">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)] lg:mb-1.5">
         Parametr {slot}
       </p>
       <p className={labelClass}>Druh hodnoty</p>
       <div
-        className="mt-1.5 flex flex-wrap gap-1.5"
+        className="mt-1.5 flex flex-wrap gap-1.5 lg:gap-1"
         role="group"
         aria-label={`Parametr ${slot} — druh`}
       >
@@ -222,7 +222,7 @@ function SloupecParametru({
             disabled={ukladam}
             onClick={() => onZmenDruh(opt.id)}
             className={[
-              "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors sm:text-[13px]",
+              "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors sm:text-[13px] lg:px-2 lg:py-1 lg:text-xs",
               param.typ === opt.id
                 ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
                 : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
@@ -233,7 +233,7 @@ function SloupecParametru({
         ))}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 lg:mt-2.5">
         {param.typ === "narodnost" ? (
           <>
             <label htmlFor={`nb-s${slot}-nar-${draftId}`} className={labelClass}>
@@ -246,13 +246,14 @@ function SloupecParametru({
                 value={param.narodnostKod}
                 onChange={(kod) => onZmenParam({ typ: "narodnost", narodnostKod: kod })}
                 disabled={narodnostiVolby.length === 0 || ukladam}
+                triggerHeight="kompaktniLg"
               />
             </div>
           </>
         ) : null}
 
         {param.typ === "tym" ? (
-          <div className="space-y-3">
+          <div className="space-y-3 lg:space-y-2">
             <div>
               <label htmlFor={`nb-s${slot}-liga-${draftId}`} className={labelClass}>
                 Liga
@@ -292,6 +293,7 @@ function SloupecParametru({
                   value={param.tym}
                   disabled={ukladam}
                   onChange={(tym) => onZmenParam({ typ: "tym", liga: param.liga, tym })}
+                  triggerHeight="kompaktniLg"
                 />
               </div>
             </div>
@@ -306,6 +308,7 @@ function SloupecParametru({
                 id={`nb-s${slot}-tym-hledat-${draftId}`}
                 disabled={ukladam}
                 onVybrat={(liga, tym) => onZmenParam({ typ: "tym", liga, tym })}
+                variant="kompaktniLg"
               />
             </div>
           </div>
@@ -323,6 +326,7 @@ function SloupecParametru({
                 value={param.typKarty}
                 disabled={ukladam}
                 onChange={(v) => onZmenParam({ typ: "typ_karty", typKarty: v })}
+                triggerHeight="kompaktniLg"
               />
             </div>
           </>
@@ -348,12 +352,12 @@ function SloupecBonusu({
   onZmenTyp: (v: TypBonusuKombinace) => void;
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-[var(--hut-border)]/80 bg-[var(--hut-bg-elevated)]/25 p-3 sm:p-4">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
+    <div className="min-w-0 rounded-lg border border-[var(--hut-border)]/80 bg-[var(--hut-bg-elevated)]/25 p-3 sm:p-4 lg:p-2.5">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)] lg:mb-1.5">
         Bonus
       </p>
-      <p className={`${labelClass} mb-2`}>Hodnota a typ bonusu</p>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-3">
+      <p className={`${labelClass} mb-2 lg:mb-1.5`}>Hodnota a typ bonusu</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-3 lg:gap-2">
         <div className="min-w-0 flex-1">
           <label htmlFor={`nb-bonus-hod-${draftId}`} className={labelClass}>
             Hodnota
@@ -700,14 +704,14 @@ export function NastaveniBonusu() {
             id="bonus-kombinace-filtr"
             className="sticky top-[max(0.5rem,env(safe-area-inset-top))] z-20 mt-8 scroll-mt-4 rounded-xl border border-[var(--hut-border)] bg-[color-mix(in_srgb,var(--hut-surface)_92%,transparent)] p-3 shadow-lg shadow-black/20 backdrop-blur-md supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--hut-surface)_85%,transparent)] sm:top-4 sm:p-4"
           >
-            <p className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)] lg:mb-2">
               Filtr kombinace
             </p>
             <div
               className={
                 typKombinace === "obranna"
-                  ? "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
-                  : "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4"
+                  ? "grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-3"
+                  : "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-3"
               }
             >
               {(typKombinace === "obranna" ? ([1, 2] as const) : ([1, 2, 3] as const)).map(

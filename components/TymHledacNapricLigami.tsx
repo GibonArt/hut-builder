@@ -9,16 +9,26 @@ import {
 import { urlLogaTymu } from "@/lib/tymLoga";
 import { TymLogoOblast } from "@/components/TymLogo";
 
-const inputClass =
-  "box-border h-14 min-h-14 w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-0 text-sm text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+const inputClassZaklad =
+  "box-border w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-0 text-sm text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+const inputVyskaDefault = "h-14 min-h-14";
+const inputVyskaKompaktLg = "h-14 min-h-14 lg:h-11 lg:min-h-11";
 
 type Props = {
   id: string;
   disabled?: boolean;
   onVybrat: (liga: Liga, tym: string) => void;
+  /** Nižší pole na velkém desktopu (stejné jako kompaktní výběry). */
+  variant?: "default" | "kompaktniLg";
 };
 
-export function TymHledacNapricLigami({ id, disabled, onVybrat }: Props) {
+export function TymHledacNapricLigami({
+  id,
+  disabled,
+  onVybrat,
+  variant = "default",
+}: Props) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [dotaz, setDotaz] = useState("");
@@ -56,7 +66,10 @@ export function TymHledacNapricLigami({ id, disabled, onVybrat }: Props) {
         aria-autocomplete="list"
         aria-expanded={zobrazPanel}
         aria-controls={zobrazPanel ? listId : undefined}
-        className={inputClass}
+        className={[
+          inputClassZaklad,
+          variant === "kompaktniLg" ? inputVyskaKompaktLg : inputVyskaDefault,
+        ].join(" ")}
       />
 
       {zobrazPanel ? (

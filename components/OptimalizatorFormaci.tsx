@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, startTransition } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import { nactiKartyUzivatele } from "@/lib/cardsDb";
@@ -11,6 +12,7 @@ import {
   nactiBonusKombinaceSdilene,
   type BonusKombinaceParametr,
   type RadekBonusKombinaceUi,
+  TYPY_BONUSU_KOMBINACE,
   type TypBonusuKombinace,
 } from "@/lib/bonusKombinaceDb";
 import {
@@ -20,6 +22,8 @@ import {
   spoctiGolmanskeDvojice,
   spoctiObranneDvojice,
   spoctiUtocneFormace,
+  type DvojiceVysledek,
+  type UtocnaFormaceVysledek,
 } from "@/lib/optimalizatorFormaci";
 import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
 import { urlLogaTymu } from "@/lib/tymLoga";
@@ -58,6 +62,73 @@ function filtrujVysledkyPodleTypuBonusu<T extends { kombinace: RadekBonusKombina
 ): T[] {
   if (typ === "vse") return [...radky];
   return radky.filter((x) => x.kombinace.bonusTyp === typ);
+}
+
+function klicUtocnaFormace(v: UtocnaFormaceVysledek): string {
+  return `${v.kombinace.id}|${v.lk.id}|${v.c.id}|${v.pk.id}`;
+}
+
+/** Jednoznačný klíč dvojice (pořadí karet v řádku nehraje roli). */
+function klicDvojiceVysledek(v: DvojiceVysledek): string {
+  const [x, y] = [v.a.id, v.b.id].slice().sort();
+  return `${v.kombinace.id}|${x}|${y}`;
+}
+
+function maUtokSpolecnehoHrace(
+  v: UtocnaFormaceVysledek,
+  zakazaneId: ReadonlySet<string>,
+): boolean {
+  return zakazaneId.has(v.lk.id) || zakazaneId.has(v.c.id) || zakazaneId.has(v.pk.id);
+}
+
+function maDvojiceSpolecnehoHrace(
+  v: DvojiceVysledek,
+  zakazaneId: ReadonlySet<string>,
+): boolean {
+  return zakazaneId.has(v.a.id) || zakazaneId.has(v.b.id);
+}
+
+const MAX_VYBER_UTOK_NA_TYP = 4;
+const MAX_VYBER_OBRANA_NA_TYP = 3;
+const MAX_VYBER_GOLMAN_NA_TYP = 1;
+
+function prazdneVyberyPodleTypu(): Record<TypBonusuKombinace, string[]> {
+  return { PLAT: [], CLK: [], BS: [] };
+}
+
+function zakazaneIdZUtokKlicu(
+  mapa: ReadonlyMap<string, UtocnaFormaceVysledek>,
+  vybery: Record<TypBonusuKombinace, string[]>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const typ of TYPY_BONUSU_KOMBINACE) {
+    for (const klic of vybery[typ]) {
+      const v = mapa.get(klic);
+      if (v) {
+        ids.add(v.lk.id);
+        ids.add(v.c.id);
+        ids.add(v.pk.id);
+      }
+    }
+  }
+  return ids;
+}
+
+function zakazaneIdZDvojicKlicu(
+  mapa: ReadonlyMap<string, DvojiceVysledek>,
+  vybery: Record<TypBonusuKombinace, string[]>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const typ of TYPY_BONUSU_KOMBINACE) {
+    for (const klic of vybery[typ]) {
+      const v = mapa.get(klic);
+      if (v) {
+        ids.add(v.a.id);
+        ids.add(v.b.id);
+      }
+    }
+  }
+  return ids;
 }
 
 function soucetPlatuKaret(karty: readonly HutCard[]): number {
@@ -201,6 +272,126 @@ function BunkaHrace({
   );
 }
 
+const btnVyberFiltrClass =
+  "touch-manipulation rounded-lg border border-[var(--hut-lime)]/45 bg-[var(--hut-lime)]/10 px-3 py-2 text-xs font-semibold text-[var(--hut-lime)] transition-colors hover:border-[var(--hut-lime)]/70 hover:bg-[var(--hut-lime)]/15";
+
+const btnZrusitVyberClass =
+  "touch-manipulation rounded-lg border border-[var(--hut-border)] px-3 py-1.5 text-xs font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-zinc-200";
+
+function UtocnaFormaceObsah({
+  v,
+  narodnostiVolby,
+  zobrazitTlacitkoVyber,
+  onVybratProFiltrHrace,
+}: {
+  v: UtocnaFormaceVysledek;
+  narodnostiVolby: ReturnType<typeof vsechnyNarodnostiCS>;
+  zobrazitTlacitkoVyber: boolean;
+  onVybratProFiltrHrace: () => void;
+}) {
+  const sym = prirazeniSymboluUtok(v.lk, v.c, v.pk, v.kombinace, narodnostiVolby);
+  const celkovyPlat = soucetPlatuKaret([v.lk, v.c, v.pk]);
+  return (
+    <>
+      <HlavickaVysledkuKombinace
+        r={v.kombinace}
+        parametryPocet={3}
+        narodnostiVolby={narodnostiVolby}
+        celkovyPlat={celkovyPlat}
+      />
+      {zobrazitTlacitkoVyber ? (
+        <div className="mt-3">
+          <button type="button" className={btnVyberFiltrClass} onClick={onVybratProFiltrHrace}>
+            Vybrat — skrýt ostatní sestavy se stejným hráčem
+          </button>
+          <p className="mt-1.5 text-[11px] leading-snug text-[var(--hut-muted)]">
+            Z výsledků zmizí všechny útočné formace, kde je LK, C nebo PK kterýkoli z těchto tří hráčů.
+          </p>
+        </div>
+      ) : null}
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:items-stretch">
+        <BunkaHrace
+          k={v.lk}
+          role="LK"
+          narodnostiVolby={narodnostiVolby}
+          symbolParam={sym?.[0]}
+        />
+        <BunkaHrace
+          k={v.c}
+          role="C"
+          narodnostiVolby={narodnostiVolby}
+          symbolParam={sym?.[1]}
+        />
+        <BunkaHrace
+          k={v.pk}
+          role="PK"
+          narodnostiVolby={narodnostiVolby}
+          symbolParam={sym?.[2]}
+        />
+      </div>
+    </>
+  );
+}
+
+function DvojiceFormaceObsah({
+  v,
+  narodnostiVolby,
+  zobrazitTlacitkoVyber,
+  onVybratProFiltrHrace,
+  roleA,
+  roleB,
+  filtrHint,
+}: {
+  v: DvojiceVysledek;
+  narodnostiVolby: ReturnType<typeof vsechnyNarodnostiCS>;
+  zobrazitTlacitkoVyber: boolean;
+  onVybratProFiltrHrace: () => void;
+  roleA: Pozice | "G1" | "G2";
+  roleB: Pozice | "G1" | "G2";
+  filtrHint: string;
+}) {
+  const sym = prirazeniSymboluDvojice(v.a, v.b, v.kombinace, narodnostiVolby);
+  const celkovyPlat = soucetPlatuKaret([v.a, v.b]);
+  const parametryPocet = 2 as const;
+  return (
+    <>
+      <HlavickaVysledkuKombinace
+        r={v.kombinace}
+        parametryPocet={parametryPocet}
+        narodnostiVolby={narodnostiVolby}
+        celkovyPlat={celkovyPlat}
+      />
+      {zobrazitTlacitkoVyber ? (
+        <div className="mt-3">
+          <button type="button" className={btnVyberFiltrClass} onClick={onVybratProFiltrHrace}>
+            Vybrat — skrýt ostatní sestavy se stejným hráčem
+          </button>
+          <p className="mt-1.5 text-[11px] leading-snug text-[var(--hut-muted)]">
+            Z výsledků zmizí všechny {filtrHint}, kde je kterýkoli z těchto dvou hráčů.
+          </p>
+        </div>
+      ) : null}
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-stretch">
+        <BunkaHrace
+          k={v.a}
+          role={roleA}
+          narodnostiVolby={narodnostiVolby}
+          symbolParam={sym?.[0]}
+        />
+        <BunkaHrace
+          k={v.b}
+          role={roleB}
+          narodnostiVolby={narodnostiVolby}
+          symbolParam={sym?.[1]}
+        />
+      </div>
+    </>
+  );
+}
+
+const polozkaFormaceClass =
+  "rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-3 sm:p-4";
+
 export function OptimalizatorFormaci() {
   const { user, loading: authLoading } = useAuth();
   const supabase = useMemo(() => createClient(), []);
@@ -218,6 +409,17 @@ export function OptimalizatorFormaci() {
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
   const [typBonusuFiltr, setTypBonusuFiltr] = useState<TypBonusuKombinace | "vse">("vse");
+
+  /** Připnuté sestavy podle typu bonusu (PLAT/CLK/BS) — limity: útok 4, obrana 3, brankáři 1 na typ. */
+  const [vyberyUtok, setVyberyUtok] = useState<Record<TypBonusuKombinace, string[]>>(
+    () => prazdneVyberyPodleTypu(),
+  );
+  const [vyberyObrana, setVyberyObrana] = useState<Record<TypBonusuKombinace, string[]>>(
+    () => prazdneVyberyPodleTypu(),
+  );
+  const [vyberyGolmani, setVyberyGolmani] = useState<Record<TypBonusuKombinace, string[]>>(
+    () => prazdneVyberyPodleTypu(),
+  );
 
   const minOvr = useMemo(() => parseOvrVolitelne(minOvrStr), [minOvrStr]);
   const maxOvr = useMemo(() => parseOvrVolitelne(maxOvrStr), [maxOvrStr]);
@@ -319,6 +521,145 @@ export function OptimalizatorFormaci() {
     [vysledkyGolmani, typBonusuFiltr],
   );
 
+  const mapaUtok = useMemo(() => {
+    const m = new Map<string, UtocnaFormaceVysledek>();
+    for (const x of vysledkyUtok) m.set(klicUtocnaFormace(x), x);
+    return m;
+  }, [vysledkyUtok]);
+
+  const mapaObrana = useMemo(() => {
+    const m = new Map<string, DvojiceVysledek>();
+    for (const x of vysledkyObrana) m.set(klicDvojiceVysledek(x), x);
+    return m;
+  }, [vysledkyObrana]);
+
+  const mapaGolmani = useMemo(() => {
+    const m = new Map<string, DvojiceVysledek>();
+    for (const x of vysledkyGolmani) m.set(klicDvojiceVysledek(x), x);
+    return m;
+  }, [vysledkyGolmani]);
+
+  const zakazaneIdUtok = useMemo(
+    () => zakazaneIdZUtokKlicu(mapaUtok, vyberyUtok),
+    [mapaUtok, vyberyUtok],
+  );
+
+  const zakazaneIdObrana = useMemo(
+    () => zakazaneIdZDvojicKlicu(mapaObrana, vyberyObrana),
+    [mapaObrana, vyberyObrana],
+  );
+
+  const zakazaneIdGolmani = useMemo(
+    () => zakazaneIdZDvojicKlicu(mapaGolmani, vyberyGolmani),
+    [mapaGolmani, vyberyGolmani],
+  );
+
+  const maVybranouUtok = useMemo(
+    () => TYPY_BONUSU_KOMBINACE.some((t) => vyberyUtok[t].length > 0),
+    [vyberyUtok],
+  );
+  const maVybranouObranu = useMemo(
+    () => TYPY_BONUSU_KOMBINACE.some((t) => vyberyObrana[t].length > 0),
+    [vyberyObrana],
+  );
+  const maVybraneGolmany = useMemo(
+    () => TYPY_BONUSU_KOMBINACE.some((t) => vyberyGolmani[t].length > 0),
+    [vyberyGolmani],
+  );
+
+  const utokZobrazenoPoVylouceni = useMemo(() => {
+    if (!zakazaneIdUtok.size) return utokZobrazeno;
+    return utokZobrazeno.filter((row) => !maUtokSpolecnehoHrace(row, zakazaneIdUtok));
+  }, [utokZobrazeno, zakazaneIdUtok]);
+
+  const obranaZobrazenoPoVylouceni = useMemo(() => {
+    if (!zakazaneIdObrana.size) return obranaZobrazeno;
+    return obranaZobrazeno.filter((row) => !maDvojiceSpolecnehoHrace(row, zakazaneIdObrana));
+  }, [obranaZobrazeno, zakazaneIdObrana]);
+
+  const golmaniZobrazenoPoVylouceni = useMemo(() => {
+    if (!zakazaneIdGolmani.size) return golmaniZobrazeno;
+    return golmaniZobrazeno.filter((row) => !maDvojiceSpolecnehoHrace(row, zakazaneIdGolmani));
+  }, [golmaniZobrazeno, zakazaneIdGolmani]);
+
+  useEffect(() => {
+    const valid = new Set(vysledkyUtok.map((x) => klicUtocnaFormace(x)));
+    setVyberyUtok((prev) => {
+      let changed = false;
+      const next = prazdneVyberyPodleTypu();
+      for (const typ of TYPY_BONUSU_KOMBINACE) {
+        next[typ] = prev[typ].filter((k) => valid.has(k));
+        if (next[typ].length !== prev[typ].length) changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [vysledkyUtok]);
+
+  useEffect(() => {
+    const valid = new Set(vysledkyObrana.map((x) => klicDvojiceVysledek(x)));
+    setVyberyObrana((prev) => {
+      let changed = false;
+      const next = prazdneVyberyPodleTypu();
+      for (const typ of TYPY_BONUSU_KOMBINACE) {
+        next[typ] = prev[typ].filter((k) => valid.has(k));
+        if (next[typ].length !== prev[typ].length) changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [vysledkyObrana]);
+
+  useEffect(() => {
+    const valid = new Set(vysledkyGolmani.map((x) => klicDvojiceVysledek(x)));
+    setVyberyGolmani((prev) => {
+      let changed = false;
+      const next = prazdneVyberyPodleTypu();
+      for (const typ of TYPY_BONUSU_KOMBINACE) {
+        next[typ] = prev[typ].filter((k) => valid.has(k));
+        if (next[typ].length !== prev[typ].length) changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [vysledkyGolmani]);
+
+  const pridatUtok = (v: UtocnaFormaceVysledek) => {
+    const klic = klicUtocnaFormace(v);
+    const typ = v.kombinace.bonusTyp;
+    setVyberyUtok((prev) => {
+      if (prev[typ].includes(klic)) return prev;
+      if (prev[typ].length >= MAX_VYBER_UTOK_NA_TYP) {
+        toast.error(`Útok: nejvýše ${MAX_VYBER_UTOK_NA_TYP} sestavy s bonusem ${typ}.`);
+        return prev;
+      }
+      return { ...prev, [typ]: [...prev[typ], klic] };
+    });
+  };
+
+  const pridatObrana = (v: DvojiceVysledek) => {
+    const klic = klicDvojiceVysledek(v);
+    const typ = v.kombinace.bonusTyp;
+    setVyberyObrana((prev) => {
+      if (prev[typ].includes(klic)) return prev;
+      if (prev[typ].length >= MAX_VYBER_OBRANA_NA_TYP) {
+        toast.error(`Obrana: nejvýše ${MAX_VYBER_OBRANA_NA_TYP} dvojice s bonusem ${typ}.`);
+        return prev;
+      }
+      return { ...prev, [typ]: [...prev[typ], klic] };
+    });
+  };
+
+  const pridatGolmani = (v: DvojiceVysledek) => {
+    const klic = klicDvojiceVysledek(v);
+    const typ = v.kombinace.bonusTyp;
+    setVyberyGolmani((prev) => {
+      if (prev[typ].includes(klic)) return prev;
+      if (prev[typ].length >= MAX_VYBER_GOLMAN_NA_TYP) {
+        toast.error(`Brankáři: nejvýše ${MAX_VYBER_GOLMAN_NA_TYP} dvojice s bonusem ${typ}.`);
+        return prev;
+      }
+      return { ...prev, [typ]: [...prev[typ], klic] };
+    });
+  };
+
   const nacitani = authLoading || loadingKarty || loadingKomb;
 
   return (
@@ -332,7 +673,10 @@ export function OptimalizatorFormaci() {
           </a>
           : útok (LK + C + PK), obrana (LO + PO) a dvojice brankářů (G + G). Symboly z kombinace musí pokrýt
           všechny příslušné pozice v libovolném pořadí (LK nemusí odpovídat prvnímu uloženému parametru).
-          Zobrazí se jen plné shody — žádné částečné trojice ani dvojice.
+          Zobrazí se jen plné shody — žádné částečné trojice ani dvojice. U každého výsledku můžeš připnout
+          sestavy podle typu bonusu (PLAT / CLK / BS): útok max. 4 na typ, obrana max. 3 na typ, brankáři max. 1
+          na typ. Ze seznamu se pak skryjí všechny varianty, které sdílejí alespoň jednoho hráče s některou z
+          připnutých sestav v dané sekci (sjednocení množin hráčů).
         </p>
       </header>
 
@@ -458,7 +802,199 @@ export function OptimalizatorFormaci() {
               {typBonusuFiltr !== "vse"
                 ? ` · zobrazeno jen ${typBonusuFiltr}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
                 : ` · výsledků: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`}
+              {maVybranouUtok || maVybranouObranu || maVybraneGolmany
+                ? ` · po výběru hráčů: útok ${utokZobrazenoPoVylouceni.length}/${utokZobrazeno.length}, obrana ${obranaZobrazenoPoVylouceni.length}/${obranaZobrazeno.length}, brankáři ${golmaniZobrazenoPoVylouceni.length}/${golmaniZobrazeno.length}`
+                : ""}
             </p>
+          ) : null}
+
+          {!nacitani && (maVybranouUtok || maVybranouObranu || maVybraneGolmany) ? (
+            <section
+              className="space-y-4 rounded-xl border border-[var(--hut-lime)]/40 bg-[var(--hut-surface-raised)]/90 p-4 shadow-inner shadow-black/15 sm:p-5"
+              aria-label="Vybrané sestavy pro filtrování podle hráčů"
+            >
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
+                  Připnuté sestavy (filtr hráčů)
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--hut-muted)]">
+                  Ze seznamů níže jsou skryté varianty, které sdílejí alespoň jednoho hráče s některou z
+                  připnutých sestav v dané sekci (sjednocení hráčů ze všech připnutí). Limity: útok 4 / typ
+                  bonusu, obrana 3 / typ, brankáři 1 / typ.
+                </p>
+              </div>
+
+              {maVybranouUtok ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-xs font-semibold text-white">Útočná formace (LK · C · PK)</p>
+                    <button
+                      type="button"
+                      className={btnZrusitVyberClass}
+                      onClick={() => setVyberyUtok(prazdneVyberyPodleTypu())}
+                    >
+                      Zrušit vše (útok)
+                    </button>
+                  </div>
+                  {TYPY_BONUSU_KOMBINACE.map((typ) =>
+                    vyberyUtok[typ].length === 0 ? null : (
+                      <div key={typ} className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
+                          Bonus {typ} ({vyberyUtok[typ].length}/{MAX_VYBER_UTOK_NA_TYP})
+                        </p>
+                        {vyberyUtok[typ].map((klic) => {
+                          const v = mapaUtok.get(klic);
+                          if (!v) return null;
+                          return (
+                            <article
+                              key={klic}
+                              className={`${polozkaFormaceClass} border-[var(--hut-focus)]/30 bg-[var(--hut-bg-elevated)]/70`}
+                            >
+                              <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
+                                <button
+                                  type="button"
+                                  className={btnZrusitVyberClass}
+                                  onClick={() =>
+                                    setVyberyUtok((p) => ({
+                                      ...p,
+                                      [typ]: p[typ].filter((k) => k !== klic),
+                                    }))
+                                  }
+                                >
+                                  Odebrat
+                                </button>
+                              </div>
+                              <UtocnaFormaceObsah
+                                v={v}
+                                narodnostiVolby={narodnostiVolby}
+                                zobrazitTlacitkoVyber={false}
+                                onVybratProFiltrHrace={() => {}}
+                              />
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ),
+                  )}
+                </div>
+              ) : null}
+
+              {maVybranouObranu ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-xs font-semibold text-white">Obranná dvojice (LO · PO)</p>
+                    <button
+                      type="button"
+                      className={btnZrusitVyberClass}
+                      onClick={() => setVyberyObrana(prazdneVyberyPodleTypu())}
+                    >
+                      Zrušit vše (obrana)
+                    </button>
+                  </div>
+                  {TYPY_BONUSU_KOMBINACE.map((typ) =>
+                    vyberyObrana[typ].length === 0 ? null : (
+                      <div key={typ} className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
+                          Bonus {typ} ({vyberyObrana[typ].length}/{MAX_VYBER_OBRANA_NA_TYP})
+                        </p>
+                        {vyberyObrana[typ].map((klic) => {
+                          const v = mapaObrana.get(klic);
+                          if (!v) return null;
+                          return (
+                            <article
+                              key={klic}
+                              className={`${polozkaFormaceClass} border-[var(--hut-focus)]/30 bg-[var(--hut-bg-elevated)]/70`}
+                            >
+                              <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
+                                <button
+                                  type="button"
+                                  className={btnZrusitVyberClass}
+                                  onClick={() =>
+                                    setVyberyObrana((p) => ({
+                                      ...p,
+                                      [typ]: p[typ].filter((k) => k !== klic),
+                                    }))
+                                  }
+                                >
+                                  Odebrat
+                                </button>
+                              </div>
+                              <DvojiceFormaceObsah
+                                v={v}
+                                narodnostiVolby={narodnostiVolby}
+                                zobrazitTlacitkoVyber={false}
+                                onVybratProFiltrHrace={() => {}}
+                                roleA="LO"
+                                roleB="PO"
+                                filtrHint="obranné dvojice"
+                              />
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ),
+                  )}
+                </div>
+              ) : null}
+
+              {maVybraneGolmany ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-xs font-semibold text-white">Brankářská dvojice (G · G)</p>
+                    <button
+                      type="button"
+                      className={btnZrusitVyberClass}
+                      onClick={() => setVyberyGolmani(prazdneVyberyPodleTypu())}
+                    >
+                      Zrušit vše (brankáři)
+                    </button>
+                  </div>
+                  {TYPY_BONUSU_KOMBINACE.map((typ) =>
+                    vyberyGolmani[typ].length === 0 ? null : (
+                      <div key={typ} className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
+                          Bonus {typ} ({vyberyGolmani[typ].length}/{MAX_VYBER_GOLMAN_NA_TYP})
+                        </p>
+                        {vyberyGolmani[typ].map((klic) => {
+                          const v = mapaGolmani.get(klic);
+                          if (!v) return null;
+                          return (
+                            <article
+                              key={klic}
+                              className={`${polozkaFormaceClass} border-[var(--hut-focus)]/30 bg-[var(--hut-bg-elevated)]/70`}
+                            >
+                              <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
+                                <button
+                                  type="button"
+                                  className={btnZrusitVyberClass}
+                                  onClick={() =>
+                                    setVyberyGolmani((p) => ({
+                                      ...p,
+                                      [typ]: p[typ].filter((k) => k !== klic),
+                                    }))
+                                  }
+                                >
+                                  Odebrat
+                                </button>
+                              </div>
+                              <DvojiceFormaceObsah
+                                v={v}
+                                narodnostiVolby={narodnostiVolby}
+                                zobrazitTlacitkoVyber={false}
+                                onVybratProFiltrHrace={() => {}}
+                                roleA="G1"
+                                roleB="G2"
+                                filtrHint="brankářské dvojice"
+                              />
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ),
+                  )}
+                </div>
+              ) : null}
+            </section>
           ) : null}
 
           <section>
@@ -478,44 +1014,27 @@ export function OptimalizatorFormaci() {
                 Po zapnutí filtru „{typBonusuFiltr}“ nezůstala žádná útočná sestava — zkus „Vše“ nebo jiný typ.
               </p>
             ) : null}
+            {utokZobrazeno.length > 0 &&
+            utokZobrazenoPoVylouceni.length === 0 &&
+            maVybranouUtok &&
+            !chybaOvrRozsah &&
+            !neplatnyVstup ? (
+              <p className="mt-2 text-sm text-amber-200/90" role="status">
+                Ostatní útočné formace sdílejí s některou z připnutých sestav alespoň jednoho hráče — v seznamu
+                níže nic nezbývá. Uprav připnutí nahoře nebo změň OVR / typ bonusu.
+              </p>
+            ) : null}
             <ul className="mt-4 space-y-4">
-              {utokZobrazeno.map((v, idx) => {
-                const sym = prirazeniSymboluUtok(v.lk, v.c, v.pk, v.kombinace, narodnostiVolby);
-                const celkovyPlat = soucetPlatuKaret([v.lk, v.c, v.pk]);
-                return (
-                  <li
-                    key={`${v.kombinace.id}-${v.lk.id}-${v.c.id}-${v.pk.id}-${idx}`}
-                    className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-3 sm:p-4"
-                  >
-                    <HlavickaVysledkuKombinace
-                      r={v.kombinace}
-                      parametryPocet={3}
-                      narodnostiVolby={narodnostiVolby}
-                      celkovyPlat={celkovyPlat}
-                    />
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:items-stretch">
-                      <BunkaHrace
-                        k={v.lk}
-                        role="LK"
-                        narodnostiVolby={narodnostiVolby}
-                        symbolParam={sym?.[0]}
-                      />
-                      <BunkaHrace
-                        k={v.c}
-                        role="C"
-                        narodnostiVolby={narodnostiVolby}
-                        symbolParam={sym?.[1]}
-                      />
-                      <BunkaHrace
-                        k={v.pk}
-                        role="PK"
-                        narodnostiVolby={narodnostiVolby}
-                        symbolParam={sym?.[2]}
-                      />
-                    </div>
-                  </li>
-                );
-              })}
+              {utokZobrazenoPoVylouceni.map((v) => (
+                <li key={klicUtocnaFormace(v)} className={polozkaFormaceClass}>
+                  <UtocnaFormaceObsah
+                    v={v}
+                    narodnostiVolby={narodnostiVolby}
+                    zobrazitTlacitkoVyber
+                    onVybratProFiltrHrace={() => pridatUtok(v)}
+                  />
+                </li>
+              ))}
             </ul>
           </section>
 
@@ -536,38 +1055,30 @@ export function OptimalizatorFormaci() {
                 Pro typ „{typBonusuFiltr}“ žádná obranná dvojice.
               </p>
             ) : null}
+            {obranaZobrazeno.length > 0 &&
+            obranaZobrazenoPoVylouceni.length === 0 &&
+            maVybranouObranu &&
+            !chybaOvrRozsah &&
+            !neplatnyVstup ? (
+              <p className="mt-2 text-sm text-amber-200/90" role="status">
+                Ostatní obranné dvojice sdílejí s některým připnutím alespoň jednoho hráče — zkus upravit výběr
+                nahoře.
+              </p>
+            ) : null}
             <ul className="mt-4 space-y-4">
-              {obranaZobrazeno.map((v, idx) => {
-                const sym = prirazeniSymboluDvojice(v.a, v.b, v.kombinace, narodnostiVolby);
-                const celkovyPlat = soucetPlatuKaret([v.a, v.b]);
-                return (
-                  <li
-                    key={`${v.kombinace.id}-${v.a.id}-${v.b.id}-${idx}`}
-                    className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-3 sm:p-4"
-                  >
-                    <HlavickaVysledkuKombinace
-                      r={v.kombinace}
-                      parametryPocet={2}
-                      narodnostiVolby={narodnostiVolby}
-                      celkovyPlat={celkovyPlat}
-                    />
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-stretch">
-                      <BunkaHrace
-                        k={v.a}
-                        role="LO"
-                        narodnostiVolby={narodnostiVolby}
-                        symbolParam={sym?.[0]}
-                      />
-                      <BunkaHrace
-                        k={v.b}
-                        role="PO"
-                        narodnostiVolby={narodnostiVolby}
-                        symbolParam={sym?.[1]}
-                      />
-                    </div>
-                  </li>
-                );
-              })}
+              {obranaZobrazenoPoVylouceni.map((v) => (
+                <li key={klicDvojiceVysledek(v)} className={polozkaFormaceClass}>
+                  <DvojiceFormaceObsah
+                    v={v}
+                    narodnostiVolby={narodnostiVolby}
+                    zobrazitTlacitkoVyber
+                    onVybratProFiltrHrace={() => pridatObrana(v)}
+                    roleA="LO"
+                    roleB="PO"
+                    filtrHint="obranné dvojice"
+                  />
+                </li>
+              ))}
             </ul>
           </section>
 
@@ -587,38 +1098,30 @@ export function OptimalizatorFormaci() {
                 Pro typ „{typBonusuFiltr}“ žádná brankářská dvojice.
               </p>
             ) : null}
+            {golmaniZobrazeno.length > 0 &&
+            golmaniZobrazenoPoVylouceni.length === 0 &&
+            maVybraneGolmany &&
+            !chybaOvrRozsah &&
+            !neplatnyVstup ? (
+              <p className="mt-2 text-sm text-amber-200/90" role="status">
+                Ostatní brankářské dvojice sdílejí s některým připnutím alespoň jednoho hráče — zkus upravit výběr
+                nahoře.
+              </p>
+            ) : null}
             <ul className="mt-4 space-y-4">
-              {golmaniZobrazeno.map((v, idx) => {
-                const sym = prirazeniSymboluDvojice(v.a, v.b, v.kombinace, narodnostiVolby);
-                const celkovyPlat = soucetPlatuKaret([v.a, v.b]);
-                return (
-                  <li
-                    key={`${v.kombinace.id}-${v.a.id}-${v.b.id}-${idx}`}
-                    className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-3 sm:p-4"
-                  >
-                    <HlavickaVysledkuKombinace
-                      r={v.kombinace}
-                      parametryPocet={2}
-                      narodnostiVolby={narodnostiVolby}
-                      celkovyPlat={celkovyPlat}
-                    />
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-stretch">
-                      <BunkaHrace
-                        k={v.a}
-                        role="G1"
-                        narodnostiVolby={narodnostiVolby}
-                        symbolParam={sym?.[0]}
-                      />
-                      <BunkaHrace
-                        k={v.b}
-                        role="G2"
-                        narodnostiVolby={narodnostiVolby}
-                        symbolParam={sym?.[1]}
-                      />
-                    </div>
-                  </li>
-                );
-              })}
+              {golmaniZobrazenoPoVylouceni.map((v) => (
+                <li key={klicDvojiceVysledek(v)} className={polozkaFormaceClass}>
+                  <DvojiceFormaceObsah
+                    v={v}
+                    narodnostiVolby={narodnostiVolby}
+                    zobrazitTlacitkoVyber
+                    onVybratProFiltrHrace={() => pridatGolmani(v)}
+                    roleA="G1"
+                    roleB="G2"
+                    filtrHint="brankářské dvojice"
+                  />
+                </li>
+              ))}
             </ul>
           </section>
         </>

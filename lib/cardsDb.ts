@@ -180,6 +180,129 @@ export async function vlozKartu(
   return { error: null };
 }
 
+/** Porovnání obsahu karty (bez `id` / slug) — shoda s řádkem v DB / snapshotem z katalogu. */
+export function jsouKartyObsahoveStejne(a: HutCard, b: HutCard): boolean {
+  const ra = dataRadkuZHutCard(a);
+  const rb = dataRadkuZHutCard(b);
+  return (
+    ra.jmeno === rb.jmeno &&
+    ra.ovr === rb.ovr &&
+    ra.pozice === rb.pozice &&
+    ra.preferovana_ruka === rb.preferovana_ruka &&
+    ra.narodnost === rb.narodnost &&
+    ra.tym === rb.tym &&
+    ra.liga === rb.liga &&
+    ra.typ_karty === rb.typ_karty &&
+    ra.plat === rb.plat &&
+    (ra.ap ?? null) === (rb.ap ?? null) &&
+    JSON.stringify(ra.atributy ?? null) === JSON.stringify(rb.atributy ?? null)
+  );
+}
+
+export type GlobalniKatalogRadkaDb = {
+  card_id: string;
+  jmeno: string;
+  ovr: number;
+  pozice: string;
+  preferovana_ruka: string;
+  narodnost: string;
+  tym: string;
+  liga: string;
+  typ_karty: string;
+  plat: string | number;
+  ap: number | null;
+  atributy: unknown | null;
+};
+
+export async function nactiGlobalniKatalogKaret(
+  supabase: SupabaseClient,
+): Promise<{ data: GlobalniKatalogRadkaDb[]; error: Error | null }> {
+  const { data, error } = await supabase.rpc("cards_globalni_katalog");
+  if (error) {
+    return { data: [], error: new Error(error.message) };
+  }
+  const rows = (data ?? []) as GlobalniKatalogRadkaDb[];
+  return { data: rows, error: null };
+}
+
+export function katalogRadkaKHutCard(r: GlobalniKatalogRadkaDb): HutCard | null {
+  return rowToHutCard({
+    card_slug: `katalog-${r.card_id}`,
+    jmeno: r.jmeno,
+    ovr: r.ovr,
+    pozice: r.pozice,
+    preferovana_ruka: r.preferovana_ruka,
+    narodnost: r.narodnost,
+    tym: r.tym,
+    liga: r.liga,
+    typ_karty: r.typ_karty,
+    plat: r.plat,
+    ap: r.ap,
+    atributy: r.atributy,
+  });
+}
+
+export async function najdiUuidZdrojeProShodnyObsah(
+  supabase: SupabaseClient,
+  card: HutCard,
+): Promise<{ uuid: string | null; error: Error | null }> {
+  const row = dataRadkuZHutCard(card);
+  const { data, error } = await supabase.rpc("cards_najdi_id_shodneho_obsahu", {
+    p_jmeno: row.jmeno,
+    p_ovr: row.ovr,
+    p_pozice: row.pozice,
+    p_preferovana_ruka: row.preferovana_ruka,
+    p_narodnost: row.narodnost,
+    p_tym: row.tym,
+    p_liga: row.liga,
+    p_typ_karty: row.typ_karty,
+    p_plat: row.plat,
+    p_ap: row.ap ?? null,
+    p_atributy: row.atributy ?? null,
+  });
+  if (error) {
+    return { uuid: null, error: new Error(error.message) };
+  }
+  const uuid = data as string | null;
+  return { uuid: uuid ?? null, error: null };
+}
+
+export async function kopirujKartuZKatalogu(
+  supabase: SupabaseClient,
+  zdrojCardUuid: string,
+  novyCardSlug: string,
+): Promise<{ error: Error | null }> {
+  const { error } = await supabase.rpc("cards_kopiruj_kartu_do_inventare", {
+    p_zdroj_card_id: zdrojCardUuid,
+    p_novy_card_slug: novyCardSlug,
+  });
+  if (error) {
+    return { error: new Error(error.message) };
+  }
+  return { error: null };
+}
+
+/** Čitelná zpráva k chybám z RPC kopírování karty. */
+export function ceskaZpravaKopieKarty(raw: string): string {
+  const n = raw.toLowerCase();
+  if (n.includes("vlastni_karta")) {
+    return "Tuto kartu už ve svém inventáři máš — kopírování z vlastního řádku nedává smysl.";
+  }
+  if (n.includes("jiz_v_inventari") || n.includes("už v inventáři")) {
+    return "Kartu se stejnými údaji už ve svém inventáři máš.";
+  }
+  if (n.includes("slug_exists")) {
+    return "Interní ID karty koliduje — změň OVR nebo jméno a zkus znovu.";
+  }
+  if (n.includes("zdroj nenalezen")) {
+    return "Zdrojová karta v databázi už neexistuje — znovu načti katalog.";
+  }
+  if (n.includes("not authenticated")) {
+    return "Nejsi přihlášen.";
+  }
+  return raw;
+}
+
 /** Jen `atributy` (X-F) — bez přepisu ovr/jména; bezpečné pro jednorázovou migraci ikon. */
 export async function aktualizujJenAtributyKarty(
   supabase: SupabaseClient,

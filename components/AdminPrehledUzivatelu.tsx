@@ -1,6 +1,7 @@
 "use client";
 
 import { HutShell } from "@/components/HutShell";
+import { AdminRozeslatNovinky } from "@/components/AdminRozeslatNovinky";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
 import type { AdminUzivatelRadek } from "@/lib/adminPrehledUzivatelu";
 
@@ -105,6 +106,8 @@ export function AdminPrehledUzivatelu({ radky, chyba }: Props) {
             </div>
           </>
         ) : null}
+
+        {!chyba ? <AdminRozeslatNovinky pocetAdresatu={radky.length} /> : null}
       </div>
     </HutShell>
   );

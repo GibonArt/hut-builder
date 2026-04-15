@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { jeBonusAdmin } from "@/lib/bonusAdmin";
 
 function supabasePublicKey(): string {
   return (
@@ -35,7 +36,28 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const path = request.nextUrl.pathname;
+  const isAdminRoute =
+    path.startsWith("/admin") || path.startsWith("/api/admin");
+
+  if (isAdminRoute) {
+    if (!user) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.searchParams.set("next", `${path}${request.nextUrl.search}`);
+      return NextResponse.redirect(loginUrl);
+    }
+    if (!jeBonusAdmin(user.email)) {
+      const home = request.nextUrl.clone();
+      home.pathname = "/";
+      home.search = "";
+      return NextResponse.redirect(home);
+    }
+  }
 
   return supabaseResponse;
 }
