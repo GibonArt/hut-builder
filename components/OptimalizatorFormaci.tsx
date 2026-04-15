@@ -56,6 +56,15 @@ const TYP_BONUSU_FILTR: { id: TypBonusuKombinace | "vse"; label: string; title: 
   { id: "BS", label: "BS", title: "Body synergie (BS)" },
 ];
 
+type SekceVysledkuQuick = "vse" | "utok" | "obrana" | "golmani";
+
+const SEKCE_QUICK_FILTR: { id: SekceVysledkuQuick; label: string; title: string }[] = [
+  { id: "vse", label: "Vše", title: "Útok, obrana i brankáři" },
+  { id: "utok", label: "Útok (LK · C · PK)", title: "Jen seznam útočných formací" },
+  { id: "obrana", label: "Obrana (LO · PO)", title: "Jen seznam obranných dvojic" },
+  { id: "golmani", label: "Brankáři (G · G)", title: "Jen seznam brankářských dvojic" },
+];
+
 function filtrujVysledkyPodleTypuBonusu<T extends { kombinace: RadekBonusKombinaceUi }>(
   radky: readonly T[],
   typ: TypBonusuKombinace | "vse",
@@ -409,6 +418,8 @@ export function OptimalizatorFormaci() {
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
   const [typBonusuFiltr, setTypBonusuFiltr] = useState<TypBonusuKombinace | "vse">("vse");
+  /** Rychlý výběr, který blok výsledků zobrazit — méně scrollování při velkém počtu kombinací. */
+  const [sekceQuickFiltr, setSekceQuickFiltr] = useState<SekceVysledkuQuick>("vse");
 
   /** Připnuté sestavy podle typu bonusu (PLAT/CLK/BS) — limity: útok 4, obrana 3, brankáři 1 na typ. */
   const [vyberyUtok, setVyberyUtok] = useState<Record<TypBonusuKombinace, string[]>>(
@@ -662,6 +673,16 @@ export function OptimalizatorFormaci() {
 
   const nacitani = authLoading || loadingKarty || loadingKomb;
 
+  const zobrazitSekciUtok = sekceQuickFiltr === "vse" || sekceQuickFiltr === "utok";
+  const zobrazitSekciObranu = sekceQuickFiltr === "vse" || sekceQuickFiltr === "obrana";
+  const zobrazitSekciGolmany = sekceQuickFiltr === "vse" || sekceQuickFiltr === "golmani";
+
+  const zobrazitPripnutouSekci =
+    (sekceQuickFiltr === "vse" && (maVybranouUtok || maVybranouObranu || maVybraneGolmany)) ||
+    (sekceQuickFiltr === "utok" && maVybranouUtok) ||
+    (sekceQuickFiltr === "obrana" && maVybranouObranu) ||
+    (sekceQuickFiltr === "golmani" && maVybraneGolmany);
+
   return (
     <div className="space-y-8 sm:space-y-10">
       <header>
@@ -795,20 +816,51 @@ export function OptimalizatorFormaci() {
           ) : null}
 
           {!nacitani && !chybaOvrRozsah && !neplatnyVstup ? (
-            <p className="text-xs text-[var(--hut-muted)]">
-              V úvaze: {kartyVeFiltru.length} karet
-              {utocneRadky.length ? ` · ${utocneRadky.length} útočných kombinací` : ""}
-              {obranneRadky.length ? ` · ${obranneRadky.length} obranných kombinací` : ""}
-              {typBonusuFiltr !== "vse"
-                ? ` · zobrazeno jen ${typBonusuFiltr}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
-                : ` · výsledků: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`}
-              {maVybranouUtok || maVybranouObranu || maVybraneGolmany
-                ? ` · po výběru hráčů: útok ${utokZobrazenoPoVylouceni.length}/${utokZobrazeno.length}, obrana ${obranaZobrazenoPoVylouceni.length}/${obranaZobrazeno.length}, brankáři ${golmaniZobrazenoPoVylouceni.length}/${golmaniZobrazeno.length}`
-                : ""}
-            </p>
+            <div className="space-y-3">
+              <p className="text-xs text-[var(--hut-muted)]">
+                V úvaze: {kartyVeFiltru.length} karet
+                {utocneRadky.length ? ` · ${utocneRadky.length} útočných kombinací` : ""}
+                {obranneRadky.length ? ` · ${obranneRadky.length} obranných kombinací` : ""}
+                {typBonusuFiltr !== "vse"
+                  ? ` · zobrazeno jen ${typBonusuFiltr}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
+                  : ` · výsledků: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`}
+                {maVybranouUtok || maVybranouObranu || maVybraneGolmany
+                  ? ` · po výběru hráčů: útok ${utokZobrazenoPoVylouceni.length}/${utokZobrazeno.length}, obrana ${obranaZobrazenoPoVylouceni.length}/${obranaZobrazeno.length}, brankáři ${golmaniZobrazenoPoVylouceni.length}/${golmaniZobrazeno.length}`
+                  : ""}
+              </p>
+              <div
+                className="flex flex-wrap items-center gap-2"
+                role="group"
+                aria-label="Rychlý výběr zobrazené sekce výsledků"
+              >
+                <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+                  Zobrazit sekci
+                </span>
+                {SEKCE_QUICK_FILTR.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    title={s.title}
+                    onClick={() => setSekceQuickFiltr(s.id)}
+                    className={[
+                      btnFiltrClass,
+                      sekceQuickFiltr === s.id
+                        ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                        : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                    ].join(" ")}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] leading-relaxed text-[var(--hut-muted)]/90">
+                Zobraz jen jednu kategorii výsledků — méně scrollování při stovkách kombinací. Filtry OVR a typ
+                bonusu platí dál.
+              </p>
+            </div>
           ) : null}
 
-          {!nacitani && (maVybranouUtok || maVybranouObranu || maVybraneGolmany) ? (
+          {!nacitani && zobrazitPripnutouSekci ? (
             <section
               className="space-y-4 rounded-xl border border-[var(--hut-lime)]/40 bg-[var(--hut-surface-raised)]/90 p-4 shadow-inner shadow-black/15 sm:p-5"
               aria-label="Vybrané sestavy pro filtrování podle hráčů"
@@ -824,7 +876,7 @@ export function OptimalizatorFormaci() {
                 </p>
               </div>
 
-              {maVybranouUtok ? (
+              {maVybranouUtok && zobrazitSekciUtok ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <p className="text-xs font-semibold text-white">Útočná formace (LK · C · PK)</p>
@@ -879,7 +931,7 @@ export function OptimalizatorFormaci() {
                 </div>
               ) : null}
 
-              {maVybranouObranu ? (
+              {maVybranouObranu && zobrazitSekciObranu ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <p className="text-xs font-semibold text-white">Obranná dvojice (LO · PO)</p>
@@ -937,7 +989,7 @@ export function OptimalizatorFormaci() {
                 </div>
               ) : null}
 
-              {maVybraneGolmany ? (
+              {maVybraneGolmany && zobrazitSekciGolmany ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <p className="text-xs font-semibold text-white">Brankářská dvojice (G · G)</p>
@@ -997,6 +1049,7 @@ export function OptimalizatorFormaci() {
             </section>
           ) : null}
 
+          {zobrazitSekciUtok ? (
           <section>
             <h3 className="text-lg font-medium text-white">Útočné formace (LK · C · PK)</h3>
             {!utocneRadky.length && !loadingKomb ? (
@@ -1037,7 +1090,9 @@ export function OptimalizatorFormaci() {
               ))}
             </ul>
           </section>
+          ) : null}
 
+          {zobrazitSekciObranu ? (
           <section>
             <h3 className="text-lg font-medium text-white">Obranné dvojice (LO · PO)</h3>
             {!obranneRadky.length && !loadingKomb ? (
@@ -1081,7 +1136,9 @@ export function OptimalizatorFormaci() {
               ))}
             </ul>
           </section>
+          ) : null}
 
+          {zobrazitSekciGolmany ? (
           <section>
             <h3 className="text-lg font-medium text-white">Brankářské dvojice (G · G)</h3>
             <p className="mt-1 text-xs text-[var(--hut-muted)]">
@@ -1124,6 +1181,7 @@ export function OptimalizatorFormaci() {
               ))}
             </ul>
           </section>
+          ) : null}
         </>
       )}
     </div>
