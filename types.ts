@@ -66,6 +66,10 @@ export interface HutCard {
   ap?: number;
   /** Až 3 X-Faktory; ukládá se do `cards.atributy` (jsonb). */
   xFactory?: XFactorZaznam[];
+  /**
+   * Označení „prodáno“ — karta zůstane v databázi (sdílení s komunitou), ale nepočítá se v optimalizátoru formací.
+   */
+  prodano?: boolean;
 }
 
 /** Zobrazení jména na kartě. */

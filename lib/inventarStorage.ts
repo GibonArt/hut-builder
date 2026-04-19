@@ -113,6 +113,10 @@ function normalizeCard(raw: unknown): HutCard | null {
     }
   }
 
+  if (raw.prodano === true) {
+    card.prodano = true;
+  }
+
   return card;
 }
 

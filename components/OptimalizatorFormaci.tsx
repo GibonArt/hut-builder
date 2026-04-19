@@ -502,7 +502,8 @@ export function OptimalizatorFormaci() {
 
   const kartyVeFiltru = useMemo(() => {
     if (chybaOvrRozsah || neplatnyVstup) return [];
-    return filtrujKartyPodleOvr(karty, minOvr, maxOvr);
+    const bezProdanych = karty.filter((k) => !k.prodano);
+    return filtrujKartyPodleOvr(bezProdanych, minOvr, maxOvr);
   }, [karty, minOvr, maxOvr, chybaOvrRozsah, neplatnyVstup]);
 
   const vysledkyUtok = useMemo(
@@ -707,7 +708,8 @@ export function OptimalizatorFormaci() {
           Zobrazí se jen plné shody — žádné částečné trojice ani dvojice. U každého výsledku můžeš připnout
           sestavy podle typu bonusu (PLAT / CLK / BS): útok max. 4 na typ, obrana max. 3 na typ, brankáři max. 1
           na typ. Ze seznamu se pak skryjí všechny varianty, které sdílejí alespoň jednoho hráče s některou z
-          připnutých sestav v dané sekci (sjednocení množin hráčů).
+          připnutých sestav v dané sekci (sjednocení množin hráčů). Karty v inventáři označené jako{" "}
+          <span className="text-zinc-300">Prodáno</span> se do výpočtu nezahrnují.
         </p>
       </header>
 

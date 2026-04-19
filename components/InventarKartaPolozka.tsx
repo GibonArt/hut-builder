@@ -92,7 +92,14 @@ export function InventarKartaPolozka({
           </div>
 
           <div className="min-w-0 w-full flex-1 overflow-hidden">
-            <JmenoNaKarteFit text={celeJmenoHrace(k)} maxPx={18} minPx={8} />
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <JmenoNaKarteFit text={celeJmenoHrace(k)} maxPx={18} minPx={8} />
+              {k.prodano ? (
+                <span className="shrink-0 rounded border border-amber-500/40 bg-amber-950/50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100/95">
+                  Prodáno
+                </span>
+              ) : null}
+            </div>
             <p className="mt-1 text-xs text-[var(--hut-muted)]">
               <span
                 className="inline font-semibold tabular-nums tracking-wide text-[var(--hut-lime)] [text-shadow:0_0_14px_color-mix(in_oklab,var(--hut-lime)_55%,transparent)]"

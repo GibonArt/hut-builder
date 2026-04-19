@@ -20,6 +20,7 @@ export type CardRow = {
   plat: string | number;
   ap: number | null;
   atributy: unknown | null;
+  prodano?: boolean | null;
 };
 
 function parsePlat(v: string | number): number {
@@ -83,6 +84,7 @@ export function rowToHutCard(row: CardRow): HutCard | null {
   }
   const xf = xFactoryZAtributuJsonb(row.atributy);
   if (xf?.length) card.xFactory = obnovIkonyXeFactoryZKatalogu(xf);
+  if (row.prodano === true) card.prodano = true;
   return card;
 }
 
@@ -101,6 +103,7 @@ export function dataRadkuZHutCard(card: HutCard) {
     plat: card.plat,
     ap: card.ap ?? null,
     atributy: atributyZHutCard(card),
+    prodano: card.prodano === true,
   };
 }
 
@@ -149,7 +152,7 @@ export async function nactiKartyUzivatele(
   const { data, error } = await supabase
     .from("cards")
     .select(
-      "card_slug, jmeno, ovr, pozice, preferovana_ruka, narodnost, tym, liga, typ_karty, plat, ap, atributy",
+      "card_slug, jmeno, ovr, pozice, preferovana_ruka, narodnost, tym, liga, typ_karty, plat, ap, atributy, prodano",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: true });

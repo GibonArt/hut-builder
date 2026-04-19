@@ -17,6 +17,7 @@ create table if not exists public.cards (
   plat numeric not null,
   ap smallint null,
   atributy jsonb null, -- rozšíření: objekt s polem xFactory (max 3 X-Faktory z EA / ručně)
+  prodano boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (user_id, card_slug)

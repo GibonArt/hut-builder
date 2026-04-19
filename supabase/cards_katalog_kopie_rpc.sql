@@ -171,7 +171,8 @@ begin
     typ_karty,
     plat,
     ap,
-    atributy
+    atributy,
+    prodano
   )
   values (
     auth.uid(),
@@ -186,7 +187,8 @@ begin
     v_src.typ_karty,
     v_src.plat,
     v_src.ap,
-    v_src.atributy
+    v_src.atributy,
+    false
   );
 end;
 $$;

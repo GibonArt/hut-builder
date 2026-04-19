@@ -160,6 +160,8 @@ export function MujInventar() {
   const [xFactory, setXFactory] = useState<XFactorZaznam[]>(triPrazdneXFactory);
   /** `card_slug` řádku v DB; při úpravě se může po uložení změnit (jméno/OVR). */
   const [editujiSlug, setEditujiSlug] = useState<string | null>(null);
+  /** Jen při úpravě karty — prodané karty nejdou do optimalizátoru, zůstávají v DB. */
+  const [prodano, setProdano] = useState(false);
   /** Inkrementace vyčistí pole „Hledat hráče“ v `EaHracNapoveda` (po uložení / zrušení). */
   const [eaNapovedaVycistit, setEaNapovedaVycistit] = useState(0);
   /** Po výběru z komunitní DB nápovědy — zobrazit upozornění k ověření údajů. */
@@ -189,6 +191,7 @@ export function MujInventar() {
       setKatalogZdrojUuid(null);
       setKatalogSnapshot(null);
       setNavrhKopieUuid(null);
+      setProdano(false);
       setJmeno(h.jmeno);
       setFormError(null);
 
@@ -354,6 +357,7 @@ export function MujInventar() {
     setKatalogZdrojUuid(null);
     setKatalogSnapshot(null);
     setNavrhKopieUuid(null);
+    setProdano(false);
   }, []);
 
   const naplnFormZKarty = useCallback(
@@ -386,6 +390,7 @@ export function MujInventar() {
         xf[2] ?? { id: "", label: "" },
       ]);
       setEditujiSlug(rezim === "editovat" ? k.id : null);
+      setProdano(rezim === "editovat" && k.prodano === true);
       setFormError(null);
       setUpozorneniKartovaNapoveda(false);
       setFormDirty(false);
@@ -589,6 +594,9 @@ export function MujInventar() {
       plat: platNum,
     };
     if (xfUlozit.length) nova.xFactory = xfUlozit;
+    if (editujiSlug) {
+      nova.prodano = prodano;
+    }
 
     return { ok: true, nova, finalId };
   }, [
@@ -605,6 +613,7 @@ export function MujInventar() {
     xFactory,
     narodnostiVolby,
     editujiSlug,
+    prodano,
     karty,
   ]);
 
@@ -1125,6 +1134,26 @@ export function MujInventar() {
               })}
             </div>
           </fieldset>
+
+          {editujiSlug ? (
+            <div className="sm:col-span-2 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/35 px-4 py-3">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] text-[var(--hut-lime)] focus:ring-[var(--hut-focus-ring)]"
+                  checked={prodano}
+                  onChange={(e) => setProdano(e.target.checked)}
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-white">Prodáno</span>
+                  <span className="mt-0.5 block text-xs leading-snug text-[var(--hut-muted)]">
+                    Karta zůstane v databázi (ostatní ji mohou dál použít při zadávání / kopírování), ale nebude se
+                    počítat v optimalizátoru formací.
+                  </span>
+                </span>
+              </label>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
