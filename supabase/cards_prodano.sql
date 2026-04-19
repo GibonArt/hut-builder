@@ -49,22 +49,22 @@ begin
     select 1
     from public.cards c
     where c.user_id = auth.uid()
-      and trim(c.jmeno) = trim(v_src.jmeno)
-      and c.ovr = v_src.ovr
-      and c.pozice = v_src.pozice
-      and c.preferovana_ruka = v_src.preferovana_ruka
-      and trim(c.narodnost) = trim(v_src.narodnost)
-      and trim(c.tym) = trim(v_src.tym)
-      and c.liga = v_src.liga
-      and c.typ_karty = v_src.typ_karty
-      and c.plat = v_src.plat
+      and trim(c.jmeno) = trim((v_src).jmeno)
+      and c.ovr = (v_src).ovr
+      and c.pozice = (v_src).pozice
+      and c.preferovana_ruka = (v_src).preferovana_ruka
+      and trim(c.narodnost) = trim((v_src).narodnost)
+      and trim(c.tym) = trim((v_src).tym)
+      and c.liga = (v_src).liga
+      and c.typ_karty = (v_src).typ_karty
+      and c.plat = (v_src).plat
       and (
-        (c.ap is null and v_src.ap is null)
-        or (c.ap = v_src.ap)
+        (c.ap is null and (v_src).ap is null)
+        or (c.ap = (v_src).ap)
       )
       and (
-        (c.atributy is null and v_src.atributy is null)
-        or (c.atributy = v_src.atributy)
+        (c.atributy is null and (v_src).atributy is null)
+        or (c.atributy = (v_src).atributy)
       )
   ) then
     raise exception 'jiz_v_inventari';
@@ -89,17 +89,17 @@ begin
   values (
     auth.uid(),
     p_novy_card_slug,
-    v_src.jmeno,
-    v_src.ovr,
-    v_src.pozice,
-    v_src.preferovana_ruka,
-    v_src.narodnost,
-    v_src.tym,
-    v_src.liga,
-    v_src.typ_karty,
-    v_src.plat,
-    v_src.ap,
-    v_src.atributy,
+    (v_src).jmeno,
+    (v_src).ovr,
+    (v_src).pozice,
+    (v_src).preferovana_ruka,
+    (v_src).narodnost,
+    (v_src).tym,
+    (v_src).liga,
+    (v_src).typ_karty,
+    (v_src).plat,
+    (v_src).ap,
+    (v_src).atributy,
     false
   );
 end;
