@@ -66,6 +66,15 @@ const SEKCE_QUICK_FILTR: { id: SekceVysledkuQuick; label: string; title: string 
   { id: "golmani", label: "Brankáři (G · G)", title: "Jen seznam brankářských dvojic" },
 ];
 
+type SnapshotFiltryOptimalizatoru = {
+  minOvrStr: string;
+  maxOvrStr: string;
+  typBonusuFiltr: TypBonusuKombinace | "vse";
+};
+
+const btnHledatClass =
+  "min-h-12 touch-manipulation rounded-full border border-[var(--hut-lime)]/55 bg-[var(--hut-lime)]/15 px-6 py-3 text-sm font-semibold text-[var(--hut-lime)] shadow-sm transition-colors hover:bg-[var(--hut-lime)]/25 disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-0 sm:py-2.5";
+
 function filtrujVysledkyPodleTypuBonusu<T extends { kombinace: RadekBonusKombinaceUi }>(
   radky: readonly T[],
   typ: TypBonusuKombinace | "vse",
@@ -419,6 +428,10 @@ export function OptimalizatorFormaci() {
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
   const [typBonusuFiltr, setTypBonusuFiltr] = useState<TypBonusuKombinace | "vse">("vse");
+  /** Hodnoty filtrů použité u posledního výpočtu (klik „Hledat“). Dokud je null, náročné výpočty neběží. */
+  const [filtryPoHledani, setFiltryPoHledani] = useState<SnapshotFiltryOptimalizatoru | null>(
+    null,
+  );
   /** Rychlý výběr, který blok výsledků zobrazit — méně scrollování při velkém počtu kombinací. */
   const [sekceQuickFiltr, setSekceQuickFiltr] = useState<SekceVysledkuQuick>("vse");
 
@@ -443,6 +456,21 @@ export function OptimalizatorFormaci() {
   const neplatnyVstup =
     (minOvrStr.trim() !== "" && minOvr === null) ||
     (maxOvrStr.trim() !== "" && maxOvr === null);
+
+  const filtryOdlisneOdHledani = useMemo(() => {
+    if (!filtryPoHledani) return false;
+    return (
+      filtryPoHledani.minOvrStr !== minOvrStr ||
+      filtryPoHledani.maxOvrStr !== maxOvrStr ||
+      filtryPoHledani.typBonusuFiltr !== typBonusuFiltr
+    );
+  }, [filtryPoHledani, minOvrStr, maxOvrStr, typBonusuFiltr]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setFiltryPoHledani(null);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -501,10 +529,14 @@ export function OptimalizatorFormaci() {
   }, [supabase]);
 
   const kartyVeFiltru = useMemo(() => {
-    if (chybaOvrRozsah || neplatnyVstup) return [];
+    if (!filtryPoHledani) return [];
+    const min = parseOvrVolitelne(filtryPoHledani.minOvrStr);
+    const max = parseOvrVolitelne(filtryPoHledani.maxOvrStr);
     const bezProdanych = karty.filter((k) => !k.prodano);
-    return filtrujKartyPodleOvr(bezProdanych, minOvr, maxOvr);
-  }, [karty, minOvr, maxOvr, chybaOvrRozsah, neplatnyVstup]);
+    return filtrujKartyPodleOvr(bezProdanych, min, max);
+  }, [karty, filtryPoHledani]);
+
+  const typBonusuAplikovany = filtryPoHledani?.typBonusuFiltr ?? "vse";
 
   const vysledkyUtok = useMemo(
     () => spoctiUtocneFormace(kartyVeFiltru, utocneRadky, narodnostiVolby),
@@ -522,16 +554,16 @@ export function OptimalizatorFormaci() {
   );
 
   const utokZobrazeno = useMemo(
-    () => filtrujVysledkyPodleTypuBonusu(vysledkyUtok, typBonusuFiltr),
-    [vysledkyUtok, typBonusuFiltr],
+    () => filtrujVysledkyPodleTypuBonusu(vysledkyUtok, typBonusuAplikovany),
+    [vysledkyUtok, typBonusuAplikovany],
   );
   const obranaZobrazeno = useMemo(
-    () => filtrujVysledkyPodleTypuBonusu(vysledkyObrana, typBonusuFiltr),
-    [vysledkyObrana, typBonusuFiltr],
+    () => filtrujVysledkyPodleTypuBonusu(vysledkyObrana, typBonusuAplikovany),
+    [vysledkyObrana, typBonusuAplikovany],
   );
   const golmaniZobrazeno = useMemo(
-    () => filtrujVysledkyPodleTypuBonusu(vysledkyGolmani, typBonusuFiltr),
-    [vysledkyGolmani, typBonusuFiltr],
+    () => filtrujVysledkyPodleTypuBonusu(vysledkyGolmani, typBonusuAplikovany),
+    [vysledkyGolmani, typBonusuAplikovany],
   );
 
   const mapaUtok = useMemo(() => {
@@ -673,17 +705,39 @@ export function OptimalizatorFormaci() {
     });
   };
 
+  const handleHledat = () => {
+    if (chybaOvrRozsah || neplatnyVstup) {
+      toast.error("Zkontroluj rozsah OVR (celá čísla 0–99 nebo prázdná pole).");
+      return;
+    }
+    if (!karty.some((k) => !k.prodano)) {
+      toast.error("Žádná neprodaná karta k výpočtu.");
+      return;
+    }
+    startTransition(() => {
+      setFiltryPoHledani({
+        minOvrStr,
+        maxOvrStr,
+        typBonusuFiltr,
+      });
+    });
+  };
+
   const nacitani = authLoading || loadingKarty || loadingKomb;
+
+  const hledatDisabled =
+    nacitani || !!chybaKarty || !!chybaKomb || !karty.some((k) => !k.prodano);
 
   const zobrazitSekciUtok = sekceQuickFiltr === "vse" || sekceQuickFiltr === "utok";
   const zobrazitSekciObranu = sekceQuickFiltr === "vse" || sekceQuickFiltr === "obrana";
   const zobrazitSekciGolmany = sekceQuickFiltr === "vse" || sekceQuickFiltr === "golmani";
 
   const zobrazitPripnutouSekci =
-    (sekceQuickFiltr === "vse" && (maVybranouUtok || maVybranouObranu || maVybraneGolmany)) ||
-    (sekceQuickFiltr === "utok" && maVybranouUtok) ||
-    (sekceQuickFiltr === "obrana" && maVybranouObranu) ||
-    (sekceQuickFiltr === "golmani" && maVybraneGolmany);
+    !!filtryPoHledani &&
+    ((sekceQuickFiltr === "vse" && (maVybranouUtok || maVybranouObranu || maVybraneGolmany)) ||
+      (sekceQuickFiltr === "utok" && maVybranouUtok) ||
+      (sekceQuickFiltr === "obrana" && maVybranouObranu) ||
+      (sekceQuickFiltr === "golmani" && maVybraneGolmany));
 
   const nastaveniBonusuJakoOdkaz = jeBonusAdmin(user?.email);
 
@@ -737,8 +791,9 @@ export function OptimalizatorFormaci() {
               Filtry formací
             </h3>
             <p className="mt-1 text-xs text-[var(--hut-muted)]/90">
-              OVR: prázdné pole = bez limitu. Platí pro všechny typy formací; pozice (LK, C, PK / LO, PO / G) se
-              vždy dodrží. Typ bonusu zužuje nalezené kombinace podle hodnoty z Nastavení bonusů.
+              OVR: prázdné pole = bez limitu. Typ bonusu zužuje výsledky podle hodnoty z Nastavení bonusů. Pozice (LK,
+              C, PK / LO, PO / G) se vždy dodrží. Kombinace se dopočítají až po kliknutí na{" "}
+              <span className="text-zinc-300">Hledat</span> — úvodní načtení stránky tak zůstane rychlé.
             </p>
             <div
               className="mt-5 flex flex-wrap items-center gap-2"
@@ -810,6 +865,33 @@ export function OptimalizatorFormaci() {
                 {chybaOvrRozsah}
               </p>
             ) : null}
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className={btnHledatClass}
+                disabled={hledatDisabled}
+                onClick={handleHledat}
+              >
+                Hledat
+              </button>
+              {filtryPoHledani ? (
+                <button
+                  type="button"
+                  className="touch-manipulation rounded-full border border-[var(--hut-border)] bg-transparent px-4 py-2.5 text-sm font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-45 sm:py-2"
+                  disabled={nacitani}
+                  onClick={() => {
+                    startTransition(() => setFiltryPoHledani(null));
+                  }}
+                >
+                  Zrušit výsledky
+                </button>
+              ) : null}
+            </div>
+            {filtryPoHledani && filtryOdlisneOdHledani ? (
+              <p className="mt-3 text-sm text-amber-200/90" role="status">
+                Upravil jsi filtry oproti poslednímu hledání — pro přepočet znovu klikni na <strong>Hledat</strong>.
+              </p>
+            ) : null}
           </section>
 
           {chybaKarty ? (
@@ -827,14 +909,23 @@ export function OptimalizatorFormaci() {
             <p className="text-sm text-[var(--hut-muted)]">Načítám karty a kombinace…</p>
           ) : null}
 
-          {!nacitani && !chybaOvrRozsah && !neplatnyVstup ? (
+          {!nacitani && !filtryPoHledani && !chybaKarty && karty.length > 0 ? (
+            <div className="rounded-xl border border-dashed border-[var(--hut-border)] bg-[var(--hut-surface)]/40 px-4 py-6 text-center sm:px-6">
+              <p className="text-sm leading-relaxed text-[var(--hut-muted)]">
+                Nastav filtry výše (OVR, typ bonusu) a klikni na <strong className="text-zinc-200">Hledat</strong>. Teprve
+                potom proběhne výpočet kombinací — úvodní načtení stránky je rychlejší.
+              </p>
+            </div>
+          ) : null}
+
+          {filtryPoHledani && !nacitani ? (
             <div className="space-y-3">
               <p className="text-xs text-[var(--hut-muted)]">
                 V úvaze: {kartyVeFiltru.length} karet
                 {utocneRadky.length ? ` · ${utocneRadky.length} útočných kombinací` : ""}
                 {obranneRadky.length ? ` · ${obranneRadky.length} obranných kombinací` : ""}
-                {typBonusuFiltr !== "vse"
-                  ? ` · zobrazeno jen ${typBonusuFiltr}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
+                {filtryPoHledani.typBonusuFiltr !== "vse"
+                  ? ` · zobrazeno jen ${filtryPoHledani.typBonusuFiltr}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
                   : ` · výsledků: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`}
                 {maVybranouUtok || maVybranouObranu || maVybraneGolmany
                   ? ` · po výběru hráčů: útok ${utokZobrazenoPoVylouceni.length}/${utokZobrazeno.length}, obrana ${obranaZobrazenoPoVylouceni.length}/${obranaZobrazeno.length}, brankáři ${golmaniZobrazenoPoVylouceni.length}/${golmaniZobrazeno.length}`
@@ -866,13 +957,13 @@ export function OptimalizatorFormaci() {
                 ))}
               </div>
               <p className="text-[11px] leading-relaxed text-[var(--hut-muted)]/90">
-                Zobraz jen jednu kategorii výsledků — méně scrollování při stovkách kombinací. Filtry OVR a typ
-                bonusu platí dál.
+                Zobraz jen jednu kategorii výsledků — méně scrollování při stovkách kombinací. Pro změnu filtrů použij
+                znovu tlačítko Hledat v sekci nahoře.
               </p>
             </div>
           ) : null}
 
-          {!nacitani && zobrazitPripnutouSekci ? (
+          {filtryPoHledani && !nacitani && zobrazitPripnutouSekci ? (
             <section
               className="space-y-4 rounded-xl border border-[var(--hut-lime)]/40 bg-[var(--hut-surface-raised)]/90 p-4 shadow-inner shadow-black/15 sm:p-5"
               aria-label="Vybrané sestavy pro filtrování podle hráčů"
@@ -1061,7 +1152,7 @@ export function OptimalizatorFormaci() {
             </section>
           ) : null}
 
-          {zobrazitSekciUtok ? (
+          {filtryPoHledani && zobrazitSekciUtok ? (
           <section>
             <h3 className="text-lg font-medium text-white">Útočné formace (LK · C · PK)</h3>
             {!utocneRadky.length && !loadingKomb ? (
@@ -1069,21 +1160,20 @@ export function OptimalizatorFormaci() {
                 Žádná kompletní útočná kombinace v databázi — doplní ji správce v Nastavení bonusů.
               </p>
             ) : null}
-            {vysledkyUtok.length === 0 && utocneRadky.length > 0 && !chybaOvrRozsah && !neplatnyVstup ? (
+            {vysledkyUtok.length === 0 && utocneRadky.length > 0 && filtryPoHledani ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
                 Žádná trojice nepokrývá všechny tři symboly kombinace na pozicích LK/C/PK při zvolených filtrech.
               </p>
             ) : null}
-            {vysledkyUtok.length > 0 && utokZobrazeno.length === 0 && typBonusuFiltr !== "vse" ? (
+            {vysledkyUtok.length > 0 && utokZobrazeno.length === 0 && typBonusuAplikovany !== "vse" ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
-                Po zapnutí filtru „{typBonusuFiltr}“ nezůstala žádná útočná sestava — zkus „Vše“ nebo jiný typ.
+                Po zapnutí filtru „{typBonusuAplikovany}“ nezůstala žádná útočná sestava — zkus „Vše“ nebo jiný typ.
               </p>
             ) : null}
             {utokZobrazeno.length > 0 &&
             utokZobrazenoPoVylouceni.length === 0 &&
             maVybranouUtok &&
-            !chybaOvrRozsah &&
-            !neplatnyVstup ? (
+            filtryPoHledani ? (
               <p className="mt-2 text-sm text-amber-200/90" role="status">
                 Ostatní útočné formace sdílejí s některou z připnutých sestav alespoň jednoho hráče — v seznamu
                 níže nic nezbývá. Uprav připnutí nahoře nebo změň OVR / typ bonusu.
@@ -1104,7 +1194,7 @@ export function OptimalizatorFormaci() {
           </section>
           ) : null}
 
-          {zobrazitSekciObranu ? (
+          {filtryPoHledani && zobrazitSekciObranu ? (
           <section>
             <h3 className="text-lg font-medium text-white">Obranné dvojice (LO · PO)</h3>
             {!obranneRadky.length && !loadingKomb ? (
@@ -1112,21 +1202,20 @@ export function OptimalizatorFormaci() {
                 Žádná kompletní obranná kombinace v databázi.
               </p>
             ) : null}
-            {vysledkyObrana.length === 0 && obranneRadky.length > 0 && !chybaOvrRozsah && !neplatnyVstup ? (
+            {vysledkyObrana.length === 0 && obranneRadky.length > 0 && filtryPoHledani ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
                 Žádná dvojice LO+PO nepokrývá oba symboly kombinace při zvolených filtrech.
               </p>
             ) : null}
-            {vysledkyObrana.length > 0 && obranaZobrazeno.length === 0 && typBonusuFiltr !== "vse" ? (
+            {vysledkyObrana.length > 0 && obranaZobrazeno.length === 0 && typBonusuAplikovany !== "vse" ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
-                Pro typ „{typBonusuFiltr}“ žádná obranná dvojice.
+                Pro typ „{typBonusuAplikovany}“ žádná obranná dvojice.
               </p>
             ) : null}
             {obranaZobrazeno.length > 0 &&
             obranaZobrazenoPoVylouceni.length === 0 &&
             maVybranouObranu &&
-            !chybaOvrRozsah &&
-            !neplatnyVstup ? (
+            filtryPoHledani ? (
               <p className="mt-2 text-sm text-amber-200/90" role="status">
                 Ostatní obranné dvojice sdílejí s některým připnutím alespoň jednoho hráče — zkus upravit výběr
                 nahoře.
@@ -1150,28 +1239,27 @@ export function OptimalizatorFormaci() {
           </section>
           ) : null}
 
-          {zobrazitSekciGolmany ? (
+          {filtryPoHledani && zobrazitSekciGolmany ? (
           <section>
             <h3 className="text-lg font-medium text-white">Brankářské dvojice (G · G)</h3>
             <p className="mt-1 text-xs text-[var(--hut-muted)]">
               Stejné 2-parametrové kombinace jako u obrany; oba symboly lze přiřadit ke dvěma brankářům v
               libovolném pořadí (G1/G2 jsou jen pořadí v seznamu karet).
             </p>
-            {vysledkyGolmani.length === 0 && obranneRadky.length > 0 && !chybaOvrRozsah && !neplatnyVstup ? (
+            {vysledkyGolmani.length === 0 && obranneRadky.length > 0 && filtryPoHledani ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
                 Žádná dvojice brankářů nepokrývá oba symboly kombinace při zvolených filtrech.
               </p>
             ) : null}
-            {vysledkyGolmani.length > 0 && golmaniZobrazeno.length === 0 && typBonusuFiltr !== "vse" ? (
+            {vysledkyGolmani.length > 0 && golmaniZobrazeno.length === 0 && typBonusuAplikovany !== "vse" ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
-                Pro typ „{typBonusuFiltr}“ žádná brankářská dvojice.
+                Pro typ „{typBonusuAplikovany}“ žádná brankářská dvojice.
               </p>
             ) : null}
             {golmaniZobrazeno.length > 0 &&
             golmaniZobrazenoPoVylouceni.length === 0 &&
             maVybraneGolmany &&
-            !chybaOvrRozsah &&
-            !neplatnyVstup ? (
+            filtryPoHledani ? (
               <p className="mt-2 text-sm text-amber-200/90" role="status">
                 Ostatní brankářské dvojice sdílejí s některým připnutím alespoň jednoho hráče — zkus upravit výběr
                 nahoře.
