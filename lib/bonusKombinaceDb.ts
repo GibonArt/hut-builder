@@ -282,6 +282,70 @@ export function jeKompletniRadek(
   return p1 && p2 && jeKompletniParametr(r.param3) && bonusOk;
 }
 
+/** Stejné parametry po ořezání mezer a stejný druh — deduplikace, filtr náhledu. */
+export function parametryBonusuShodne(
+  a: BonusKombinaceParametr,
+  b: BonusKombinaceParametr,
+): boolean {
+  if (a.typ !== b.typ) return false;
+  if (a.typ === "narodnost" && b.typ === "narodnost") {
+    return a.narodnostKod.trim() === b.narodnostKod.trim();
+  }
+  if (a.typ === "tym" && b.typ === "tym") {
+    return a.liga === b.liga && a.tym.trim() === b.tym.trim();
+  }
+  if (a.typ === "typ_karty" && b.typ === "typ_karty") {
+    return a.typKarty.trim() === b.typKarty.trim();
+  }
+  return false;
+}
+
+/**
+ * Stejný záznam kombinace (parametry + hodnota + typ bonusu). U obrany se porovnávají jen první dva parametry.
+ */
+export function jsouRadkyBonusuDuplicitni(
+  a: RadekBonusKombinaceUi,
+  b: RadekBonusKombinaceUi,
+  typKombinace: TypKombinaceBonusu,
+): boolean {
+  if (a.bonusTyp !== b.bonusTyp) return false;
+  const ha = a.bonusHodnota;
+  const hb = b.bonusHodnota;
+  if (ha === null || hb === null) return false;
+  if (!Number.isFinite(ha) || !Number.isFinite(hb)) return false;
+  if (ha !== hb) return false;
+  if (!parametryBonusuShodne(a.param1, b.param1)) return false;
+  if (!parametryBonusuShodne(a.param2, b.param2)) return false;
+  if (typKombinace === "utocna") {
+    return parametryBonusuShodne(a.param3, b.param3);
+  }
+  return true;
+}
+
+/** Zachová první výskyt každé unikátní kombinace (viz `jsouRadkyBonusuDuplicitni`). */
+export function deduplikujRadkyBonusu(
+  radky: readonly RadekBonusKombinaceUi[],
+  typKombinace: TypKombinaceBonusu,
+): RadekBonusKombinaceUi[] {
+  const out: RadekBonusKombinaceUi[] = [];
+  for (const r of radky) {
+    if (!out.some((x) => jsouRadkyBonusuDuplicitni(x, r, typKombinace))) {
+      out.push(r);
+    }
+  }
+  return out;
+}
+
+export function deduplikujPayloadBonusu(payload: {
+  utocna: RadekBonusKombinaceUi[];
+  obranna: RadekBonusKombinaceUi[];
+}): { utocna: RadekBonusKombinaceUi[]; obranna: RadekBonusKombinaceUi[] } {
+  return {
+    utocna: deduplikujRadkyBonusu(payload.utocna, "utocna"),
+    obranna: deduplikujRadkyBonusu(payload.obranna, "obranna"),
+  };
+}
+
 function jenPlneKombinace(
   radky: RadekBonusKombinaceUi[],
   typ: TypKombinaceBonusu,

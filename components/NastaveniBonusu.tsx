@@ -20,12 +20,16 @@ import { HutShell } from "@/components/HutShell";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
 import {
+  deduplikujPayloadBonusu,
   formatujBonusVRadkuNahled,
+  jeKompletniParametr,
   jeKompletniRadek,
+  jsouRadkyBonusuDuplicitni,
   migrujLegacyBonusTypyVSdileneTabulce,
   nactiBonusKombinaceSdilene,
   novyParametrPrazdny,
   novyRadekBonusu,
+  parametryBonusuShodne,
   radkaZKopii,
   TYPY_BONUSU_KOMBINACE,
   ulozBonusKombinaciSdilenou,
@@ -59,6 +63,42 @@ type Payload = {
   utocna: RadekBonusKombinaceUi[];
   obranna: RadekBonusKombinaceUi[];
 };
+
+type FiltrNahledSloty = {
+  p1: BonusKombinaceParametr;
+  p2: BonusKombinaceParametr;
+  p3: BonusKombinaceParametr;
+};
+
+function prazdnyFiltrNahled(): FiltrNahledSloty {
+  return {
+    p1: novyParametrPrazdny("narodnost"),
+    p2: novyParametrPrazdny("narodnost"),
+    p3: novyParametrPrazdny("narodnost"),
+  };
+}
+
+/** Řádek projde, pokud každý vyplněný parametr ve filtru sedí na stejné pozici. U obrany se 3. parametr ve filtru neaplikuje. */
+function radekSplnujeFiltrNahled(
+  r: RadekBonusKombinaceUi,
+  filtr: FiltrNahledSloty,
+  obor: TypKombinaceBonusu,
+): boolean {
+  const dvojice: readonly [keyof FiltrNahledSloty, 1 | 2 | 3][] = [
+    ["p1", 1],
+    ["p2", 2],
+    ["p3", 3],
+  ];
+  const limit = obor === "obranna" ? 2 : 3;
+  for (let i = 0; i < limit; i++) {
+    const [klic, slot] = dvojice[i];
+    const fp = filtr[klic];
+    if (!jeKompletniParametr(fp)) continue;
+    const rp = parametrZRadek(r, slot);
+    if (!parametryBonusuShodne(fp, rp)) return false;
+  }
+  return true;
+}
 
 /** Náhled: nejvyšší bonus nahoře; bez vyplněné hodnoty až dole. */
 function seradKombinacePodleBonusuDesc(
@@ -423,6 +463,11 @@ export function NastaveniBonusu() {
   const [nahledFiltrBonusTyp, setNahledFiltrBonusTyp] = useState<
     "vse" | TypBonusuKombinace
   >("vse");
+  const [nahledFiltrSloty, setNahledFiltrSloty] = useState<FiltrNahledSloty>(() =>
+    prazdnyFiltrNahled(),
+  );
+  const [nahledFiltrParamAplikovany, setNahledFiltrParamAplikovany] = useState(false);
+  const [nahledFiltrChyba, setNahledFiltrChyba] = useState<string | null>(null);
 
   const pristup = jeBonusAdmin(user?.email);
 
@@ -512,23 +557,24 @@ export function NastaveniBonusu() {
   }, []);
 
   const persistPayload = useCallback(
-    async (next: Payload): Promise<string | null> => {
-      if (!user?.id) return "Nejsi přihlášen.";
+    async (next: Payload): Promise<{ error: string | null; ulozeno: Payload }> => {
+      const deduped = deduplikujPayloadBonusu(next);
+      if (!user?.id) return { error: "Nejsi přihlášen.", ulozeno: deduped };
       const u = await ulozBonusKombinaciSdilenou(
         supabase,
         user.id,
         "utocna",
-        next.utocna,
+        deduped.utocna,
       );
-      if (u.error) return u.error.message;
+      if (u.error) return { error: u.error.message, ulozeno: deduped };
       const o = await ulozBonusKombinaciSdilenou(
         supabase,
         user.id,
         "obranna",
-        next.obranna,
+        deduped.obranna,
       );
-      if (o.error) return o.error.message;
-      return null;
+      if (o.error) return { error: o.error.message, ulozeno: deduped };
+      return { error: null, ulozeno: deduped };
     },
     [supabase, user?.id],
   );
@@ -549,6 +595,14 @@ export function NastaveniBonusu() {
       typKombinace === "obranna"
         ? { ...kopieBase, param3: novyParametrPrazdny("narodnost") }
         : kopieBase;
+    if (
+      payload[typKombinace].some((r) => jsouRadkyBonusuDuplicitni(r, kopie, typKombinace))
+    ) {
+      setVyberChyba(
+        "Tato kombinace už v seznamu je (stejné parametry, hodnota bonusu a typ PLAT / CLK / BS).",
+      );
+      return;
+    }
     const newPayload: Payload = {
       ...payload,
       [typKombinace]: [...payload[typKombinace], kopie],
@@ -556,13 +610,13 @@ export function NastaveniBonusu() {
     setUkladam(true);
     setUlozChyba(null);
     setUlozenoOk(false);
-    const err = await persistPayload(newPayload);
+    const res = await persistPayload(newPayload);
     setUkladam(false);
-    if (err) {
-      setUlozChyba(err);
+    if (res.error) {
+      setUlozChyba(res.error);
       return;
     }
-    setPayload(newPayload);
+    setPayload(res.ulozeno);
     setDraft(novyRadekBonusu());
     setUlozenoOk(true);
   }, [draft, typKombinace, payload, user?.id, persistPayload]);
@@ -577,32 +631,91 @@ export function NastaveniBonusu() {
       setUkladam(true);
       setUlozChyba(null);
       setUlozenoOk(false);
-      const err = await persistPayload(newPayload);
+      const res = await persistPayload(newPayload);
       setUkladam(false);
-      if (err) {
-        setUlozChyba(err);
+      if (res.error) {
+        setUlozChyba(res.error);
         return;
       }
-      setPayload(newPayload);
+      setPayload(res.ulozeno);
       setUlozenoOk(true);
     },
     [payload, user?.id, persistPayload],
   );
 
+  const zmenNahledFiltrDruh = useCallback((slot: 1 | 2 | 3, druh: BonusKombinaceParametrTyp) => {
+    const p = novyParametrPrazdny(druh);
+    setNahledFiltrSloty((s) =>
+      slot === 1 ? { ...s, p1: p } : slot === 2 ? { ...s, p2: p } : { ...s, p3: p },
+    );
+    setNahledFiltrChyba(null);
+  }, []);
+
+  const zmenNahledFiltrParam = useCallback((slot: 1 | 2 | 3, p: BonusKombinaceParametr) => {
+    setNahledFiltrSloty((s) =>
+      slot === 1 ? { ...s, p1: p } : slot === 2 ? { ...s, p2: p } : { ...s, p3: p },
+    );
+    setNahledFiltrChyba(null);
+  }, []);
+
+  const aplikujFiltrNahled = useCallback(() => {
+    const n = [nahledFiltrSloty.p1, nahledFiltrSloty.p2, nahledFiltrSloty.p3].filter(
+      (p) => jeKompletniParametr(p),
+    ).length;
+    if (n < 1) {
+      setNahledFiltrChyba(
+        "Vyber alespoň jeden parametr — vyplň konkrétní hodnotu u národnosti, týmu nebo typu karty.",
+      );
+      return;
+    }
+    setNahledFiltrChyba(null);
+    setNahledFiltrParamAplikovany(true);
+  }, [nahledFiltrSloty]);
+
+  const zrusFiltrNahled = useCallback(() => {
+    setNahledFiltrParamAplikovany(false);
+    setNahledFiltrChyba(null);
+  }, []);
+
+  const vynulujKriteriaFiltruNahled = useCallback(() => {
+    setNahledFiltrSloty(prazdnyFiltrNahled());
+    setNahledFiltrChyba(null);
+    setNahledFiltrParamAplikovany(false);
+  }, []);
+
   const utocnaNahled = useMemo(() => {
-    const filtrovane =
+    let list =
       nahledFiltrBonusTyp === "vse"
         ? payload.utocna
         : payload.utocna.filter((r) => r.bonusTyp === nahledFiltrBonusTyp);
-    return seradKombinacePodleBonusuDesc(filtrovane);
-  }, [nahledFiltrBonusTyp, payload.utocna]);
+    if (nahledFiltrParamAplikovany) {
+      list = list.filter((r) => radekSplnujeFiltrNahled(r, nahledFiltrSloty, "utocna"));
+    }
+    return seradKombinacePodleBonusuDesc(list);
+  }, [
+    nahledFiltrBonusTyp,
+    nahledFiltrParamAplikovany,
+    nahledFiltrSloty,
+    payload.utocna,
+  ]);
   const obrannaNahled = useMemo(() => {
-    const filtrovane =
+    let list =
       nahledFiltrBonusTyp === "vse"
         ? payload.obranna
         : payload.obranna.filter((r) => r.bonusTyp === nahledFiltrBonusTyp);
-    return seradKombinacePodleBonusuDesc(filtrovane);
-  }, [nahledFiltrBonusTyp, payload.obranna]);
+    if (nahledFiltrParamAplikovany) {
+      list = list.filter((r) => radekSplnujeFiltrNahled(r, nahledFiltrSloty, "obranna"));
+    }
+    return seradKombinacePodleBonusuDesc(list);
+  }, [
+    nahledFiltrBonusTyp,
+    nahledFiltrParamAplikovany,
+    nahledFiltrSloty,
+    payload.obranna,
+  ]);
+
+  const nahledJeFiltrovany =
+    nahledFiltrParamAplikovany || nahledFiltrBonusTyp !== "vse";
 
   const upravKombinaci = useCallback((typ: TypKombinaceBonusu, r: RadekBonusKombinaceUi) => {
     setTypKombinace(typ);
@@ -642,7 +755,8 @@ export function NastaveniBonusu() {
         tým nebo typ karty), u <span className="font-medium text-zinc-300">Obrana</span> stačí dva. Ve
         sloupci <span className="font-medium text-zinc-300">Bonus</span> zadej číslo a typ (PLAT, CLK,
         BS). Klikni <span className="font-medium text-zinc-300">Uložit</span> — kombinace se zapíše do
-        databáze a formulář se vyprázdní. Smazání řádku v náhledu se také hned uloží.
+        databáze a formulář se vyprázdní. Stejný řádek (parametry + hodnota + typ bonusu) dvakrát uložit nelze.
+        Smazání řádku v náhledu se také hned uloží.
       </p>
 
       {nastaveniChyba ? (
@@ -705,7 +819,7 @@ export function NastaveniBonusu() {
             className="sticky top-[max(0.5rem,env(safe-area-inset-top))] z-20 mt-8 scroll-mt-4 rounded-xl border border-[var(--hut-border)] bg-[color-mix(in_srgb,var(--hut-surface)_92%,transparent)] p-3 shadow-lg shadow-black/20 backdrop-blur-md supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--hut-surface)_85%,transparent)] sm:top-4 sm:p-4"
           >
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)] lg:mb-2">
-              Filtr kombinace
+              Nová kombinace
             </p>
             <div
               className={
@@ -761,8 +875,78 @@ export function NastaveniBonusu() {
             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]">
               Náhled kombinací
             </h3>
+
             <div
-              className="mt-3 flex flex-wrap items-center gap-2"
+              id="bonus-nahled-filtr"
+              className="mt-5 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/25 p-3 sm:p-4"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+                Filtr uložených řádků (parametry)
+              </p>
+              <p className="mt-1.5 text-xs leading-relaxed text-[var(--hut-muted)]">
+                Vyplň alespoň jeden parametr stejně jako při zadávání — po kliknutí na Filtruj se zúží oba sloupce
+                náhledu. U obranných kombinací se třetí parametr ve filtru k řádkům neaplikuje (obrana má jen dva
+                symboly).
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-3">
+                {([1, 2, 3] as const).map((slot) => (
+                  <SloupecParametru
+                    key={slot}
+                    slot={slot}
+                    draftId={`nahled-filtr-s${slot}`}
+                    param={
+                      slot === 1
+                        ? nahledFiltrSloty.p1
+                        : slot === 2
+                          ? nahledFiltrSloty.p2
+                          : nahledFiltrSloty.p3
+                    }
+                    narodnostiVolby={narodnostiVolby}
+                    hutdbTypyKaret={hutdbTypyKaret}
+                    ukladam={ukladam}
+                    onZmenDruh={(druh) => zmenNahledFiltrDruh(slot, druh)}
+                    onZmenParam={(p) => zmenNahledFiltrParam(slot, p)}
+                  />
+                ))}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void aplikujFiltrNahled()}
+                  disabled={ukladam}
+                  className="rounded-full border border-[var(--hut-focus)]/50 bg-[var(--hut-focus)]/15 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-white transition-colors hover:bg-[var(--hut-focus)]/25 disabled:opacity-45"
+                >
+                  Filtruj
+                </button>
+                <button
+                  type="button"
+                  onClick={zrusFiltrNahled}
+                  disabled={ukladam || !nahledFiltrParamAplikovany}
+                  className="rounded-full border border-[var(--hut-border)] px-4 py-2 text-sm font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-zinc-200 disabled:opacity-40"
+                >
+                  Zrušit filtr parametrů
+                </button>
+                <button
+                  type="button"
+                  onClick={vynulujKriteriaFiltruNahled}
+                  disabled={ukladam}
+                  className="rounded-full border border-[var(--hut-border)] px-4 py-2 text-sm font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-zinc-200 disabled:opacity-40"
+                >
+                  Vynulovat kritéria
+                </button>
+                {nahledFiltrParamAplikovany ? (
+                  <span className="text-xs font-medium text-[var(--hut-lime)]">Filtr parametrů je zapnutý</span>
+                ) : null}
+              </div>
+              {nahledFiltrChyba ? (
+                <p className="mt-3 text-sm text-amber-200" role="alert">
+                  {nahledFiltrChyba}
+                </p>
+              ) : null}
+            </div>
+
+            <div
+              className="mt-5 flex flex-wrap items-center gap-2"
               role="group"
               aria-label="Filtrovat náhled podle typu bonusu"
             >
@@ -798,7 +982,9 @@ export function NastaveniBonusu() {
                     </li>
                   ) : utocnaNahled.length === 0 ? (
                     <li className="rounded-lg border border-dashed border-[var(--hut-border)] px-3 py-6 text-center text-sm text-[var(--hut-muted)]">
-                      Pro zvolený typ bonusu tu nic není — zkus „Vše“ nebo jiný typ.
+                      {nahledJeFiltrovany
+                        ? "Žádná útočná kombinace neodpovídá zvoleným filtrům — zkus „Vše“, zrušit filtr parametrů nebo upravit kritéria."
+                        : "Pro zvolený typ bonusu tu nic není — zkus „Vše“ nebo jiný typ."}
                     </li>
                   ) : (
                     utocnaNahled.map((r) => (
@@ -839,7 +1025,9 @@ export function NastaveniBonusu() {
                     </li>
                   ) : obrannaNahled.length === 0 ? (
                     <li className="rounded-lg border border-dashed border-[var(--hut-border)] px-3 py-6 text-center text-sm text-[var(--hut-muted)]">
-                      Pro zvolený typ bonusu tu nic není — zkus „Vše“ nebo jiný typ.
+                      {nahledJeFiltrovany
+                        ? "Žádná obranná kombinace neodpovídá zvoleným filtrům — zkus „Vše“, zrušit filtr parametrů nebo upravit kritéria."
+                        : "Pro zvolený typ bonusu tu nic není — zkus „Vše“ nebo jiný typ."}
                     </li>
                   ) : (
                     obrannaNahled.map((r) => (
