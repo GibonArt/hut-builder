@@ -195,6 +195,12 @@ const RADKY: HutDbTypKarty[] = [
     comboSoubor: "SOTM1890082452.png",
   },
   {
+    hodnotaFiltru: "STANLEY CUP PLAYOFFS",
+    jmenoCs: "Stanley Cup Playoffs",
+    popisCs: "Karty z play off NHL / Stanley Cup (HUTDB combo asset CUP).",
+    comboSoubor: "CUP302895086.png",
+  },
+  {
     hodnotaFiltru: "SUPERSTAR ORIGINS",
     jmenoCs: "Superstar Origins",
     popisCs: "Původ a rozjezd dnešních superhvězd.",
@@ -277,6 +283,7 @@ const PORADI_MRIZKY_CHEMISTRY: string[] = [
   "SUPERSTAR ORIGINS",
   "STARS OF THE MONTH",
   "SPOTLIGHT",
+  "STANLEY CUP PLAYOFFS",
   "TRADE QUEST",
   "TEAM OF THE SEASON",
   "TEAM OF THE WEEK",
@@ -342,6 +349,9 @@ const ALIAS_NA_FILTR: Record<string, string> = {
   PRO: "PROTOTYPES",
   PROTOTYPES: "PROTOTYPES",
   SPOT: "SPOTLIGHT",
+  /** EA / HUT text „Stanley Cup Playoffs“ → kanonický filtr. */
+  SCP: "STANLEY CUP PLAYOFFS",
+  SCPP: "STANLEY CUP PLAYOFFS",
   TQ: "TRADE QUEST",
   TRAN: "TRANSACTIONS",
   XP: "XP",
