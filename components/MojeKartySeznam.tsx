@@ -21,6 +21,7 @@ import { useRazeniKaret } from "@/lib/useRazeniKaret";
 import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 
 type FiltrPozice = Pozice | "vse";
+type FiltrProdano = "vse" | "neprodane" | "prodane";
 
 function textPocetKaret(n: number): string {
   if (n === 1) return "1 karta";
@@ -37,6 +38,7 @@ export function MojeKartySeznam() {
   const [loading, setLoading] = useState(false);
   const [chyba, setChyba] = useState<string | null>(null);
   const [filtrPozice, setFiltrPozice] = useState<FiltrPozice>("vse");
+  const [filtrProdano, setFiltrProdano] = useState<FiltrProdano>("vse");
   const [razeniKaret, nastavRazeniKaret] = useRazeniKaret();
   const [mazuId, setMazuId] = useState<string | null>(null);
 
@@ -77,9 +79,17 @@ export function MojeKartySeznam() {
   }, [user?.id, supabase]);
 
   const filtrovane = useMemo(() => {
-    if (filtrPozice === "vse") return karty;
-    return karty.filter((k) => k.pozice === filtrPozice);
-  }, [karty, filtrPozice]);
+    let rows = karty;
+    if (filtrPozice !== "vse") {
+      rows = rows.filter((k) => k.pozice === filtrPozice);
+    }
+    if (filtrProdano === "neprodane") {
+      rows = rows.filter((k) => k.prodano !== true);
+    } else if (filtrProdano === "prodane") {
+      rows = rows.filter((k) => k.prodano === true);
+    }
+    return rows;
+  }, [karty, filtrPozice, filtrProdano]);
 
   const filtrovaneSerazene = useMemo(
     () => seraditKarty(filtrovane, razeniKaret),
@@ -151,7 +161,8 @@ export function MojeKartySeznam() {
       <div className="flex min-h-full w-full flex-col">
         <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Moje karty</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
-          Všechny uložené karty. Filtr podle pozice a řazení podle OVR nebo pořadí přidání.
+          Všechny uložené karty. Filtr podle pozice, prodaných (aktivní) karet a řazení podle OVR nebo pořadí
+          přidání.
         </p>
 
         {user ? (
@@ -235,6 +246,43 @@ export function MojeKartySeznam() {
               </button>
             ))}
           </div>
+          <div
+            className="flex min-w-0 flex-wrap items-center gap-2"
+            role="group"
+            aria-label="Filtr podle stavu (prodané karty)"
+          >
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+              Prodáno
+            </span>
+            {(
+              [
+                ["vse", "Všechny"] as const,
+                ["neprodane", "Aktivní"] as const,
+                ["prodane", "Prodané"] as const,
+              ] satisfies readonly (readonly [FiltrProdano, string])[]
+            ).map(([hodnota, label]) => (
+              <button
+                key={hodnota}
+                type="button"
+                onClick={() => setFiltrProdano(hodnota)}
+                title={
+                  hodnota === "vse"
+                    ? "Včetně prodaných i neprodaných"
+                    : hodnota === "neprodane"
+                      ? "Jen karty, které nejsou označené jako prodané"
+                      : "Jen karty označené jako prodané"
+                }
+                className={[
+                  "touch-manipulation rounded-full border px-3 py-2 text-xs font-medium transition-colors sm:py-1.5",
+                  filtrProdano === hodnota
+                    ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                    : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                ].join(" ")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {user ? (
             <p
               className="shrink-0 text-sm font-medium tabular-nums text-white sm:ml-auto"
@@ -282,7 +330,7 @@ export function MojeKartySeznam() {
                 </p>
               </>
             ) : (
-              "Žádná karta pro zvolenou pozici."
+              "Žádná karta pro zvolenou kombinaci filtrů (pozice, stav prodáno)."
             )}
           </div>
         ) : (
