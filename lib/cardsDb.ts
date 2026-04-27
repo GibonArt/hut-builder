@@ -114,13 +114,14 @@ export function hutCardToInsertRow(userId: string, card: HutCard) {
   };
 }
 
-/** Uživatelsky čitelná chyba — shoda s existujícím řádkem (jakýkoli uživatel). */
+/** Uživatelsky čitelná chyba — u tohoto účtu už existuje jiná karta se stejným obsahem. */
 export const CHYBA_DUPLICITNI_OBSAH_KARTY =
-  "Karta se stejnými údaji už v databázi existuje. Duplikát nelze uložit.";
+  "Karta se stejnými údaji už ve tvém inventáři existuje. Duplikát nelze uložit.";
 
 async function maDuplicitniObsah(
   supabase: SupabaseClient,
   card: HutCard,
+  proUzivateleId: string,
   vyloucit?: { userId: string; cardSlug: string },
 ): Promise<{ error: Error | null; duplikat: boolean }> {
   const row = dataRadkuZHutCard(card);
@@ -136,6 +137,8 @@ async function maDuplicitniObsah(
     p_plat: row.plat,
     p_ap: row.ap ?? null,
     p_atributy: row.atributy ?? null,
+    p_pouze_pro_user_id: proUzivateleId,
+    p_prodano: row.prodano === true,
     p_vyloucit_user_id: vyloucit?.userId ?? null,
     p_vyloucit_card_slug: vyloucit?.cardSlug ?? null,
   });
@@ -172,7 +175,7 @@ export async function vlozKartu(
   userId: string,
   card: HutCard,
 ): Promise<{ error: Error | null }> {
-  const dup = await maDuplicitniObsah(supabase, card);
+  const dup = await maDuplicitniObsah(supabase, card, userId);
   if (dup.error) return { error: dup.error };
   if (dup.duplikat) return { error: new Error(CHYBA_DUPLICITNI_OBSAH_KARTY) };
 
@@ -198,6 +201,7 @@ export function jsouKartyObsahoveStejne(a: HutCard, b: HutCard): boolean {
     ra.typ_karty === rb.typ_karty &&
     ra.plat === rb.plat &&
     (ra.ap ?? null) === (rb.ap ?? null) &&
+    ra.prodano === rb.prodano &&
     JSON.stringify(ra.atributy ?? null) === JSON.stringify(rb.atributy ?? null)
   );
 }
@@ -330,7 +334,7 @@ export async function aktualizujKartu(
   puvodniSlug: string,
   card: HutCard,
 ): Promise<{ error: Error | null }> {
-  const dup = await maDuplicitniObsah(supabase, card, {
+  const dup = await maDuplicitniObsah(supabase, card, userId, {
     userId,
     cardSlug: puvodniSlug,
   });

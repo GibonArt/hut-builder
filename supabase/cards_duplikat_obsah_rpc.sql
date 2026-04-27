@@ -1,6 +1,40 @@
--- Globální kontrola duplicitního obsahu karty (stejná data jako u jiného řádku v `cards`, libovolný uživatel).
+-- Kontrola duplicitního obsahu karty pouze uvnitř inventáře daného uživatele (stejná sada polí
+-- jako u jiného jeho řádku v `cards`). Jiný účet se shodným střídáním tedy nebrání uložení.
 -- Spusť v Supabase SQL Editor po cards_setup.sql.
 -- Aplikace volá přes supabase.rpc('cards_ma_duplicitni_obsah', …).
+--
+-- Migrace: staré signatury funkce, aby se po úpravách vytvořila právě jedna verze.
+drop function if exists public.cards_ma_duplicitni_obsah(
+  text,
+  smallint,
+  text,
+  text,
+  text,
+  text,
+  text,
+  text,
+  numeric,
+  smallint,
+  jsonb,
+  uuid,
+  text
+);
+drop function if exists public.cards_ma_duplicitni_obsah(
+  text,
+  smallint,
+  text,
+  text,
+  text,
+  text,
+  text,
+  text,
+  numeric,
+  smallint,
+  jsonb,
+  uuid,
+  uuid,
+  text
+);
 
 create or replace function public.cards_ma_duplicitni_obsah(
   p_jmeno text,
@@ -14,6 +48,8 @@ create or replace function public.cards_ma_duplicitni_obsah(
   p_plat numeric,
   p_ap smallint,
   p_atributy jsonb,
+  p_pouze_pro_user_id uuid,
+  p_prodano boolean,
   p_vyloucit_user_id uuid default null,
   p_vyloucit_card_slug text default null
 ) returns boolean
@@ -26,7 +62,9 @@ as $$
     select 1
     from public.cards c
     where
-      trim(c.jmeno) = trim(p_jmeno)
+      c.user_id = p_pouze_pro_user_id
+      and c.prodano = p_prodano
+      and trim(c.jmeno) = trim(p_jmeno)
       and c.ovr = p_ovr
       and c.pozice = p_pozice
       and c.preferovana_ruka = p_preferovana_ruka
@@ -65,6 +103,8 @@ revoke all on function public.cards_ma_duplicitni_obsah(
   smallint,
   jsonb,
   uuid,
+  boolean,
+  uuid,
   text
 ) from public;
 
@@ -81,8 +121,10 @@ grant execute on function public.cards_ma_duplicitni_obsah(
   smallint,
   jsonb,
   uuid,
+  boolean,
+  uuid,
   text
 ) to authenticated;
 
 comment on function public.cards_ma_duplicitni_obsah is
-  'Vrací true, pokud už existuje karta se shodným obsahem polí (napříč uživateli). Volitelně vyloučí jeden řádek (úprava vlastní karty).';
+  'Vrací true, pokud tento uživatel už má jiný řádek se shodným obsahem polí (včetně prodáno). Volitelně vyloučí jeden slug (úprava vlastní karty).';

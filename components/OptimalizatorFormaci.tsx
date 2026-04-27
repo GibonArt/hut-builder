@@ -83,6 +83,35 @@ function filtrujVysledkyPodleTypuBonusu<T extends { kombinace: RadekBonusKombina
   return radky.filter((x) => x.kombinace.bonusTyp === typ);
 }
 
+/** Sestupně = nejvyšší číselná hodnota bonusu první; při stejné hodnotě zachová původní pořadí. */
+type SmerRazeniHodnotyBonusu = "sestupne" | "vzestupne";
+
+function hodnotaBonusuCiselne(r: RadekBonusKombinaceUi): number {
+  const h = r.bonusHodnota;
+  if (h == null || !Number.isFinite(h)) return Number.NaN;
+  return h;
+}
+
+function seraditPodleHodnotyBonusu<T extends { kombinace: RadekBonusKombinaceUi }>(
+  radky: readonly T[],
+  smer: SmerRazeniHodnotyBonusu,
+): T[] {
+  const sMetadaty = radky.map((row, puvodniIndex) => ({ row, puvodniIndex }));
+  sMetadaty.sort((a, b) => {
+    const va = hodnotaBonusuCiselne(a.row.kombinace);
+    const vb = hodnotaBonusuCiselne(b.row.kombinace);
+    const na = Number.isNaN(va);
+    const nb = Number.isNaN(vb);
+    if (na && nb) return a.puvodniIndex - b.puvodniIndex;
+    if (na) return 1;
+    if (nb) return -1;
+    const rozdil = va - vb;
+    if (rozdil !== 0) return smer === "sestupne" ? -rozdil : rozdil;
+    return a.puvodniIndex - b.puvodniIndex;
+  });
+  return sMetadaty.map((x) => x.row);
+}
+
 function klicUtocnaFormace(v: UtocnaFormaceVysledek): string {
   return `${v.kombinace.id}|${v.lk.id}|${v.c.id}|${v.pk.id}`;
 }
@@ -553,6 +582,12 @@ export function OptimalizatorFormaci() {
   /** Rychlý výběr, který blok výsledků zobrazit — méně scrollování při velkém počtu kombinací. */
   const [sekceQuickFiltr, setSekceQuickFiltr] = useState<SekceVysledkuQuick>("vse");
   /**
+   * Řazení seznamů výsledků (útok / obrana / brankáři) podle čísla u uložené kombinace = platí pro PLAT, CLK i BS
+   * (srovnatelná hodnota v rámci řádku).
+   */
+  const [smerRazeniHodnotyBonusu, setSmerRazeniHodnotyBonusu] =
+    useState<SmerRazeniHodnotyBonusu>("sestupne");
+  /**
    * Po „Hledat“: filtrování řádků podle toho, zda stejná sestava hráčů splňuje víc typů bonusů (PLAT/CLK/BS).
    * Dynamické hodnoty „BS+PLAT“ atd. odpovídají přesné množině typů u té sestavy v plném výsledku.
    */
@@ -593,6 +628,7 @@ export function OptimalizatorFormaci() {
     if (!user?.id) {
       setFiltryPoHledani(null);
       setFiltrPrekryvBonusu("vse");
+      setSmerRazeniHodnotyBonusu("sestupne");
     }
   }, [user?.id]);
 
@@ -806,6 +842,19 @@ export function OptimalizatorFormaci() {
     if (!zakazaneIdGolmani.size) return golmaniZobrazenoPoPrekryvu;
     return golmaniZobrazenoPoPrekryvu.filter((row) => !maDvojiceSpolecnehoHrace(row, zakazaneIdGolmani));
   }, [golmaniZobrazenoPoPrekryvu, zakazaneIdGolmani]);
+
+  const utokZobrazenoPoVylouceniSerazeno = useMemo(
+    () => seraditPodleHodnotyBonusu(utokZobrazenoPoVylouceni, smerRazeniHodnotyBonusu),
+    [utokZobrazenoPoVylouceni, smerRazeniHodnotyBonusu],
+  );
+  const obranaZobrazenoPoVylouceniSerazeno = useMemo(
+    () => seraditPodleHodnotyBonusu(obranaZobrazenoPoVylouceni, smerRazeniHodnotyBonusu),
+    [obranaZobrazenoPoVylouceni, smerRazeniHodnotyBonusu],
+  );
+  const golmaniZobrazenoPoVylouceniSerazeno = useMemo(
+    () => seraditPodleHodnotyBonusu(golmaniZobrazenoPoVylouceni, smerRazeniHodnotyBonusu),
+    [golmaniZobrazenoPoVylouceni, smerRazeniHodnotyBonusu],
+  );
 
   useEffect(() => {
     const valid = new Set(vysledkyUtok.map((x) => klicUtocnaFormace(x)));
@@ -1063,6 +1112,7 @@ export function OptimalizatorFormaci() {
                   onClick={() => {
                     startTransition(() => {
                       setFiltrPrekryvBonusu("vse");
+                      setSmerRazeniHodnotyBonusu("sestupne");
                       setFiltryPoHledani(null);
                     });
                   }}
@@ -1202,6 +1252,45 @@ export function OptimalizatorFormaci() {
               <p className="text-[11px] leading-relaxed text-[var(--hut-muted)]/90">
                 Zobraz jen jednu kategorii výsledků — méně scrollování při stovkách kombinací. Pro změnu filtrů použij
                 znovu tlačítko Hledat v sekci nahoře.
+              </p>
+              <div
+                className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--hut-border)]/80 pt-3"
+                role="group"
+                aria-label="Řazení podle číselné hodnoty bonusu"
+              >
+                <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+                  Řadit podle bonusu
+                </span>
+                <button
+                  type="button"
+                  title="Nejvyšší uvedená hodnota (PLAT / CLK / BS) nahoře"
+                  onClick={() => setSmerRazeniHodnotyBonusu("sestupne")}
+                  className={[
+                    btnFiltrClass,
+                    smerRazeniHodnotyBonusu === "sestupne"
+                      ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                      : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                  ].join(" ")}
+                >
+                  Nejvyšší → nejnižší
+                </button>
+                <button
+                  type="button"
+                  title="Nejnižší uvedená hodnota nahoře"
+                  onClick={() => setSmerRazeniHodnotyBonusu("vzestupne")}
+                  className={[
+                    btnFiltrClass,
+                    smerRazeniHodnotyBonusu === "vzestupne"
+                      ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                      : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                  ].join(" ")}
+                >
+                  Nejnižší → nejvyšší
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-[var(--hut-muted)]/90">
+                Řadí všechny tři seznamy stejně — podle čísla u rovnítka u dané uložené kombinace (PLAT, CLK i BS
+                se porovnávají číselně).
               </p>
             </div>
           ) : null}
@@ -1456,7 +1545,7 @@ export function OptimalizatorFormaci() {
               </p>
             ) : null}
             <ul className="mt-4 space-y-4">
-              {utokZobrazenoPoVylouceni.map((v) => {
+              {utokZobrazenoPoVylouceniSerazeno.map((v) => {
                 const dalsi = dalsiTypyBonusuProRadek(
                   v.kombinace.bonusTyp,
                   mapaBonusuUtok.get(klicHracuUtokTrojice(v)),
@@ -1511,7 +1600,7 @@ export function OptimalizatorFormaci() {
               </p>
             ) : null}
             <ul className="mt-4 space-y-4">
-              {obranaZobrazenoPoVylouceni.map((v) => {
+              {obranaZobrazenoPoVylouceniSerazeno.map((v) => {
                 const dalsi = dalsiTypyBonusuProRadek(
                   v.kombinace.bonusTyp,
                   mapaBonusuObrana.get(klicHracuDvojiceIde(v)),
@@ -1568,7 +1657,7 @@ export function OptimalizatorFormaci() {
               </p>
             ) : null}
             <ul className="mt-4 space-y-4">
-              {golmaniZobrazenoPoVylouceni.map((v) => {
+              {golmaniZobrazenoPoVylouceniSerazeno.map((v) => {
                 const dalsi = dalsiTypyBonusuProRadek(
                   v.kombinace.bonusTyp,
                   mapaBonusuGolmani.get(klicHracuDvojiceIde(v)),

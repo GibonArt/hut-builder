@@ -27,7 +27,6 @@ import {
   ceskaZpravaKopieKarty,
   jsouKartyObsahoveStejne,
   kopirujKartuZKatalogu,
-  najdiUuidZdrojeProShodnyObsah,
   nactiKartyUzivatele,
   smazKartuPodleSlug,
   vlozKartu,
@@ -171,8 +170,6 @@ export function MujInventar() {
   const [katalogZdrojUuid, setKatalogZdrojUuid] = useState<string | null>(null);
   /** Snapshot obsahu pro rozhodnutí kopie vs. ruční insert. */
   const [katalogSnapshot, setKatalogSnapshot] = useState<HutCard | null>(null);
-  /** Po neúspěchu `vlozKartu` (globální duplicita) — UUID záznamu pro kopii. */
-  const [navrhKopieUuid, setNavrhKopieUuid] = useState<string | null>(null);
 
   const tymyProAktualniLigu = useMemo(() => tymyProLigu(liga), [liga]);
 
@@ -190,7 +187,6 @@ export function MujInventar() {
     (h: EaNhl26Hrac) => {
       setKatalogZdrojUuid(null);
       setKatalogSnapshot(null);
-      setNavrhKopieUuid(null);
       setProdano(false);
       setJmeno(h.jmeno);
       setFormError(null);
@@ -356,7 +352,6 @@ export function MujInventar() {
     setFormDirty(false);
     setKatalogZdrojUuid(null);
     setKatalogSnapshot(null);
-    setNavrhKopieUuid(null);
     setProdano(false);
   }, []);
 
@@ -365,7 +360,6 @@ export function MujInventar() {
       if (rezim === "editovat") {
         setKatalogZdrojUuid(null);
         setKatalogSnapshot(null);
-        setNavrhKopieUuid(null);
       }
       setJmeno(k.jmeno);
       setOvr(String(k.ovr));
@@ -633,42 +627,15 @@ export function MujInventar() {
       naplnFormZKarty(k, "kopie");
       setKatalogZdrojUuid(dbId);
       setKatalogSnapshot({ ...k });
-      setNavrhKopieUuid(null);
       setFormDirty(false);
       toast.info("Údaje z katalogu — před uložením zkontroluj. „Přidat mezi mé karty“ použij jen pokud nic neměníš.");
     },
     [naplnFormZKarty],
   );
 
-  const pridatNavrzenouKopii = async () => {
-    if (!user?.id || !navrhKopieUuid) return;
-    setFormError(null);
-    const sestaveno = sestavKartuZFormulare();
-    if (!sestaveno.ok) {
-      setFormError(sestaveno.chyba);
-      return;
-    }
-    setUkladamKartu(true);
-    const { error } = await kopirujKartuZKatalogu(
-      supabase,
-      navrhKopieUuid,
-      sestaveno.finalId,
-    );
-    setUkladamKartu(false);
-    if (error) {
-      setFormError(ceskaZpravaKopieKarty(error.message));
-      return;
-    }
-    const ulozena: HutCard = { ...sestaveno.nova, id: sestaveno.finalId };
-    toast.success("Karta byla přidána do inventáře (kopie ze sdílené databáze).");
-    setKarty((prev) => [...prev, ulozena]);
-    resetForm();
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    setNavrhKopieUuid(null);
 
     const sestaveno = sestavKartuZFormulare();
     if (!sestaveno.ok) {
@@ -744,17 +711,10 @@ export function MujInventar() {
         errUloz.message === CHYBA_DUPLICITNI_OBSAH_KARTY ||
         errUloz.message.includes("stejnými údaji")
       ) {
-        const { uuid, error: errHled } = await najdiUuidZdrojeProShodnyObsah(
-          supabase,
-          nova,
+        setFormError(
+          "Kartu se shodnými údaji už v inventáři máš — uprav stávající záznam, nebo změň třeba OVR, tým nebo X-Faktor.",
         );
-        if (!errHled && uuid) {
-          setNavrhKopieUuid(uuid);
-          setFormError(
-            "Karta se stejnými údaji už v databázi existuje. Můžeš ji přidat kopírováním do svého inventáře (bez druhého globálního záznamu se shodnými daty).",
-          );
-          return;
-        }
+        return;
       }
       setFormError(ceskaZpravaAuthNeboDb(errUloz.message));
       return;
@@ -847,23 +807,6 @@ export function MujInventar() {
           >
             {formError}
           </p>
-        ) : null}
-
-        {navrhKopieUuid ? (
-          <div className="mt-4 rounded-xl border border-[var(--hut-lime)]/45 bg-[var(--hut-lime)]/10 px-4 py-3 text-sm text-zinc-100">
-            <p className="leading-snug">
-              Shoda s existujícím záznamem v databázi — můžeš přidat stejnou kartu jen do svého inventáře (nový řádek pod
-              tvým účtem, bez měnění globálního „originálu“).
-            </p>
-            <button
-              type="button"
-              className="mt-3 min-h-11 touch-manipulation rounded-full border border-[var(--hut-lime)]/60 bg-[var(--hut-lime)]/15 px-5 py-2 text-sm font-semibold text-[var(--hut-lime)] transition-colors hover:bg-[var(--hut-lime)]/25 disabled:opacity-45"
-              disabled={formZakazany}
-              onClick={() => void pridatNavrzenouKopii()}
-            >
-              {ukladamKartu ? "Přidávám…" : "Přidat mezi mé karty"}
-            </button>
-          </div>
         ) : null}
 
         <fieldset
@@ -1181,8 +1124,9 @@ export function MujInventar() {
         </div>
         {katalogZdrojUuid && !editujiSlug && !shodnySeSnapshotemKatalogu ? (
           <p className="mt-3 text-xs leading-snug text-amber-200/90" role="status">
-            Upravil jsi údaje oproti výběru z katalogu — odesláním se uloží jako běžná nová karta (kontrola duplicit v celé
-            databázi). Chceš‑li čistou kopii z databáze, znovu vyber řádek v katalogu nebo vymazat formulář.
+            Upravil jsi údaje oproti výběru z katalogu — odesláním se uloží jako běžná nová karta (kontrola duplicit jen u
+            tvých uložených karet). Chceš‑li čistou kopii z databáze, znovu vyber řádek v katalogu nebo vymazat
+            formulář.
           </p>
         ) : null}
         </fieldset>
