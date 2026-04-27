@@ -206,6 +206,14 @@ export function jsouKartyObsahoveStejne(a: HutCard, b: HutCard): boolean {
   );
 }
 
+/** Zda `kandidát` odpovídá už některé uložené kartě (stejné srovnání obsahu jako při ukládání do DB). */
+export function shodnaKartaJizVInventari(
+  kandidat: HutCard,
+  inventar: readonly HutCard[],
+): boolean {
+  return inventar.some((k) => jsouKartyObsahoveStejne(k, kandidat));
+}
+
 export type GlobalniKatalogRadkaDb = {
   card_id: string;
   jmeno: string;

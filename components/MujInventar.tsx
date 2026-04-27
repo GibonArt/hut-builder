@@ -49,6 +49,7 @@ import { TymHledacNapricLigami } from "@/components/TymHledacNapricLigami";
 import { TymVyber } from "@/components/TymVyber";
 import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
 import { EaHracNapoveda } from "@/components/EaHracNapoveda";
+import { KatalogHromadnyImport } from "@/components/KatalogHromadnyImport";
 import { KatalogKaretVyber } from "@/components/KatalogKaretVyber";
 import {
   EA_POZICE_NA_HUT,
@@ -68,6 +69,7 @@ import { HUT_POZICE, HUT_POZICE_LABEL } from "@/lib/hutPozice";
 import { nahledCtyriKaret, type RazeniKaret } from "@/lib/hutRazeniKaret";
 import { useRazeniKaret } from "@/lib/useRazeniKaret";
 import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
+import { vygenerujIdKarty } from "@/lib/vygenerujIdKarty";
 
 const RUKY: Ruka[] = ["LR", "PR"];
 
@@ -75,31 +77,6 @@ const RUKA_LABEL: Record<Ruka, string> = {
   LR: "Levá (LR)",
   PR: "Pravá (PR)",
 };
-
-/** Poslední „slovo“ z celého jména — základ pro slug v ID karty (např. McDavid z Connora). */
-function zakladSlugZJmena(jmeno: string): string {
-  const parts = jmeno.trim().split(/\s+/).filter(Boolean);
-  const token = parts.length ? parts[parts.length - 1]! : jmeno.trim();
-  const ascii = token.normalize("NFD").replace(/\p{M}/gu, "");
-  const slug = ascii
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug || "hrac";
-}
-
-/** `slug-ovr`; při kolizi s existující kartou `-2`, `-3`, … */
-function vygenerujIdKarty(
-  jmeno: string,
-  ovr: number,
-  existujici: readonly HutCard[],
-): string {
-  const base = `${zakladSlugZJmena(jmeno)}-${ovr}`;
-  if (!existujici.some((k) => k.id === base)) return base;
-  let n = 2;
-  while (existujici.some((k) => k.id === `${base}-${n}`)) n += 1;
-  return `${base}-${n}`;
-}
 
 const inputClass =
   "w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2 text-sm text-white placeholder:text-[var(--hut-muted)]/50 outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)]";
@@ -633,6 +610,11 @@ export function MujInventar() {
     [naplnFormZKarty],
   );
 
+  const priHromadnePridaneZKatalogu = useCallback((nove: HutCard[]) => {
+    if (nove.length === 0) return;
+    setKarty((prev) => [...prev, ...nove]);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -819,6 +801,12 @@ export function MujInventar() {
               userId={user?.id ?? null}
               disabled={formZakazany}
               onVybrat={priVyberuZKatalogu}
+            />
+            <KatalogHromadnyImport
+              userId={user?.id ?? null}
+              stavajiciKarty={karty}
+              disabled={formZakazany}
+              onKartyPridany={priHromadnePridaneZKatalogu}
             />
             <EaHracNapoveda
               userId={user?.id ?? null}
