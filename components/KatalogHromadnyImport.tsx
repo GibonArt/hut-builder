@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   ceskaZpravaKopieKarty,
@@ -44,7 +44,9 @@ export function KatalogHromadnyImport({
   const supabase = useMemo(() => createClient(), []);
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
   const baseId = useId();
-  const [otevreno, setOtevreno] = useState(true);
+  const [otevreno, setOtevreno] = useState(false);
+  /** První načtení katalogu až po rozbalení; při změně uživatele znovu. */
+  const katalogNactenProUser = useRef<string | null>(null);
   const [nacitam, setNacitam] = useState(false);
   const [pridavam, setPridavam] = useState(false);
   const [chyba, setChyba] = useState<string | null>(null);
@@ -64,6 +66,7 @@ export function KatalogHromadnyImport({
     if (error) {
       setChyba(ceskaZpravaAuthNeboDb(error.message));
       setRadky([]);
+      katalogNactenProUser.current = null;
       return;
     }
     const polozky: Polozka[] = [];
@@ -76,8 +79,18 @@ export function KatalogHromadnyImport({
   }, [supabase, userId]);
 
   useEffect(() => {
+    katalogNactenProUser.current = null;
+    setRadky([]);
+    setVybrano(new Set());
+    setChyba(null);
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId || !otevreno) return;
+    if (katalogNactenProUser.current === userId) return;
+    katalogNactenProUser.current = userId;
     void nacti();
-  }, [nacti]);
+  }, [otevreno, userId, nacti]);
 
   const filtrovane = useMemo(() => {
     const q = filtr.trim().toLowerCase();
