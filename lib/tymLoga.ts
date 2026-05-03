@@ -28,6 +28,11 @@ const MANIFEST: Manifest = (() => {
 export function urlLogaTymu(tym: string, liga: Liga): string | null {
   if (!tym) return null;
   const k = tym.normalize("NFC");
+  /** INT Czechia: stejné logo jako WINT (SportsLogos), ne IIHF blob — shoda s očekáváním HUT/EA. */
+  if (liga === "INT" && k === "Czechia") {
+    const wintSoubor = MANIFEST.WINT?.Czechia ?? MANIFEST.WINT?.[k];
+    if (wintSoubor) return `/logos/WINT/${wintSoubor}`;
+  }
   const tab = MANIFEST[liga];
   const file = tab?.[tym] ?? tab?.[k];
   return file ? `/logos/${liga}/${file}` : null;

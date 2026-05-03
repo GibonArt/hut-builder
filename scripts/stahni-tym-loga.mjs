@@ -183,11 +183,15 @@ const IIHF_MNA_LOGOS =
   "https://blob.iihf.com/iihf-media/iihfmvc/media/contentimages/1_global/mna/logos";
 
 /** Přímé URL — přepíše vlajku z flagcdn (INT). */
+/** Czechia INT = stejný asset jako WINT (SportsLogos), ne IIHF cze_logo — viz WINT_CUSTOM_URL.Czechia. */
+const INT_CZECHIA_LOGO_URL =
+  "https://content.sportslogos.net/logos/62/1650/full/3377__czech_republic-primary-2019.png";
+
 const INT_CUSTOM_URL = {
   Austria: `${IIHF_MNA_LOGOS}/aut_logo.png`,
   Belarus: `${IIHF_MNA_LOGOS}/blr_logo.png`,
   Canada: `${IIHF_MNA_LOGOS}/can_logo.png`,
-  Czechia: `${IIHF_MNA_LOGOS}/cze_logo.png`,
+  Czechia: INT_CZECHIA_LOGO_URL,
   Denmark: `${IIHF_MNA_LOGOS}/den_logo.png`,
   Finland: `${IIHF_MNA_LOGOS}/fin_logo2018.png?width=145`,
   France: `${IIHF_MNA_LOGOS}/fra_logo.png`,
@@ -237,8 +241,7 @@ const INT_TÝMY = Object.keys(INT_FLAG_KÓD).sort((a, b) => a.localeCompare(b, "
 /** Ženské národní týmy (WINT / W-INT). */
 /** Přímé URL — přepíše vlajku z flagcdn (WINT). */
 const WINT_CUSTOM_URL = {
-  Czechia:
-    "https://content.sportslogos.net/logos/62/1650/full/3377__czech_republic-primary-2019.png",
+  Czechia: INT_CZECHIA_LOGO_URL,
 };
 
 const WINT_FLAG_KÓD = {

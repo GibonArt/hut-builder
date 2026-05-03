@@ -98,14 +98,18 @@ export function MojeKartySeznam() {
 
   const editovat = useCallback(
     (k: HutCard) => {
-      router.push(`/?edit=${encodeURIComponent(k.id)}`);
+      router.push(
+        `/?edit=${encodeURIComponent(k.id)}&from=moje-karty`,
+      );
     },
     [router],
   );
 
   const duplikovat = useCallback(
     (k: HutCard) => {
-      router.push(`/?duplicate=${encodeURIComponent(k.id)}`);
+      router.push(
+        `/?duplicate=${encodeURIComponent(k.id)}&from=moje-karty`,
+      );
     },
     [router],
   );

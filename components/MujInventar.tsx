@@ -111,6 +111,8 @@ export function MujInventar() {
   const searchParams = useSearchParams();
   const editZQueryZpracovan = useRef<string | null>(null);
   const duplicitaZQueryZpracovan = useRef<string | null>(null);
+  /** Po úspěšném uložení přesměrovat (např. z úpravy odkazem ze stránky Moje karty). */
+  const navratPoUlozeniPath = useRef<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const supabase = useMemo(() => createClient(), []);
 
@@ -162,6 +164,7 @@ export function MujInventar() {
 
   const priVyberuEaHrace = useCallback(
     (h: EaNhl26Hrac) => {
+      navratPoUlozeniPath.current = null;
       setKatalogZdrojUuid(null);
       setKatalogSnapshot(null);
       setProdano(false);
@@ -332,6 +335,14 @@ export function MujInventar() {
     setProdano(false);
   }, []);
 
+  /** Po úspěšném uložení vyčistí formulář a případně přejde na `/moje-karty` (parametr `from=moje-karty`). */
+  const dokoncitUlozeniAFreshForm = useCallback(() => {
+    const cil = navratPoUlozeniPath.current;
+    navratPoUlozeniPath.current = null;
+    resetForm();
+    if (cil) router.push(cil);
+  }, [resetForm, router]);
+
   const naplnFormZKarty = useCallback(
     (k: HutCard, rezim: "editovat" | "kopie" = "editovat") => {
       if (rezim === "editovat") {
@@ -374,6 +385,14 @@ export function MujInventar() {
     [narodnostiVolby],
   );
 
+  const upravitZKartouZInventare = useCallback(
+    (k: HutCard) => {
+      navratPoUlozeniPath.current = null;
+      naplnFormZKarty(k, "editovat");
+    },
+    [naplnFormZKarty],
+  );
+
   useEffect(() => {
     const slug = searchParams.get("edit");
     if (!slug) {
@@ -386,12 +405,15 @@ export function MujInventar() {
     if (!k) {
       if (editZQueryZpracovan.current === slug) return;
       editZQueryZpracovan.current = slug;
+      navratPoUlozeniPath.current = null;
       router.replace("/", { scroll: false });
       return;
     }
 
     if (editZQueryZpracovan.current === slug) return;
     editZQueryZpracovan.current = slug;
+    navratPoUlozeniPath.current =
+      searchParams.get("from") === "moje-karty" ? "/moje-karty" : null;
     naplnFormZKarty(k, "editovat");
     router.replace("/", { scroll: false });
   }, [searchParams, user?.id, kartyLoading, karty, naplnFormZKarty, router]);
@@ -408,12 +430,15 @@ export function MujInventar() {
     if (!k) {
       if (duplicitaZQueryZpracovan.current === dup) return;
       duplicitaZQueryZpracovan.current = dup;
+      navratPoUlozeniPath.current = null;
       router.replace("/", { scroll: false });
       return;
     }
 
     if (duplicitaZQueryZpracovan.current === dup) return;
     duplicitaZQueryZpracovan.current = dup;
+    navratPoUlozeniPath.current =
+      searchParams.get("from") === "moje-karty" ? "/moje-karty" : null;
     naplnFormZKarty(k, "kopie");
     router.replace("/", { scroll: false });
     toast.info("Zkopírované údaje — ulož jako novou kartu (uprav OVR/jméno, pokud koliduje).");
@@ -601,6 +626,7 @@ export function MujInventar() {
 
   const priVyberuZKatalogu = useCallback(
     (dbId: string, k: HutCard) => {
+      navratPoUlozeniPath.current = null;
       naplnFormZKarty(k, "kopie");
       setKatalogZdrojUuid(dbId);
       setKatalogSnapshot({ ...k });
@@ -652,7 +678,7 @@ export function MujInventar() {
       setKarty((prev) =>
         prev.map((c) => (c.id === editujiSlug ? nova : c)),
       );
-      resetForm();
+      dokoncitUlozeniAFreshForm();
       return;
     }
 
@@ -674,7 +700,7 @@ export function MujInventar() {
       const ulozena: HutCard = { ...katalogSnapshot, id: finalId };
       toast.success("Karta byla přidána do inventáře (kopie ze sdílené databáze).");
       setKarty((prev) => [...prev, ulozena]);
-      resetForm();
+      dokoncitUlozeniAFreshForm();
       return;
     }
 
@@ -704,7 +730,7 @@ export function MujInventar() {
 
     toast.success("Karta byla přidána.");
     setKarty((prev) => [...prev, nova]);
-    resetForm();
+    dokoncitUlozeniAFreshForm();
   };
 
   const smazatKartu = async (idKarty: string) => {
@@ -722,6 +748,7 @@ export function MujInventar() {
       return;
     }
     if (editujiSlug === idKarty) {
+      navratPoUlozeniPath.current = null;
       resetForm();
     }
     setKarty((prev) => prev.filter((k) => k.id !== idKarty));
@@ -1103,7 +1130,10 @@ export function MujInventar() {
           </button>
           <button
             type="button"
-            onClick={resetForm}
+            onClick={() => {
+              navratPoUlozeniPath.current = null;
+              resetForm();
+            }}
             disabled={formZakazany}
             className="min-h-12 w-full touch-manipulation rounded-full border border-[var(--hut-border-strong)] bg-transparent px-5 py-3 text-sm font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-45 sm:min-h-0 sm:w-auto sm:py-2.5"
           >
@@ -1214,7 +1244,7 @@ export function MujInventar() {
                 key={k.id}
                 karta={k}
                 narodnostiVolby={narodnostiVolby}
-                onEditovat={naplnFormZKarty}
+                onEditovat={upravitZKartouZInventare}
                 onSmazat={smazatKartu}
                 formZakazany={formZakazany}
               />

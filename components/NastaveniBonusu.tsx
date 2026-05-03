@@ -621,6 +621,18 @@ export function NastaveniBonusu() {
     setUlozenoOk(true);
   }, [draft, typKombinace, payload, user?.id, persistPayload]);
 
+  const vymazatFormularKombinace = useCallback(() => {
+    setDraft(() => {
+      const base = novyRadekBonusu();
+      return typKombinace === "obranna"
+        ? { ...base, param3: novyParametrPrazdny("narodnost") }
+        : base;
+    });
+    setVyberChyba(null);
+    setUlozChyba(null);
+    setUlozenoOk(false);
+  }, [typKombinace]);
+
   const odeberKombinaci = useCallback(
     async (typ: TypKombinaceBonusu, id: string) => {
       if (!user?.id) return;
@@ -861,6 +873,14 @@ export function NastaveniBonusu() {
                 className="rounded-full border border-zinc-600 bg-[var(--hut-btn)] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-zinc-500 hover:bg-[var(--hut-btn-hover)] disabled:opacity-45"
               >
                 {ukladam ? "Ukládám…" : "Uložit"}
+              </button>
+              <button
+                type="button"
+                onClick={vymazatFormularKombinace}
+                disabled={ukladam}
+                className="rounded-full border border-[var(--hut-border-strong)] bg-transparent px-5 py-2.5 text-sm font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-45"
+              >
+                Smazat formulář
               </button>
             </div>
 
