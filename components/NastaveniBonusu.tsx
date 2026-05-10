@@ -22,6 +22,7 @@ import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
 import {
   deduplikujPayloadBonusu,
+  deduplikujRadkyBonusu,
   formatujBonusVRadkuNahled,
   jeKompletniParametr,
   jeKompletniRadek,
@@ -45,8 +46,13 @@ import {
   LIGY_V_PORADI,
   tymyProLigu,
 } from "@/lib/tymyPodleLigy";
-import { hutdbTypyKaretVTriPoradi } from "@/lib/hutdbTypKaret";
+import {
+  radkyZRadekHutbuilder,
+  type HutbuilderImportedLine,
+} from "@/lib/hutbuilderBonusImport";
+import type { HutDbTypKarty } from "@/lib/hutdbTypKaret";
 import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
+import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
 import { urlLogaTymu } from "@/lib/tymLoga";
 
 const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
@@ -258,7 +264,7 @@ function SloupecParametru({
   draftId: string;
   param: BonusKombinaceParametr;
   narodnostiVolby: readonly { code: string; label: string }[];
-  hutdbTypyKaret: ReturnType<typeof hutdbTypyKaretVTriPoradi>;
+  hutdbTypyKaret: HutDbTypKarty[];
   ukladam: boolean;
   onZmenDruh: (druh: BonusKombinaceParametrTyp) => void;
   onZmenParam: (p: BonusKombinaceParametr) => void;
@@ -469,7 +475,7 @@ export function NastaveniBonusu() {
   const { user, loading } = useAuth();
   const supabase = useMemo(() => createClient(), []);
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
-  const hutdbTypyKaret = useMemo(() => hutdbTypyKaretVTriPoradi(), []);
+  const { typyKaret: hutdbTypyKaret, refreshDynamic } = useMergedTypyKaret();
 
   const [typKombinace, setTypKombinace] = useState<TypKombinaceBonusu>("utocna");
   const [draft, setDraft] = useState<RadekBonusKombinaceUi>(() => novyRadekBonusu());
@@ -489,40 +495,14 @@ export function NastaveniBonusu() {
   );
   const [nahledFiltrParamAplikovany, setNahledFiltrParamAplikovany] = useState(false);
   const [nahledFiltrChyba, setNahledFiltrChyba] = useState<string | null>(null);
-  const [nastrojKopirovatHint, setNastrojKopirovatHint] = useState<string | null>(null);
-  const nastrojKopirovatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [syncTypyBezi, setSyncTypyBezi] = useState(false);
+  const [syncTypyChyba, setSyncTypyChyba] = useState<string | null>(null);
+  const [importHbBezi, setImportHbBezi] = useState(false);
+  const [importHbChyba, setImportHbChyba] = useState<string | null>(null);
+  const [importHbLog, setImportHbLog] = useState<string | null>(null);
+  const importHbAbortRef = useRef<AbortController | null>(null);
 
   const pristup = jeBonusAdmin(user?.email);
-
-  const kopirujPrikazDoSchranky = useCallback((prikaz: string) => {
-    void (async () => {
-      try {
-        await navigator.clipboard.writeText(prikaz);
-        if (nastrojKopirovatTimeoutRef.current) {
-          clearTimeout(nastrojKopirovatTimeoutRef.current);
-        }
-        setNastrojKopirovatHint("Příkaz je ve schránce — spusť ho v terminálu v kořeni projektu.");
-        nastrojKopirovatTimeoutRef.current = setTimeout(() => {
-          setNastrojKopirovatHint(null);
-          nastrojKopirovatTimeoutRef.current = null;
-        }, 3200);
-      } catch {
-        setNastrojKopirovatHint("Schánka nedostupná — zkopíruj příkaz ručně z nápovědy.");
-        nastrojKopirovatTimeoutRef.current = setTimeout(() => {
-          setNastrojKopirovatHint(null);
-          nastrojKopirovatTimeoutRef.current = null;
-        }, 4800);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (nastrojKopirovatTimeoutRef.current) {
-        clearTimeout(nastrojKopirovatTimeoutRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!user?.id || !pristup) {
@@ -631,6 +611,143 @@ export function NastaveniBonusu() {
     },
     [supabase, user?.id],
   );
+
+  const synchronizujTypyKaretZHutbuilder = useCallback(async () => {
+    setSyncTypyBezi(true);
+    setSyncTypyChyba(null);
+    setUlozChyba(null);
+    try {
+      const res = await fetch("/api/admin/sync-typy-karet", { method: "POST" });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setSyncTypyChyba(j.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      await refreshDynamic();
+      setUlozenoOk(true);
+      setTimeout(() => setUlozenoOk(false), 4000);
+    } catch (e) {
+      setSyncTypyChyba(String(e instanceof Error ? e.message : e));
+    } finally {
+      setSyncTypyBezi(false);
+    }
+  }, [refreshDynamic]);
+
+  const zrusImportHutbuilder = useCallback(() => {
+    importHbAbortRef.current?.abort();
+  }, []);
+
+  const importujKombinaceZHutbuilder = useCallback(async () => {
+    if (!user?.id) return;
+    const ok = window.confirm(
+      "Stáhnout předgenerované řádky z NHL HUT Builderu a připojit je ke sdíleným kombinacím?\n\n" +
+        "• Bere se jen chemie složená výhradně z typů karet (ne tým ani národ).\n" +
+        "• Hut Builder SAL → PLAT, AP → BS, OVR → CLK.\n" +
+        "• Duplicity se sloučí s už uloženými řádky.\n" +
+        "• Může to trvat několik minut.",
+    );
+    if (!ok) return;
+
+    importHbAbortRef.current?.abort();
+    importHbAbortRef.current = new AbortController();
+    const sig = importHbAbortRef.current.signal;
+
+    setImportHbBezi(true);
+    setImportHbChyba(null);
+    setImportHbLog("Začínám…");
+    setUlozChyba(null);
+    setUlozenoOk(false);
+
+    const noveUt: RadekBonusKombinaceUi[] = [];
+    const noveOb: RadekBonusKombinaceUi[] = [];
+    const seenLineIds = new Set<number>();
+
+    try {
+      for (const lt of ["forwards", "defense"] as const) {
+        let page = 1;
+        let perPage = 20;
+        for (;;) {
+          if (sig.aborted) {
+            throw new DOMException("Zrušeno uživatelem.", "AbortError");
+          }
+          setImportHbLog(`${lt} — stránka ${page}`);
+          const res = await fetch(
+            `/api/admin/hutbuilder-page?lineType=${encodeURIComponent(lt)}&page=${page}&timeoutMs=55000`,
+            { signal: sig },
+          );
+          const rawText = await res.text();
+          let chunk: Record<string, unknown>;
+          try {
+            chunk = JSON.parse(rawText) as Record<string, unknown>;
+          } catch {
+            throw new Error(rawText.slice(0, 280));
+          }
+          if (!res.ok) {
+            throw new Error(String(chunk.error ?? rawText.slice(0, 280)));
+          }
+
+          const lines = Array.isArray(chunk.lines) ? chunk.lines : [];
+          if (lines.length === 0) break;
+
+          if (typeof chunk.per_page === "number") perPage = chunk.per_page;
+
+          for (const row of lines) {
+            const line = row as { line_id?: number };
+            const lid = line.line_id;
+            if (lid != null) {
+              if (seenLineIds.has(lid)) continue;
+              seenLineIds.add(lid);
+            }
+            const { utocna: u, obranna: o } = radkyZRadekHutbuilder(
+              row as HutbuilderImportedLine,
+            );
+            noveUt.push(...u);
+            noveOb.push(...o);
+          }
+
+          if (lines.length < perPage) break;
+          if (chunk.has_more === false) break;
+          page += 1;
+          if (page > 650) break;
+          await new Promise((r) => setTimeout(r, 280));
+        }
+      }
+
+      const merged: Payload = {
+        utocna: deduplikujRadkyBonusu([...payload.utocna, ...noveUt], "utocna"),
+        obranna: deduplikujRadkyBonusu([...payload.obranna, ...noveOb], "obranna"),
+      };
+      const deduped = deduplikujPayloadBonusu(merged);
+
+      setImportHbLog(
+        `Ukládám (${deduped.utocna.length} útok / ${deduped.obranna.length} obrana)…`,
+      );
+      setUkladam(true);
+      const saveRes = await persistPayload(deduped);
+      setUkladam(false);
+
+      if (saveRes.error) {
+        setImportHbChyba(saveRes.error);
+        setImportHbLog(null);
+        return;
+      }
+      setPayload(saveRes.ulozeno);
+      setImportHbLog(
+        `Hotovo — útok ${saveRes.ulozeno.utocna.length} řádků, obrana ${saveRes.ulozeno.obranna.length}.`,
+      );
+      setUlozenoOk(true);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setImportHbChyba("Import zrušen.");
+      } else {
+        setImportHbChyba(String(e instanceof Error ? e.message : e));
+      }
+      setImportHbLog(null);
+    } finally {
+      setImportHbBezi(false);
+      importHbAbortRef.current = null;
+    }
+  }, [user?.id, payload, persistPayload]);
 
   const ulozKombinaci = useCallback(async () => {
     if (!user?.id) return;
@@ -925,10 +1042,14 @@ export function NastaveniBonusu() {
       <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Nastavení bonusů</h2>
       <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
         Úprava <span className="font-medium text-zinc-300">sdílených kombinací</span> v databázi (útok =
-        trojice symbolů, obrana = dvojice; bonus PLAT / CLK / BS). Níže jsou{" "}
-        <span className="font-medium text-zinc-300">dvě oddělené oblasti</span>: typy karet (kód + stažení
-        ikon v repu) a export řádků z NHL HUT Builderu (JSON mimo tuto stránku). Samotný formulář a náhled
-        řeší jen zápis kombinací do Supabase.
+        trojice symbolů, obrana = dvojice; bonus PLAT / CLK / BS). První blok synchronizuje{" "}
+        <span className="font-medium text-zinc-300">typy karet</span> z NHL HUT Builderu do Supabase; druhý
+        načte jejich <span className="font-medium text-zinc-300">chemii (jen typ karty)</span> a připojí řádky
+        k už uloženým. Statický katalog v kódu (
+        <code className="rounded bg-black/30 px-1 font-mono text-[11px] text-zinc-300">
+          lib/hutdbTypKaret.ts
+        </code>
+        ) zůstává základem — dynamické řádky ho doplňují.
       </p>
 
       {nastaveniChyba ? (
@@ -954,35 +1075,39 @@ export function NastaveniBonusu() {
                 id="bonus-hlavicka-typy-karet"
                 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]"
               >
-                1 — Typy karet (sezóna, ikony)
+                1 — Typy karet (Supabase)
               </h3>
               <p className="mt-2 text-xs leading-relaxed text-[var(--hut-muted)] sm:text-sm">
-                Seznam sad a mapování na filtry je v kódu:{" "}
+                Stáhne výčet sad z NHL HUT Builder (Combo Finder) a uloží ho do tabulky{" "}
                 <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
-                  lib/hutdbTypKaret.ts
+                  hut_typy_karet_dynamic
                 </code>
-                . Novou řadu tam nejdřív dopiš, pak v kořeni repa spusť skript — stáhne PNG do{" "}
+                . Aplikace je sloučí se statickým{" "}
+                <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
+                  hutdbTypKaret.ts
+                </code>
+                . Ikony se berou z CDN / případně z{" "}
                 <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
                   public/logos/hut-typy-karet/
                 </code>{" "}
-                (z webu to z této stránky nelze spolehlivě zapsat do deploye).
+                — lokálně můžeš doplnit soubory přes{" "}
+                <code className="font-mono text-[11px] text-zinc-300">npm run loga:typy-karet</code>.
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => kopirujPrikazDoSchranky("npm run loga:typy-karet")}
-                  className={btnUpravitClass}
+                  disabled={syncTypyBezi || importHbBezi || ukladam}
+                  onClick={() => void synchronizujTypyKaretZHutbuilder()}
+                  className="rounded-full border border-zinc-600 bg-[var(--hut-btn)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-zinc-500 hover:bg-[var(--hut-btn-hover)] disabled:opacity-45"
                 >
-                  Zkopírovat: loga:typy-karet
-                </button>
-                <button
-                  type="button"
-                  onClick={() => kopirujPrikazDoSchranky("npm run loga:typy-karet:force")}
-                  className={btnUpravitClass}
-                >
-                  Zkopírovat: loga:typy-karet:force
+                  {syncTypyBezi ? "Synchronizuji…" : "Synchronizovat typy karet"}
                 </button>
               </div>
+              {syncTypyChyba ? (
+                <p className="mt-3 text-xs text-amber-200" role="alert">
+                  {syncTypyChyba}
+                </p>
+              ) : null}
             </section>
 
             <section
@@ -994,33 +1119,42 @@ export function NastaveniBonusu() {
                 id="bonus-hlavicka-hutbuilder"
                 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]"
               >
-                2 — NHL HUT Builder (řádky / chemie)
+                2 — Kombinace z Hut Builderu → databáze
               </h3>
               <p className="mt-2 text-xs leading-relaxed text-[var(--hut-muted)] sm:text-sm">
-                Předgenerované lajny stáhneš lokálně příkazem níže → JSON v{" "}
-                <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
-                  data/hutbuilder-combos/
-                </code>
-                . To je <span className="font-medium text-zinc-400">jiný zdroj</span> než tabulka bonusů
-                zde: automatický import trojic/dvojic do databáze zatím není součástí UI (jiný formát dat).
+                Projede předgenerované útoky a obranu na Hut Builderu a{" "}
+                <span className="font-medium text-zinc-400">připojí</span> derived řádky ke stávajícím v
+                této tabulce (nezahazuje ruční úpravy). Chemie s týmem nebo národem se přeskakuje.
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => kopirujPrikazDoSchranky("npm run hutbuilder:kombinace")}
-                  className={btnUpravitClass}
+                  disabled={importHbBezi || syncTypyBezi || ukladam}
+                  onClick={() => void importujKombinaceZHutbuilder()}
+                  className="rounded-full border border-zinc-600 bg-[var(--hut-btn)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-zinc-500 hover:bg-[var(--hut-btn-hover)] disabled:opacity-45"
                 >
-                  Zkopírovat: hutbuilder:kombinace
+                  {importHbBezi ? "Importuji…" : "Načíst kombinace z Hut Builderu"}
                 </button>
+                {importHbBezi ? (
+                  <button
+                    type="button"
+                    onClick={zrusImportHutbuilder}
+                    className={`${btnUpravitClass} border-red-500/40 text-red-100`}
+                  >
+                    Zrušit import
+                  </button>
+                ) : null}
               </div>
+              {importHbLog ? (
+                <p className="mt-3 font-mono text-[11px] text-[var(--hut-muted)]">{importHbLog}</p>
+              ) : null}
+              {importHbChyba ? (
+                <p className="mt-2 text-xs text-amber-200" role="alert">
+                  {importHbChyba}
+                </p>
+              ) : null}
             </section>
           </div>
-
-          {nastrojKopirovatHint ? (
-            <p className="mt-3 text-xs font-medium text-[var(--hut-lime)]" role="status">
-              {nastrojKopirovatHint}
-            </p>
-          ) : null}
 
           <p className="mt-10 text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-muted)]">
             Kombinace v databázi

@@ -39,10 +39,8 @@ import {
   LIGY_V_PORADI,
   tymyProLigu,
 } from "@/lib/tymyPodleLigy";
-import {
-  hutdbTypyKaretVTriPoradi,
-  najdiMetaTypuKarty,
-} from "@/lib/hutdbTypKaret";
+import { najdiMetaTypuKarty } from "@/lib/hutdbTypKaret";
+import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
 import { NarodnostVyber } from "@/components/NarodnostVyber";
 import { TypKartyVyber } from "@/components/TypKartyVyber";
 import { TymHledacNapricLigami } from "@/components/TymHledacNapricLigami";
@@ -152,7 +150,7 @@ export function MujInventar() {
 
   const tymyProAktualniLigu = useMemo(() => tymyProLigu(liga), [liga]);
 
-  const hutdbTypyKaret = useMemo(() => hutdbTypyKaretVTriPoradi(), []);
+  const { typyKaret: hutdbTypyKaret } = useMergedTypyKaret();
 
   const xFactoryKatalogSerazeny = useMemo(
     () =>

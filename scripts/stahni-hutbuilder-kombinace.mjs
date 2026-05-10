@@ -6,7 +6,7 @@
  *
  * npm run hutbuilder:kombinace
  * npm run hutbuilder:kombinace -- --types=forwards,defense
- * npm run hutbuilder:kombinace -- --delay=400 --timeout=240000 --out=data/hutbuilder-combos/muj-export.json
+ * npm run hutbuilder:kombinace -- --delay=400 --timeout=240000 --retries=5 --out=data/hutbuilder-combos/muj-export.json
  */
 import { mkdirSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -25,7 +25,9 @@ const DEFAULT_TYPES = ["forwards", "defense", "goalie"];
 function parseArgs(argv) {
   let types = [...DEFAULT_TYPES];
   let delayMs = 280;
-  let timeoutMs = 180_000;
+  let timeoutMs = 240_000;
+  /** Kolikrát znovu zkusit stejnou stránku při timeoutu / síťové chybě. */
+  let retries = 4;
   /** Jedna složka nebo přímá cesta k .json souboru */
   let outPath = "";
   for (const a of argv) {
@@ -38,12 +40,14 @@ function parseArgs(argv) {
     } else if (a.startsWith("--delay=")) {
       delayMs = Math.max(0, Number(a.slice("--delay=".length)) || 280);
     } else if (a.startsWith("--timeout=")) {
-      timeoutMs = Math.max(5000, Number(a.slice("--timeout=".length)) || 180_000);
+      timeoutMs = Math.max(5000, Number(a.slice("--timeout=".length)) || 240_000);
+    } else if (a.startsWith("--retries=")) {
+      retries = Math.max(1, Math.min(20, Number(a.slice("--retries=".length)) || 4));
     } else if (a.startsWith("--out=")) {
       outPath = a.slice("--out=".length).trim();
     }
   }
-  return { types, delayMs, timeoutMs, outPath };
+  return { types, delayMs, timeoutMs, retries, outPath };
 }
 
 function sleep(ms) {
@@ -123,7 +127,40 @@ async function fetchPage(lineType, page, timeoutMs = 180_000) {
   return data;
 }
 
-async function stahniVsechnyStranky(lineType, delayMs, timeoutMs) {
+function jeOpakovatelnaChyba(e) {
+  const msg = String(e?.message ?? e);
+  return (
+    /Časový limit|timeout|AbortError|fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND/i.test(
+      msg,
+    ) || e?.cause?.name === "TimeoutError"
+  );
+}
+
+async function fetchPageSKrkem(
+  lineType,
+  page,
+  timeoutMs,
+  maxPokusu,
+  pauzaPoChybeMs,
+) {
+  let posledni;
+  for (let pokus = 1; pokus <= maxPokusu; pokus++) {
+    try {
+      return await fetchPage(lineType, page, timeoutMs);
+    } catch (e) {
+      posledni = e;
+      const znovu = pokus < maxPokusu && jeOpakovatelnaChyba(e);
+      if (!znovu) throw e;
+      process.stderr.write(
+        `    stránka ${page}: pokus ${pokus}/${maxPokusu} selhal — čekám ${pauzaPoChybeMs} ms…\n`,
+      );
+      await sleep(pauzaPoChybeMs);
+    }
+  }
+  throw posledni;
+}
+
+async function stahniVsechnyStranky(lineType, delayMs, timeoutMs, retries) {
   /** Server někdy vrací nesmyslné `total_results` / `has_more` — spoléháme na částečnou poslední stránku + deduplikaci. */
   const MAX_PAGES = 2500;
   const lines = [];
@@ -132,9 +169,17 @@ async function stahniVsechnyStranky(lineType, delayMs, timeoutMs) {
   let perPage = 20;
   let meta = null;
 
+  const pauzaPoSelhani = Math.max(delayMs, 3500);
+
   for (;;) {
     process.stderr.write(`  ${lineType} — stránka ${page}…\n`);
-    const chunk = await fetchPage(lineType, page, timeoutMs);
+    const chunk = await fetchPageSKrkem(
+      lineType,
+      page,
+      timeoutMs,
+      retries,
+      pauzaPoSelhani,
+    );
     meta = {
       total_results: chunk.total_results,
       per_page: chunk.per_page,
@@ -188,7 +233,7 @@ function defaultOutPath() {
 }
 
 async function main() {
-  const { types, delayMs, timeoutMs, outPath: outArg } = parseArgs(
+  const { types, delayMs, timeoutMs, retries, outPath: outArg } = parseArgs(
     process.argv.slice(2),
   );
 
@@ -208,7 +253,12 @@ async function main() {
 
   for (const lt of types) {
     process.stderr.write(`Stahuji ${lt}…\n`);
-    vysledek.typy_lajn[lt] = await stahniVsechnyStranky(lt, delayMs, timeoutMs);
+    vysledek.typy_lajn[lt] = await stahniVsechnyStranky(
+      lt,
+      delayMs,
+      timeoutMs,
+      retries,
+    );
     process.stderr.write(`  → ${vysledek.typy_lajn[lt].lines_fetched} řádků\n`);
     if (delayMs > 0) await sleep(delayMs);
   }
