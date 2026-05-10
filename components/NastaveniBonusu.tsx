@@ -663,7 +663,8 @@ export function NastaveniBonusu() {
         "• Hut Builder SAL → PLAT, AP → BS, OVR → CLK.\n" +
         "• Duplicity se sloučí s už uloženými řádky.\n" +
         "• Může to trvat několik minut (sekvenční stahování stránek z Hut Builderu).\n" +
-        "• Jakmile server začne opakovat stejné řádky (jen duplicitní line_id), import u daného typu končí.",
+        "• Dva průchody Hut Builderu: výchozí žebříček (PLAT/BS) + režim „overall“ kvůli OVR → CLK.\n" +
+        "• Jakmile v průchodu začne API opakovat jen duplicitní line_id, daný průchod u typu řady končí.",
     );
     if (!ok) return;
 
@@ -679,63 +680,79 @@ export function NastaveniBonusu() {
 
     const noveUt: RadekBonusKombinaceUi[] = [];
     const noveOb: RadekBonusKombinaceUi[] = [];
-    const seenLineIds = new Set<number>();
+
+    /** Bez druhého průchodu Hut Builder v „total_score“ často nevrací v synergii boost `OVR` → u nás žádné CLK. */
+    const PRUCHODY_IMPORTU: {
+      optimizeFor: string | null;
+      timeoutMs: number;
+      popisek: string;
+    }[] = [
+      { optimizeFor: null, timeoutMs: 55_000, popisek: "žebříček" },
+      { optimizeFor: "overall", timeoutMs: 130_000, popisek: "overall (CLK)" },
+    ];
 
     try {
       for (const lt of ["forwards", "defense", "goalie"] as const) {
-        let page = 1;
-        let perPage = 20;
-        for (;;) {
-          if (sig.aborted) {
-            throw new DOMException("Zrušeno uživatelem.", "AbortError");
-          }
-          setImportHbLog(`${lt} — stránka ${page} (stahuji…)`);
-          const res = await fetch(
-            `/api/admin/hutbuilder-page?lineType=${encodeURIComponent(lt)}&page=${page}&timeoutMs=55000`,
-            { signal: sig },
-          );
-          const rawText = await res.text();
-          let chunk: Record<string, unknown>;
-          try {
-            chunk = JSON.parse(rawText) as Record<string, unknown>;
-          } catch {
-            throw new Error(rawText.slice(0, 280));
-          }
-          if (!res.ok) {
-            throw new Error(String(chunk.error ?? rawText.slice(0, 280)));
-          }
-
-          const lines = Array.isArray(chunk.lines) ? chunk.lines : [];
-          if (lines.length === 0) break;
-
-          if (typeof chunk.per_page === "number") perPage = chunk.per_page;
-
-          /** Řádky bez nového line_id přeskočíme; když je celá stránka jen duplicity, API často pořád vrací „plnou“ stránku — bez ukončení by import běžel stovky requestů zbytečně (viz skript stahni-hutbuilder-kombinace.mjs). */
-          let zpracovanoRadku = 0;
-          for (const row of lines) {
-            const line = row as { line_id?: number };
-            const lid = line.line_id;
-            if (lid != null && seenLineIds.has(lid)) continue;
-            if (lid != null) seenLineIds.add(lid);
-            zpracovanoRadku += 1;
-            const { utocna: u, obranna: o } = radkyZRadekHutbuilder(
-              row as HutbuilderImportedLine,
+        for (const pr of PRUCHODY_IMPORTU) {
+          let page = 1;
+          let perPage = 20;
+          const seenLineIds = new Set<number>();
+          for (;;) {
+            if (sig.aborted) {
+              throw new DOMException("Zrušeno uživatelem.", "AbortError");
+            }
+            const paramOptimize =
+              pr.optimizeFor === null
+                ? ""
+                : `&optimizeFor=${encodeURIComponent(pr.optimizeFor)}`;
+            setImportHbLog(`${lt} — ${pr.popisek} — stránka ${page} (stahuji…)`);
+            const res = await fetch(
+              `/api/admin/hutbuilder-page?lineType=${encodeURIComponent(lt)}&page=${page}&timeoutMs=${pr.timeoutMs}${paramOptimize}`,
+              { signal: sig },
             );
-            noveUt.push(...u);
-            noveOb.push(...o);
+            const rawText = await res.text();
+            let chunk: Record<string, unknown>;
+            try {
+              chunk = JSON.parse(rawText) as Record<string, unknown>;
+            } catch {
+              throw new Error(rawText.slice(0, 280));
+            }
+            if (!res.ok) {
+              throw new Error(String(chunk.error ?? rawText.slice(0, 280)));
+            }
+
+            const lines = Array.isArray(chunk.lines) ? chunk.lines : [];
+            if (lines.length === 0) break;
+
+            if (typeof chunk.per_page === "number") perPage = chunk.per_page;
+
+            /** Řádky bez nového line_id přeskočíme; když je celá stránka jen duplicity, API často pořád vrací „plnou“ stránku — bez ukončení by import běžel stovky requestů zbytečně (viz skript stahni-hutbuilder-kombinace.mjs). */
+            let zpracovanoRadku = 0;
+            for (const row of lines) {
+              const line = row as { line_id?: number };
+              const lid = line.line_id;
+              if (lid != null && seenLineIds.has(lid)) continue;
+              if (lid != null) seenLineIds.add(lid);
+              zpracovanoRadku += 1;
+              const { utocna: u, obranna: o } = radkyZRadekHutbuilder(
+                row as HutbuilderImportedLine,
+              );
+              noveUt.push(...u);
+              noveOb.push(...o);
+            }
+
+            setImportHbLog(
+              `${lt} — ${pr.popisek} — stránka ${page} (${zpracovanoRadku} nových řádků API / ${seenLineIds.size} unikát. line_id v průchodu)`,
+            );
+
+            if (lines.length > 0 && zpracovanoRadku === 0) break;
+
+            if (chunk.has_more === false) break;
+            if (lines.length < perPage) break;
+            page += 1;
+            if (page > 650) break;
+            await new Promise((r) => setTimeout(r, 280));
           }
-
-          setImportHbLog(
-            `${lt} — stránka ${page} (${zpracovanoRadku} nových řádků API / ${seenLineIds.size} unikát. line_id)`,
-          );
-
-          if (lines.length > 0 && zpracovanoRadku === 0) break;
-
-          if (lines.length < perPage) break;
-          if (chunk.has_more === false) break;
-          page += 1;
-          if (page > 650) break;
-          await new Promise((r) => setTimeout(r, 280));
         }
       }
 
@@ -1160,7 +1177,9 @@ export function NastaveniBonusu() {
                 Projede předgenerované útoky, obranu i brankáře na Hut Builderu a{" "}
                 <span className="font-medium text-zinc-400">připojí</span> řádky ke stávajícím v této tabulce
                 (nezahazuje ruční úpravy). Sloty synergy se berou v pořadí: typ karty i tým — BS (AP) je často
-                kombinace obojího. Neznámý název týmu v našem seznamu lig se přeskočí.
+                kombinace obojího. Neznámý název týmu v našem seznamu lig se přeskočí. Import běží dvakrát za řadu:
+                výchozí žebříček (hlavně PLAT + BS) a pak režim „overall“, kde Hut Builder doplní synergii s{" "}
+                <span className="font-medium text-zinc-400">OVR → CLK</span>.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button

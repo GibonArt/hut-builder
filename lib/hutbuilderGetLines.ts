@@ -8,9 +8,19 @@ export const HUTBUILDER_COMBO_FINDER_REFERER =
 
 export type HutbuilderLineType = "forwards" | "defense" | "goalie";
 
+/** Volitelné parametry stejného endpointu jako Combo Finder. */
+export type HutbuilderGetLinesOpts = {
+  /**
+   * Např. `overall` — v synergii se objeví i boost `OVR` (u nás CLK).
+   * Prázdné = výchozí řazení; typicky hodně SAL + AP, málo nebo žádné OVR.
+   */
+  optimizeFor?: string | null;
+};
+
 export function buildGetLinesSearchParams(
   lineType: HutbuilderLineType,
   page: number,
+  opts?: HutbuilderGetLinesOpts | null,
 ): URLSearchParams {
   const p = new URLSearchParams();
   p.set("line_type", lineType);
@@ -28,7 +38,7 @@ export function buildGetLinesSearchParams(
   p.set("sort_by", "total_score");
   p.set("source_type", "");
   p.set("source_id", "");
-  p.set("optimize_for", "");
+  p.set("optimize_for", (opts?.optimizeFor ?? "").trim());
   p.set("page", String(page));
   return p;
 }
@@ -37,8 +47,9 @@ export async function fetchHutbuilderLinesPage(
   lineType: HutbuilderLineType,
   page: number,
   timeoutMs: number,
+  opts?: HutbuilderGetLinesOpts | null,
 ): Promise<unknown> {
-  const qs = buildGetLinesSearchParams(lineType, page).toString();
+  const qs = buildGetLinesSearchParams(lineType, page, opts).toString();
   const signal =
     typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
       ? AbortSignal.timeout(Math.max(5000, timeoutMs))

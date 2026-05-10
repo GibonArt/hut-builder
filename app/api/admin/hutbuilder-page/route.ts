@@ -25,9 +25,23 @@ export async function GET(req: Request) {
   const lineTypeRaw = url.searchParams.get("lineType");
   const page = Math.max(1, Math.floor(Number(url.searchParams.get("page")) || 1));
   const timeoutMs = Math.min(
-    90_000,
+    180_000,
     Math.max(8000, Math.floor(Number(url.searchParams.get("timeoutMs")) || 55_000)),
   );
+
+  const optimizeRaw = url.searchParams.get("optimizeFor")?.trim() ?? "";
+  const optimizeFor =
+    optimizeRaw === ""
+      ? null
+      : /^[a-z][a-z0-9_-]{0,39}$/i.test(optimizeRaw)
+        ? optimizeRaw
+        : null;
+  if (optimizeFor === null && optimizeRaw !== "") {
+    return NextResponse.json(
+      { error: "Neplatný parametr optimizeFor (povolená jsou písmena, čísla, _ a -)." },
+      { status: 400 },
+    );
+  }
 
   if (!jeLineType(lineTypeRaw)) {
     return NextResponse.json(
@@ -37,7 +51,9 @@ export async function GET(req: Request) {
   }
 
   try {
-    const data = await fetchHutbuilderLinesPage(lineTypeRaw, page, timeoutMs);
+    const data = await fetchHutbuilderLinesPage(lineTypeRaw, page, timeoutMs, {
+      optimizeFor,
+    });
     if (data != null && typeof data === "object" && "error" in data && (data as { error?: boolean }).error) {
       const msg = (data as { message?: string }).message ?? "Chyba Hut Builder API";
       return NextResponse.json({ error: msg }, { status: 502 });
