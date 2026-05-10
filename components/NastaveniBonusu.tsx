@@ -649,7 +649,8 @@ export function NastaveniBonusu() {
         "• Bere se jen chemie složená výhradně z typů karet (ne tým ani národ).\n" +
         "• Hut Builder SAL → PLAT, AP → BS, OVR → CLK.\n" +
         "• Duplicity se sloučí s už uloženými řádky.\n" +
-        "• Může to trvat několik minut.",
+        "• Může to trvat několik minut (sekvenční stahování stránek z Hut Builderu).\n" +
+        "• Jakmile server začne opakovat stejné řádky (jen duplicitní line_id), import u daného typu končí.",
     );
     if (!ok) return;
 
@@ -675,7 +676,7 @@ export function NastaveniBonusu() {
           if (sig.aborted) {
             throw new DOMException("Zrušeno uživatelem.", "AbortError");
           }
-          setImportHbLog(`${lt} — stránka ${page}`);
+          setImportHbLog(`${lt} — stránka ${page} (stahuji…)`);
           const res = await fetch(
             `/api/admin/hutbuilder-page?lineType=${encodeURIComponent(lt)}&page=${page}&timeoutMs=55000`,
             { signal: sig },
@@ -696,19 +697,26 @@ export function NastaveniBonusu() {
 
           if (typeof chunk.per_page === "number") perPage = chunk.per_page;
 
+          /** Řádky bez nového line_id přeskočíme; když je celá stránka jen duplicity, API často pořád vrací „plnou“ stránku — bez ukončení by import běžel stovky requestů zbytečně (viz skript stahni-hutbuilder-kombinace.mjs). */
+          let zpracovanoRadku = 0;
           for (const row of lines) {
             const line = row as { line_id?: number };
             const lid = line.line_id;
-            if (lid != null) {
-              if (seenLineIds.has(lid)) continue;
-              seenLineIds.add(lid);
-            }
+            if (lid != null && seenLineIds.has(lid)) continue;
+            if (lid != null) seenLineIds.add(lid);
+            zpracovanoRadku += 1;
             const { utocna: u, obranna: o } = radkyZRadekHutbuilder(
               row as HutbuilderImportedLine,
             );
             noveUt.push(...u);
             noveOb.push(...o);
           }
+
+          setImportHbLog(
+            `${lt} — stránka ${page} (${zpracovanoRadku} nových řádků API / ${seenLineIds.size} unikát. line_id)`,
+          );
+
+          if (lines.length > 0 && zpracovanoRadku === 0) break;
 
           if (lines.length < perPage) break;
           if (chunk.has_more === false) break;
