@@ -60,6 +60,29 @@ export async function POST() {
     );
   }
 
+  const { data: existujiciRadky, error: chybaExistujicich } = await supabase
+    .from("hut_typy_karet_dynamic")
+    .select("hodnota_filtru");
+  if (chybaExistujicich) {
+    return NextResponse.json(
+      {
+        error: `${chybaExistujicich.message} — zkontroluj tabulku hut_typy_karet_dynamic a RLS.`,
+      },
+      { status: 500 },
+    );
+  }
+  const existujiciKlice = new Set(
+    (existujiciRadky ?? []).map((r) =>
+      String((r as { hodnota_filtru?: string }).hodnota_filtru ?? "").trim().toUpperCase(),
+    ),
+  );
+  let novychVDb = 0;
+  for (const r of rows) {
+    const k = r.hodnota_filtru.trim().toUpperCase();
+    if (!existujiciKlice.has(k)) novychVDb += 1;
+  }
+  const aktualizovano = rows.length - novychVDb;
+
   const syncedAt = new Date().toISOString();
   const { error } = await supabase.from("hut_typy_karet_dynamic").upsert(
     rows.map((r) => ({ ...r, synced_at: syncedAt })),
@@ -75,5 +98,14 @@ export async function POST() {
     );
   }
 
-  return NextResponse.json({ ok: true, pocet: rows.length, synced_at: syncedAt });
+  return NextResponse.json({
+    ok: true,
+    /** Počet unikátních typů vyparsovaných z HTML (řádků k upsertu). */
+    pocet: rows.length,
+    /** Řádky s `hodnota_filtru`, které v DB před syncem nebyly → INSERT při upsertu. */
+    novych_v_db: novychVDb,
+    /** Řádky, jejichž klíč už v DB byl → UPDATE `jmeno_cs`, `combo_soubor`, `synced_at`. */
+    aktualizovano,
+    synced_at: syncedAt,
+  });
 }

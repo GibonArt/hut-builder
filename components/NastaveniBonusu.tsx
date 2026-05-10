@@ -502,6 +502,7 @@ export function NastaveniBonusu() {
   const [nahledFiltrChyba, setNahledFiltrChyba] = useState<string | null>(null);
   const [syncTypyBezi, setSyncTypyBezi] = useState(false);
   const [syncTypyChyba, setSyncTypyChyba] = useState<string | null>(null);
+  const [syncTypyVysledek, setSyncTypyVysledek] = useState<string | null>(null);
   const [importHbBezi, setImportHbBezi] = useState(false);
   const [importHbChyba, setImportHbChyba] = useState<string | null>(null);
   const [importHbLog, setImportHbLog] = useState<string | null>(null);
@@ -620,14 +621,26 @@ export function NastaveniBonusu() {
   const synchronizujTypyKaretZHutbuilder = useCallback(async () => {
     setSyncTypyBezi(true);
     setSyncTypyChyba(null);
+    setSyncTypyVysledek(null);
     setUlozChyba(null);
     try {
       const res = await fetch("/api/admin/sync-typy-karet", { method: "POST" });
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        pocet?: number;
+        novych_v_db?: number;
+        aktualizovano?: number;
+      };
       if (!res.ok) {
         setSyncTypyChyba(j.error ?? `HTTP ${res.status}`);
         return;
       }
+      const pocet = j.pocet ?? 0;
+      const novych = j.novych_v_db ?? 0;
+      const upd = j.aktualizovano ?? 0;
+      setSyncTypyVysledek(
+        `Z Combo Finderu: ${pocet} typů. V databázi nových řádků: ${novych}, aktualizovaných (už byl stejný klíč hodnota_filtru): ${upd}.`,
+      );
       await refreshDynamic();
       setUlozenoOk(true);
       setTimeout(() => setUlozenoOk(false), 4000);
@@ -1106,7 +1119,9 @@ export function NastaveniBonusu() {
                   public/logos/hut-typy-karet/
                 </code>{" "}
                 — lokálně můžeš doplnit soubory přes{" "}
-                <code className="font-mono text-[11px] text-zinc-300">npm run loga:typy-karet</code>.
+                <code className="font-mono text-[11px] text-zinc-300">npm run loga:typy-karet</code>. Po syncu se
+                pod tlačítkem zobrazí, kolik řádků bylo nových vs. jen přepsaných (
+                <code className="font-mono text-[11px] text-zinc-300">hodnota_filtru</code>).
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
@@ -1121,6 +1136,11 @@ export function NastaveniBonusu() {
               {syncTypyChyba ? (
                 <p className="mt-3 text-xs text-amber-200" role="alert">
                   {syncTypyChyba}
+                </p>
+              ) : null}
+              {syncTypyVysledek ? (
+                <p className="mt-3 text-xs leading-relaxed text-[var(--hut-lime)]" role="status">
+                  {syncTypyVysledek}
                 </p>
               ) : null}
             </section>
