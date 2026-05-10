@@ -473,6 +473,16 @@ export const VSECHNY_TYMY_S_LIGOU: readonly TymVLize[] = LIGY_V_PORADI.flatMap(
   (liga) => TYM_PER_LIGA[liga].map((tym) => ({ liga, tym })),
 );
 
+/** Přesná shoda názvu týmu jako v Hut Builderu / EA (`Los Angeles Kings`, alumni řada …). */
+export function najdiTymPodlePresnehoNazvu(nazev: string): TymVLize | null {
+  const t = nazev.trim();
+  if (!t) return null;
+  const primarni = VSECHNY_TYMY_S_LIGOU.find(({ tym }) => tym === t);
+  if (primarni) return primarni;
+  const tl = t.toLowerCase();
+  return VSECHNY_TYMY_S_LIGOU.find(({ tym }) => tym.toLowerCase() === tl) ?? null;
+}
+
 /**
  * Filtruje týmy podle názvu napříč ligami (diakritika v datech; dotaz porovnáváme case-insensitive).
  * Shody začínající dotazem jsou výš, pak abecedně podle názvu.

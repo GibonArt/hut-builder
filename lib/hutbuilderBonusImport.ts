@@ -1,11 +1,13 @@
 import type { TypKombinaceBonusu } from "@/types";
 import {
   novyParametrPrazdny,
+  type BonusKombinaceParametr,
   type RadekBonusKombinaceUi,
   type TypBonusuKombinace,
 } from "@/lib/bonusKombinaceDb";
 import { najdiMetaTypuKarty } from "@/lib/hutdbTypKaret";
 import type { DynamicTypKartyDbRow } from "@/lib/hutdbTypKaretMerge";
+import { najdiTymPodlePresnehoNazvu } from "@/lib/tymyPodleLigy";
 
 function noveIdRadku(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -77,9 +79,30 @@ function boostNaTypBonusu(b: HutbuilderBoost): TypBonusuKombinace | null {
   return null;
 }
 
+function detailNaParametr(d: HutbuilderDetail): BonusKombinaceParametr | null {
+  const typ = String(d.type ?? "").toLowerCase();
+  if (typ === "card_type") {
+    const name = String(d.name ?? "").trim();
+    if (!name) return null;
+    const meta = najdiMetaTypuKarty(name);
+    const hodnota =
+      meta?.hodnotaFiltru ?? name.replace(/\s+/g, " ").trim().toUpperCase();
+    return { typ: "typ_karty", typKarty: hodnota };
+  }
+  if (typ === "team") {
+    const name = String(d.name ?? "").trim();
+    if (!name) return null;
+    const hit = najdiTymPodlePresnehoNazvu(name);
+    if (!hit) return null;
+    return { typ: "tym", liga: hit.liga, tym: hit.tym };
+  }
+  return null;
+}
+
 /**
- * Z jedné hutbuilder řádkové chemie: jen synergy kde jsou pouze `card_type` detaily
- * (počet = 3 útok / 2 obrana). Každý boost SAL/AP/OVR → samostatný řádek.
+ * Z jedné hutbuilder řádkové chemie: první 3 (útok) nebo 2 (obrana / goalie) sloty synergy
+ * přemapované na parametry — `card_type` i `team` (BS/AP je skoro vždy smíchané).
+ * Každý boost SAL/AP/OVR → samostatný řádek.
  */
 export function radkyZChemieHutbuilderLine(
   line: HutbuilderImportedLine,
@@ -89,17 +112,21 @@ export function radkyZChemieHutbuilderLine(
   const out: RadekBonusKombinaceUi[] = [];
 
   for (const ch of line.chemistries ?? []) {
-    const cardDetails = (ch.details ?? []).filter((d) => d.type === "card_type");
-    if (cardDetails.length < need) continue;
-    const slice = cardDetails.slice(0, need);
-    const params = slice.map((d) => {
-      const name = String(d.name ?? "").trim();
-      const meta = najdiMetaTypuKarty(name);
-      const hodnota =
-        meta?.hodnotaFiltru ??
-        name.replace(/\s+/g, " ").trim().toUpperCase();
-      return { typ: "typ_karty" as const, typKarty: hodnota };
-    });
+    const details = ch.details ?? [];
+    if (details.length < need) continue;
+    const slice = details.slice(0, need);
+    const params: BonusKombinaceParametr[] = [];
+    let ok = true;
+    for (const d of slice) {
+      const p = detailNaParametr(d);
+      if (!p) {
+        ok = false;
+        break;
+      }
+      params.push(p);
+    }
+    if (!ok || params.length !== need) continue;
+
     const prazdny3 = novyParametrPrazdny("narodnost");
 
     for (const b of ch.boosts ?? []) {
@@ -108,9 +135,9 @@ export function radkyZChemieHutbuilderLine(
       if (!bonusTyp || !Number.isFinite(amt)) continue;
       out.push({
         id: noveIdRadku(),
-        param1: params[0],
-        param2: params[1],
-        param3: typKombinace === "utocna" ? params[2] : prazdny3,
+        param1: params[0]!,
+        param2: params[1]!,
+        param3: typKombinace === "utocna" ? params[2]! : prazdny3,
         bonusHodnota: amt,
         bonusTyp,
       });
@@ -131,7 +158,7 @@ export function radkyZRadekHutbuilder(
     const u = radkyZChemieHutbuilderLine(line, "utocna");
     return { utocna: u, obranna: [] };
   }
-  if (lt === "defense") {
+  if (lt === "defense" || lt === "goalie") {
     const o = radkyZChemieHutbuilderLine(line, "obranna");
     return { utocna: [], obranna: o };
   }

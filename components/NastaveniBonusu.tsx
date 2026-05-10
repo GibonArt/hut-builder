@@ -646,7 +646,7 @@ export function NastaveniBonusu() {
     if (!user?.id) return;
     const ok = window.confirm(
       "Stáhnout předgenerované řádky z NHL HUT Builderu a připojit je ke sdíleným kombinacím?\n\n" +
-        "• Bere se jen chemie složená výhradně z typů karet (ne tým ani národ).\n" +
+        "• Útok / obrana / brankáři — sloty synergy: typ karty i tým (národnost zatím ne).\n" +
         "• Hut Builder SAL → PLAT, AP → BS, OVR → CLK.\n" +
         "• Duplicity se sloučí s už uloženými řádky.\n" +
         "• Může to trvat několik minut (sekvenční stahování stránek z Hut Builderu).\n" +
@@ -669,7 +669,7 @@ export function NastaveniBonusu() {
     const seenLineIds = new Set<number>();
 
     try {
-      for (const lt of ["forwards", "defense"] as const) {
+      for (const lt of ["forwards", "defense", "goalie"] as const) {
         let page = 1;
         let perPage = 20;
         for (;;) {
@@ -1137,9 +1137,10 @@ export function NastaveniBonusu() {
                 2 — Kombinace z Hut Builderu → databáze
               </h3>
               <p className="mt-2 text-xs leading-relaxed text-[var(--hut-muted)] sm:text-sm">
-                Projede předgenerované útoky a obranu na Hut Builderu a{" "}
-                <span className="font-medium text-zinc-400">připojí</span> derived řádky ke stávajícím v
-                této tabulce (nezahazuje ruční úpravy). Chemie s týmem nebo národem se přeskakuje.
+                Projede předgenerované útoky, obranu i brankáře na Hut Builderu a{" "}
+                <span className="font-medium text-zinc-400">připojí</span> řádky ke stávajícím v této tabulce
+                (nezahazuje ruční úpravy). Sloty synergy se berou v pořadí: typ karty i tým — BS (AP) je často
+                kombinace obojího. Neznámý název týmu v našem seznamu lig se přeskočí.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
