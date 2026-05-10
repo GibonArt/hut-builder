@@ -44,3 +44,6 @@ next-env.d.ts
 
 # volitelná záloha z npm run ea-ratings (EA_RATINGS_WRITE_JSON=1)
 /lib/eaNhl26Ratings.backup.json
+
+# export předgenerovaných lajn z npm run hutbuilder:kombinace
+/data/hutbuilder-combos/

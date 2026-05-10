@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import Link from "next/link";
@@ -96,6 +97,26 @@ function radekSplnujeFiltrNahled(
     if (!jeKompletniParametr(fp)) continue;
     const rp = parametrZRadek(r, slot);
     if (!parametryBonusuShodne(fp, rp)) return false;
+  }
+  return true;
+}
+
+/** Stejná logika jako náhled pod uloženými řádky (typ bonusu PLAT/CLK/BS + volitelný filtr parametrů). */
+function radekJeVNahledu(
+  r: RadekBonusKombinaceUi,
+  nahledFiltrBonusTyp: "vse" | TypBonusuKombinace,
+  nahledFiltrParamAplikovany: boolean,
+  nahledFiltrSloty: FiltrNahledSloty,
+  obor: TypKombinaceBonusu,
+): boolean {
+  if (nahledFiltrBonusTyp !== "vse" && r.bonusTyp !== nahledFiltrBonusTyp) {
+    return false;
+  }
+  if (
+    nahledFiltrParamAplikovany &&
+    !radekSplnujeFiltrNahled(r, nahledFiltrSloty, obor)
+  ) {
+    return false;
   }
   return true;
 }
@@ -468,8 +489,40 @@ export function NastaveniBonusu() {
   );
   const [nahledFiltrParamAplikovany, setNahledFiltrParamAplikovany] = useState(false);
   const [nahledFiltrChyba, setNahledFiltrChyba] = useState<string | null>(null);
+  const [nastrojKopirovatHint, setNastrojKopirovatHint] = useState<string | null>(null);
+  const nastrojKopirovatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pristup = jeBonusAdmin(user?.email);
+
+  const kopirujPrikazDoSchranky = useCallback((prikaz: string) => {
+    void (async () => {
+      try {
+        await navigator.clipboard.writeText(prikaz);
+        if (nastrojKopirovatTimeoutRef.current) {
+          clearTimeout(nastrojKopirovatTimeoutRef.current);
+        }
+        setNastrojKopirovatHint("Příkaz je ve schránce — spusť ho v terminálu v kořeni projektu.");
+        nastrojKopirovatTimeoutRef.current = setTimeout(() => {
+          setNastrojKopirovatHint(null);
+          nastrojKopirovatTimeoutRef.current = null;
+        }, 3200);
+      } catch {
+        setNastrojKopirovatHint("Schánka nedostupná — zkopíruj příkaz ručně z nápovědy.");
+        nastrojKopirovatTimeoutRef.current = setTimeout(() => {
+          setNastrojKopirovatHint(null);
+          nastrojKopirovatTimeoutRef.current = null;
+        }, 4800);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (nastrojKopirovatTimeoutRef.current) {
+        clearTimeout(nastrojKopirovatTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!user?.id || !pristup) {
@@ -696,13 +749,15 @@ export function NastaveniBonusu() {
   }, []);
 
   const utocnaNahled = useMemo(() => {
-    let list =
-      nahledFiltrBonusTyp === "vse"
-        ? payload.utocna
-        : payload.utocna.filter((r) => r.bonusTyp === nahledFiltrBonusTyp);
-    if (nahledFiltrParamAplikovany) {
-      list = list.filter((r) => radekSplnujeFiltrNahled(r, nahledFiltrSloty, "utocna"));
-    }
+    const list = payload.utocna.filter((r) =>
+      radekJeVNahledu(
+        r,
+        nahledFiltrBonusTyp,
+        nahledFiltrParamAplikovany,
+        nahledFiltrSloty,
+        "utocna",
+      ),
+    );
     return seradKombinacePodleBonusuDesc(list);
   }, [
     nahledFiltrBonusTyp,
@@ -711,13 +766,15 @@ export function NastaveniBonusu() {
     payload.utocna,
   ]);
   const obrannaNahled = useMemo(() => {
-    let list =
-      nahledFiltrBonusTyp === "vse"
-        ? payload.obranna
-        : payload.obranna.filter((r) => r.bonusTyp === nahledFiltrBonusTyp);
-    if (nahledFiltrParamAplikovany) {
-      list = list.filter((r) => radekSplnujeFiltrNahled(r, nahledFiltrSloty, "obranna"));
-    }
+    const list = payload.obranna.filter((r) =>
+      radekJeVNahledu(
+        r,
+        nahledFiltrBonusTyp,
+        nahledFiltrParamAplikovany,
+        nahledFiltrSloty,
+        "obranna",
+      ),
+    );
     return seradKombinacePodleBonusuDesc(list);
   }, [
     nahledFiltrBonusTyp,
@@ -726,8 +783,112 @@ export function NastaveniBonusu() {
     payload.obranna,
   ]);
 
+  const pocetKombinaciPodleFiltru = useMemo(() => {
+    const nu = payload.utocna.filter((r) =>
+      radekJeVNahledu(
+        r,
+        nahledFiltrBonusTyp,
+        nahledFiltrParamAplikovany,
+        nahledFiltrSloty,
+        "utocna",
+      ),
+    ).length;
+    const no = payload.obranna.filter((r) =>
+      radekJeVNahledu(
+        r,
+        nahledFiltrBonusTyp,
+        nahledFiltrParamAplikovany,
+        nahledFiltrSloty,
+        "obranna",
+      ),
+    ).length;
+    return { utocna: nu, obranna: no, celkem: nu + no };
+  }, [
+    nahledFiltrBonusTyp,
+    nahledFiltrParamAplikovany,
+    nahledFiltrSloty,
+    payload.obranna,
+    payload.utocna,
+  ]);
+
   const nahledJeFiltrovany =
     nahledFiltrParamAplikovany || nahledFiltrBonusTyp !== "vse";
+
+  const smazatVsechnyPodleFiltru = useCallback(async () => {
+    if (!user?.id) return;
+    const { celkem, utocna: nu, obranna: no } = pocetKombinaciPodleFiltru;
+    if (celkem < 1) return;
+
+    const castiFiltru: string[] = [];
+    if (nahledFiltrBonusTyp !== "vse") {
+      castiFiltru.push(`typ bonusu ${nahledFiltrBonusTyp}`);
+    }
+    if (nahledFiltrParamAplikovany) {
+      castiFiltru.push("zadané parametry ve filtru");
+    }
+    const filtrTxt =
+      castiFiltru.length > 0
+        ? ` Podmínky: ${castiFiltru.join(", ")}.`
+        : " Mazou se všechny kombinace (zvoleno „Vše“ a filtr parametrů je vypnutý).";
+
+    const rozpad =
+      nu > 0 && no > 0
+        ? `${nu} útočných a ${no} obranných`
+        : nu > 0
+          ? `${nu} útočných`
+          : `${no} obranných`;
+
+    if (
+      !window.confirm(
+        `Opravdu trvale smazat ${rozpad} kombinací?${filtrTxt} Tuto akci nelze vrátit zpět.`,
+      )
+    ) {
+      return;
+    }
+
+    const newPayload: Payload = {
+      utocna: payload.utocna.filter(
+        (r) =>
+          !radekJeVNahledu(
+            r,
+            nahledFiltrBonusTyp,
+            nahledFiltrParamAplikovany,
+            nahledFiltrSloty,
+            "utocna",
+          ),
+      ),
+      obranna: payload.obranna.filter(
+        (r) =>
+          !radekJeVNahledu(
+            r,
+            nahledFiltrBonusTyp,
+            nahledFiltrParamAplikovany,
+            nahledFiltrSloty,
+            "obranna",
+          ),
+      ),
+    };
+
+    setUkladam(true);
+    setUlozChyba(null);
+    setUlozenoOk(false);
+    const res = await persistPayload(newPayload);
+    setUkladam(false);
+    if (res.error) {
+      setUlozChyba(res.error);
+      return;
+    }
+    setPayload(res.ulozeno);
+    setUlozenoOk(true);
+  }, [
+    user?.id,
+    pocetKombinaciPodleFiltru,
+    nahledFiltrBonusTyp,
+    nahledFiltrParamAplikovany,
+    nahledFiltrSloty,
+    payload,
+    persistPayload,
+  ]);
 
   const upravKombinaci = useCallback((typ: TypKombinaceBonusu, r: RadekBonusKombinaceUi) => {
     setTypKombinace(typ);
@@ -763,12 +924,11 @@ export function NastaveniBonusu() {
     <div className="w-full">
       <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Nastavení bonusů</h2>
       <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
-        U volby <span className="font-medium text-zinc-300">Útok</span> zadej tři parametry (národnost,
-        tým nebo typ karty), u <span className="font-medium text-zinc-300">Obrana</span> stačí dva. Ve
-        sloupci <span className="font-medium text-zinc-300">Bonus</span> zadej číslo a typ (PLAT, CLK,
-        BS). Klikni <span className="font-medium text-zinc-300">Uložit</span> — kombinace se zapíše do
-        databáze a formulář se vyprázdní. Stejný řádek (parametry + hodnota + typ bonusu) dvakrát uložit nelze.
-        Smazání řádku v náhledu se také hned uloží.
+        Úprava <span className="font-medium text-zinc-300">sdílených kombinací</span> v databázi (útok =
+        trojice symbolů, obrana = dvojice; bonus PLAT / CLK / BS). Níže jsou{" "}
+        <span className="font-medium text-zinc-300">dvě oddělené oblasti</span>: typy karet (kód + stažení
+        ikon v repu) a export řádků z NHL HUT Builderu (JSON mimo tuto stránku). Samotný formulář a náhled
+        řeší jen zápis kombinací do Supabase.
       </p>
 
       {nastaveniChyba ? (
@@ -784,7 +944,95 @@ export function NastaveniBonusu() {
         <p className="mt-8 text-sm text-[var(--hut-muted)]">Načítám nastavení…</p>
       ) : (
         <>
-          <fieldset className="mt-8 min-w-0 border-0 p-0">
+          <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start lg:gap-5">
+            <section
+              id="bonus-nastroje-typy-karet"
+              className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/35 p-4 sm:p-5"
+              aria-labelledby="bonus-hlavicka-typy-karet"
+            >
+              <h3
+                id="bonus-hlavicka-typy-karet"
+                className="text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]"
+              >
+                1 — Typy karet (sezóna, ikony)
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-[var(--hut-muted)] sm:text-sm">
+                Seznam sad a mapování na filtry je v kódu:{" "}
+                <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
+                  lib/hutdbTypKaret.ts
+                </code>
+                . Novou řadu tam nejdřív dopiš, pak v kořeni repa spusť skript — stáhne PNG do{" "}
+                <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
+                  public/logos/hut-typy-karet/
+                </code>{" "}
+                (z webu to z této stránky nelze spolehlivě zapsat do deploye).
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => kopirujPrikazDoSchranky("npm run loga:typy-karet")}
+                  className={btnUpravitClass}
+                >
+                  Zkopírovat: loga:typy-karet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => kopirujPrikazDoSchranky("npm run loga:typy-karet:force")}
+                  className={btnUpravitClass}
+                >
+                  Zkopírovat: loga:typy-karet:force
+                </button>
+              </div>
+            </section>
+
+            <section
+              id="bonus-nastroje-hutbuilder"
+              className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/35 p-4 sm:p-5"
+              aria-labelledby="bonus-hlavicka-hutbuilder"
+            >
+              <h3
+                id="bonus-hlavicka-hutbuilder"
+                className="text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]"
+              >
+                2 — NHL HUT Builder (řádky / chemie)
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-[var(--hut-muted)] sm:text-sm">
+                Předgenerované lajny stáhneš lokálně příkazem níže → JSON v{" "}
+                <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
+                  data/hutbuilder-combos/
+                </code>
+                . To je <span className="font-medium text-zinc-400">jiný zdroj</span> než tabulka bonusů
+                zde: automatický import trojic/dvojic do databáze zatím není součástí UI (jiný formát dat).
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => kopirujPrikazDoSchranky("npm run hutbuilder:kombinace")}
+                  className={btnUpravitClass}
+                >
+                  Zkopírovat: hutbuilder:kombinace
+                </button>
+              </div>
+            </section>
+          </div>
+
+          {nastrojKopirovatHint ? (
+            <p className="mt-3 text-xs font-medium text-[var(--hut-lime)]" role="status">
+              {nastrojKopirovatHint}
+            </p>
+          ) : null}
+
+          <p className="mt-10 text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-muted)]">
+            Kombinace v databázi
+          </p>
+          <p className="mt-1.5 max-w-3xl text-xs leading-relaxed text-[var(--hut-muted)] sm:text-sm">
+            U <span className="font-medium text-zinc-400">Útok</span> vyplň tři parametry (národnost / tým /
+            typ karty), u <span className="font-medium text-zinc-400">Obrana</span> dva.{" "}
+            <span className="font-medium text-zinc-400">Uložit</span> zapíše řádek; stejná kombinace se
+            dvakrát uložit nedá. Smazání v náhledu se uloží hned.
+          </p>
+
+          <fieldset className="mt-5 min-w-0 border-0 p-0">
             <legend className="px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]">
               Kam přidat kombinaci
             </legend>
@@ -893,7 +1141,7 @@ export function NastaveniBonusu() {
 
           <div className="mt-10">
             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]">
-              Náhled kombinací
+              3 — Náhled uložených kombinací
             </h3>
 
             <div
@@ -991,6 +1239,24 @@ export function NastaveniBonusu() {
                   {opt.label}
                 </button>
               ))}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={ukladam || pocetKombinaciPodleFiltru.celkem < 1}
+                onClick={() => void smazatVsechnyPodleFiltru()}
+                title="Smaže všechny řádky, které odpovídají aktuálnímu náhledu (typ bonusu a zapnutý filtr parametrů)."
+                className={`${btnSmazatClass} disabled:opacity-40`}
+              >
+                Smazat všechny
+                {pocetKombinaciPodleFiltru.celkem > 0
+                  ? ` (${pocetKombinaciPodleFiltru.celkem})`
+                  : ""}
+              </button>
+              <span className="max-w-xl text-xs leading-relaxed text-[var(--hut-muted)]">
+                Maže útočné i obranné řádky viditelné v náhledu podle zvoleného typu bonusu (PLAT / CLK / BS) a podle
+                zapnutého filtru parametrů.
+              </span>
             </div>
             <div className="mt-4 grid gap-8 lg:grid-cols-2 lg:gap-10">
               <div className="min-w-0">
