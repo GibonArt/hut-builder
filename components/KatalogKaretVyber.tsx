@@ -9,6 +9,7 @@ import {
 } from "@/lib/cardsDb";
 import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
 import { urlLogaTymu } from "@/lib/tymLoga";
+import { useTypKartyMetaOpts } from "@/components/TypKartyMetaOptsContext";
 import { najdiMetaTypuKarty } from "@/lib/hutdbTypKaret";
 import type { HutCard } from "@/types";
 import { TypKartyMiniLogo } from "@/components/TypKartyIkona";
@@ -29,6 +30,7 @@ const btnClass =
   "touch-manipulation w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2 text-left text-sm text-white outline-none transition-[border-color,box-shadow] hover:border-zinc-500 focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)]";
 
 export function KatalogKaretVyber({ userId, disabled, onVybrat }: Props) {
+  const typKartyMetaOpts = useTypKartyMetaOpts();
   const supabase = useMemo(() => createClient(), []);
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
   const listId = useId();
@@ -187,7 +189,10 @@ export function KatalogKaretVyber({ userId, disabled, onVybrat }: Props) {
                         {HUT_POZICE_ZKRATKA[p.karta.pozice]} · {p.karta.ovr} OVR · {p.karta.tym} ·{" "}
                         {formatovatPlatVMil(p.karta.plat)}
                         {(() => {
-                          const meta = najdiMetaTypuKarty(p.karta.typKarty);
+                          const meta = najdiMetaTypuKarty(
+                            p.karta.typKarty,
+                            typKartyMetaOpts ?? undefined,
+                          );
                           return meta ? ` · ${meta.jmenoCs}` : "";
                         })()}
                       </span>

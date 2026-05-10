@@ -13,6 +13,7 @@ import {
 import { vygenerujIdKarty } from "@/lib/vygenerujIdKarty";
 import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
 import { urlLogaTymu } from "@/lib/tymLoga";
+import { useTypKartyMetaOpts } from "@/components/TypKartyMetaOptsContext";
 import { najdiMetaTypuKarty } from "@/lib/hutdbTypKaret";
 import type { HutCard } from "@/types";
 import { TypKartyMiniLogo } from "@/components/TypKartyIkona";
@@ -41,6 +42,7 @@ export function KatalogHromadnyImport({
   disabled,
   onKartyPridany,
 }: Props) {
+  const typKartyMetaOpts = useTypKartyMetaOpts();
   const supabase = useMemo(() => createClient(), []);
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
   const baseId = useId();
@@ -323,7 +325,10 @@ export function KatalogHromadnyImport({
                             {HUT_POZICE_ZKRATKA[p.karta.pozice]} · {p.karta.ovr} OVR · {p.karta.tym} ·{" "}
                             {formatovatPlatVMil(p.karta.plat)}
                             {(() => {
-                              const meta = najdiMetaTypuKarty(p.karta.typKarty);
+                              const meta = najdiMetaTypuKarty(
+                                p.karta.typKarty,
+                                typKartyMetaOpts ?? undefined,
+                              );
                               return meta ? ` · ${meta.jmenoCs}` : "";
                             })()}
                             {uzMam ? " · v inventáři" : ""}

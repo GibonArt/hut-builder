@@ -31,7 +31,10 @@ import { urlLogaTymu } from "@/lib/tymLoga";
 import { HUT_POZICE_ZKRATKA } from "@/lib/hutPozice";
 import { formatovatPlatVMil } from "@/lib/platMiliony";
 import type { HutCard, Pozice } from "@/types";
+import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import { TypKartyMiniLogo } from "@/components/TypKartyIkona";
+import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
+import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
 import { TymLogo } from "@/components/TymLogo";
 
 const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
@@ -562,6 +565,11 @@ export function OptimalizatorFormaci() {
   const { user, loading: authLoading } = useAuth();
   const supabase = useMemo(() => createClient(), []);
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
+  const { typyKaret, aliasMapZBaze } = useMergedTypyKaret();
+  const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
+    () => ({ radky: typyKaret, aliasMapZBaze }),
+    [typyKaret, aliasMapZBaze],
+  );
 
   const [karty, setKarty] = useState<HutCard[]>([]);
   const [loadingKarty, setLoadingKarty] = useState(false);
@@ -972,6 +980,7 @@ export function OptimalizatorFormaci() {
   const nastaveniBonusuJakoOdkaz = jeBonusAdmin(user?.email);
 
   return (
+    <TypKartyMetaOptsProvider value={typKartyMetaOpts}>
     <div className="space-y-8 sm:space-y-10">
       <header>
         <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Optimalizátor formací</h2>
@@ -1689,5 +1698,6 @@ export function OptimalizatorFormaci() {
         </>
       )}
     </div>
+    </TypKartyMetaOptsProvider>
   );
 }

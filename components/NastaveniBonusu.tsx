@@ -50,7 +50,8 @@ import {
   radkyZRadekHutbuilder,
   type HutbuilderImportedLine,
 } from "@/lib/hutbuilderBonusImport";
-import type { HutDbTypKarty } from "@/lib/hutdbTypKaret";
+import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
+import type { HutDbTypKarty, NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
 import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
 import { urlLogaTymu } from "@/lib/tymLoga";
@@ -475,7 +476,11 @@ export function NastaveniBonusu() {
   const { user, loading } = useAuth();
   const supabase = useMemo(() => createClient(), []);
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
-  const { typyKaret: hutdbTypyKaret, refreshDynamic } = useMergedTypyKaret();
+  const { typyKaret: hutdbTypyKaret, aliasMapZBaze, refreshDynamic } = useMergedTypyKaret();
+  const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
+    () => ({ radky: hutdbTypyKaret, aliasMapZBaze }),
+    [hutdbTypyKaret, aliasMapZBaze],
+  );
 
   const [typKombinace, setTypKombinace] = useState<TypKombinaceBonusu>("utocna");
   const [draft, setDraft] = useState<RadekBonusKombinaceUi>(() => novyRadekBonusu());
@@ -1024,7 +1029,9 @@ export function NastaveniBonusu() {
     });
   }, []);
 
-  const obsah = loading ? (
+  const obsah = (
+    <TypKartyMetaOptsProvider value={typKartyMetaOpts}>
+      {loading ? (
     <p className="text-sm text-[var(--hut-muted)]">Načítám účet…</p>
   ) : !pristup ? (
     <div className="rounded-xl border border-[var(--hut-border)] bg-[var(--hut-surface)]/80 p-8">
@@ -1507,6 +1514,8 @@ export function NastaveniBonusu() {
         </>
       )}
     </div>
+      )}
+    </TypKartyMetaOptsProvider>
   );
 
   return (

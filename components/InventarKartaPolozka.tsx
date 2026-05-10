@@ -8,9 +8,8 @@ import {
   type NarodnostVolba,
 } from "@/lib/narodnosti";
 import { formatovatPlatVMil } from "@/lib/platMiliony";
-import {
-  zobrazitelnyNazevTypuKarty,
-} from "@/lib/hutdbTypKaret";
+import { useTypKartyMetaOpts } from "@/components/TypKartyMetaOptsContext";
+import { zobrazitelnyNazevTypuKarty } from "@/lib/hutdbTypKaret";
 import { urlLogaTymu } from "@/lib/tymLoga";
 import { JmenoNaKarteFit } from "@/components/JmenoNaKarteFit";
 import { TypKartyMiniLogo } from "@/components/TypKartyIkona";
@@ -70,6 +69,7 @@ export function InventarKartaPolozka({
   formZakazany,
   mrizkaCtvrtiny = false,
 }: Props) {
+  const typKartyMetaOpts = useTypKartyMetaOpts();
   const kodNarKarty = kodNarodnostiPodleLabelu(k.narodnost, narodnostiVolby);
 
   const sirkaTridy = mrizkaCtvrtiny
@@ -117,7 +117,7 @@ export function InventarKartaPolozka({
 
         <div
           className="grid w-full min-w-0 grid-cols-3 items-center gap-2 py-0.5"
-          aria-label={`${k.narodnost}, ${k.tym}, ${zobrazitelnyNazevTypuKarty(k.typKarty)}`}
+          aria-label={`${k.narodnost}, ${k.tym}, ${zobrazitelnyNazevTypuKarty(k.typKarty, typKartyMetaOpts ?? undefined)}`}
         >
           <div className="flex min-h-[3rem] items-center justify-center">
             <span

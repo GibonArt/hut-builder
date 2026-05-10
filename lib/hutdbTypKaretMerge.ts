@@ -4,7 +4,25 @@ export type DynamicTypKartyDbRow = {
   hodnota_filtru: string;
   jmeno_cs: string;
   combo_soubor: string;
+  popis_cs?: string | null;
+  aliases?: string[] | null;
 };
+
+/** Alias (uppercase) → kanonická hodnota_filtru (uppercase), ze sloupce `aliases` v Supabase. */
+export function aliasMapZDynamickychRadku(
+  dynamic: readonly DynamicTypKartyDbRow[] | null | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const d of dynamic ?? []) {
+    const canonical = d.hodnota_filtru.trim().toUpperCase();
+    if (!canonical) continue;
+    for (const raw of d.aliases ?? []) {
+      const a = String(raw ?? "").trim().toUpperCase();
+      if (a && a !== canonical) out[a] = canonical;
+    }
+  }
+  return out;
+}
 
 /**
  * Sloučí statický katalog z kódu s řádky z Supabase (`hut_typy_karet_dynamic`).
@@ -34,6 +52,7 @@ export function sloucitStaticADynamickeTypy(
         ...r,
         comboSoubor: d.combo_soubor?.trim() ? d.combo_soubor.trim() : r.comboSoubor,
         jmenoCs: d.jmeno_cs?.trim() ? d.jmeno_cs.trim() : r.jmenoCs,
+        popisCs: d.popis_cs?.trim() ? d.popis_cs.trim() : r.popisCs,
       });
     } else {
       out.push(r);
@@ -49,7 +68,7 @@ export function sloucitStaticADynamickeTypy(
     out.push({
       hodnotaFiltru: k,
       jmenoCs: d.jmeno_cs.trim() || k,
-      popisCs: "Synchronizováno z NHL HUT Builder.",
+      popisCs: d.popis_cs?.trim() || "Synchronizováno z NHL HUT Builder.",
       comboSoubor: soubor,
     });
   }

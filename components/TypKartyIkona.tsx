@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTypKartyMetaOpts } from "@/components/TypKartyMetaOptsContext";
 import {
   najdiMetaTypuKarty,
+  type NajdiMetaTypuKartyOpts,
   urlLogaTypuKarty,
   zobrazitelnyNazevTypuKarty,
 } from "@/lib/hutdbTypKaret";
@@ -78,16 +80,21 @@ export function TypKartyIkonaVCtverci({
 export function TypKartyMiniLogo({
   ulozeno,
   velikost = "rada",
+  metaOpts: metaOptsProp,
 }: {
   ulozeno: string;
   /** `seznam` = menší čtverec (např. řádek karty vedle vlajky a loga týmu). `kombinace` = stejný čtverec jako náhled bonusů (11×11). */
   velikost?: "rada" | "seznam" | "mrizka" | "kombinace";
+  /** Bez kontextu stačí předat z `useMergedTypyKaret` + `useMemo` stejně jako u Provideru. */
+  metaOpts?: NajdiMetaTypuKartyOpts | null;
 }) {
-  const meta = najdiMetaTypuKarty(ulozeno);
+  const zKontextu = useTypKartyMetaOpts();
+  const metaOpts = metaOptsProp ?? zKontextu;
+  const meta = najdiMetaTypuKarty(ulozeno, metaOpts ?? undefined);
   return (
     <TypKartyIkonaVCtverci
       comboSoubor={meta?.comboSoubor ?? null}
-      nazev={zobrazitelnyNazevTypuKarty(ulozeno)}
+      nazev={zobrazitelnyNazevTypuKarty(ulozeno, metaOpts ?? undefined)}
       velikost={velikost}
     />
   );

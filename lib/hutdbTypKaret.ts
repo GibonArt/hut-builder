@@ -75,6 +75,12 @@ const RADKY: HutDbTypKarty[] = [
     comboSoubor: "FANT1310536400.png",
   },
   {
+    hodnotaFiltru: "GALLERY OF GREATS",
+    jmenoCs: "Gallery of Greats",
+    popisCs: "Řada Gallery of Greats (ikona z NHL HUT Builder / combo assets).",
+    comboSoubor: "GOG295734392.png",
+  },
+  {
     hodnotaFiltru: "FRESH ICE",
     jmenoCs: "Fresh Ice",
     popisCs: "Řada Fresh Ice — sezónní / akční obsah v HUT.",
@@ -262,6 +268,7 @@ const PORADI_MRIZKY_CHEMISTRY: string[] = [
   "COMBO NEXUS",
   "FACEOFF: INSIDE THE NHL",
   "FANTASY HOCKEY",
+  "GALLERY OF GREATS",
   "FRESH ICE",
   "HUT FINISH LINE",
   "HUT GAME BREAKERS",
@@ -313,6 +320,7 @@ const ALIAS_NA_FILTR: Record<string, string> = {
   ROOK: "ROOKIES",
   ROOKIES: "ROOKIES",
   FANT: "FANTASY HOCKEY",
+  GOG: "GALLERY OF GREATS",
   HUTC: "HUT CHAMPIONS",
   HBM: "HUT BEAST MODE",
   BEAST: "HUT BEAST MODE",
@@ -380,10 +388,48 @@ export function urlLogaTypuKarty(comboSoubor: string | null): string | null {
   return `${HUTDB_SUPABASE_PUBLIC_ASSETS}/combos/${comboSoubor}`;
 }
 
-/**
- * Vyhledá meta podle uložené hodnoty v `typKarty` (canonical filtr, zkratka, nebo český název).
- */
-export function najdiMetaTypuKarty(ulozeno: string): HutDbTypKarty | null {
+/** Volitelně: sloučený katalog (static + Supabase) a aliasy z DB (`aliases`). */
+export type NajdiMetaTypuKartyOpts = {
+  radky?: readonly HutDbTypKarty[] | null;
+  aliasMapZBaze?: Readonly<Record<string, string>> | null;
+};
+
+function rozvezStatickeAliasy(primUpper: string): string {
+  let p = primUpper;
+  let hops = 0;
+  while (ALIAS_NA_FILTR[p] && hops++ < 16) {
+    p = ALIAS_NA_FILTR[p];
+  }
+  return p;
+}
+
+function najdiMetaTypuKartyVRozsirenemKatalogu(
+  ulozeno: string,
+  radky: readonly HutDbTypKarty[],
+  aliasMapZBaze?: Readonly<Record<string, string>> | null,
+): HutDbTypKarty | null {
+  const t = ulozeno.trim();
+  if (!t) return null;
+
+  const map = new Map(radky.map((r) => [r.hodnotaFiltru.toUpperCase(), r]));
+
+  let prim = t.toUpperCase();
+  const zDb = aliasMapZBaze?.[prim];
+  if (zDb) prim = zDb.toUpperCase();
+  prim = rozvezStatickeAliasy(prim);
+
+  const hit = map.get(prim);
+  if (hit) return hit;
+
+  const niz = t.toLowerCase();
+  for (const r of radky) {
+    if (r.jmenoCs.toLowerCase() === niz) return r;
+  }
+
+  return null;
+}
+
+function najdiMetaTypuKartyJenStatic(ulozeno: string): HutDbTypKarty | null {
   const t = ulozeno.trim();
   if (!t) return null;
 
@@ -402,8 +448,31 @@ export function najdiMetaTypuKarty(ulozeno: string): HutDbTypKarty | null {
   return null;
 }
 
+/**
+ * Vyhledá meta podle uložené hodnoty v `typKarty` (canonical filtr, zkratka, nebo český název).
+ * S `opts.radky` (sloučený katalog z hooku) najde i čistě dynamické typy ze syncu.
+ */
+export function najdiMetaTypuKarty(
+  ulozeno: string,
+  opts?: NajdiMetaTypuKartyOpts | null,
+): HutDbTypKarty | null {
+  const radky = opts?.radky;
+  if (radky?.length) {
+    const zKatalogu = najdiMetaTypuKartyVRozsirenemKatalogu(
+      ulozeno,
+      radky,
+      opts?.aliasMapZBaze,
+    );
+    if (zKatalogu) return zKatalogu;
+  }
+  return najdiMetaTypuKartyJenStatic(ulozeno);
+}
+
 /** Krátký text do řádku karty: český název, jinak původní řetězec. */
-export function zobrazitelnyNazevTypuKarty(ulozeno: string): string {
-  const m = najdiMetaTypuKarty(ulozeno);
+export function zobrazitelnyNazevTypuKarty(
+  ulozeno: string,
+  opts?: NajdiMetaTypuKartyOpts | null,
+): string {
+  const m = najdiMetaTypuKarty(ulozeno, opts);
   return m?.jmenoCs ?? (ulozeno.trim() || "—");
 }

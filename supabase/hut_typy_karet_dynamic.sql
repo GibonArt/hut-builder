@@ -8,6 +8,8 @@ create table if not exists public.hut_typy_karet_dynamic (
   hodnota_filtru text not null,
   jmeno_cs text not null,
   combo_soubor text not null,
+  popis_cs text,
+  aliases text[] not null default '{}',
   synced_at timestamptz not null default now(),
   primary key (hodnota_filtru)
 );

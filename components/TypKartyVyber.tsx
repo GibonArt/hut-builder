@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useTypKartyMetaOpts } from "@/components/TypKartyMetaOptsContext";
 import type { HutDbTypKarty } from "@/lib/hutdbTypKaret";
 import { najdiMetaTypuKarty } from "@/lib/hutdbTypKaret";
 import { TypKartyIkonaVCtverci } from "@/components/TypKartyIkona";
@@ -31,8 +32,18 @@ export function TypKartyVyber({
   const [otevreno, setOtevreno] = useState(false);
   const [filtr, setFiltr] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  const metaOptsCtx = useTypKartyMetaOpts();
 
-  const vybrany = useMemo(() => najdiMetaTypuKarty(value), [value]);
+  const vybrany = useMemo(
+    () =>
+      najdiMetaTypuKarty(value, {
+        radky: typy,
+        aliasMapZBaze: metaOptsCtx?.aliasMapZBaze ?? undefined,
+      }),
+    [value, typy, metaOptsCtx?.aliasMapZBaze],
+  );
+
+  const hodnotaKVyberu = vybrany?.hodnotaFiltru ?? "";
 
   /** Známe typ z katalogu (včetně aliasů / odlišného uloženého tvaru) — `typy` obsahuje všechny řádky. */
   const jeVSeznamu = vybrany != null;
@@ -145,7 +156,7 @@ export function TypKartyVyber({
               </li>
             ) : (
               filtrovane.map((r) => {
-                const vybranyRadek = r.hodnotaFiltru === value;
+                const vybranyRadek = hodnotaKVyberu !== "" && r.hodnotaFiltru === hodnotaKVyberu;
                 return (
                   <li key={r.hodnotaFiltru} role="option" aria-selected={vybranyRadek}>
                     <button

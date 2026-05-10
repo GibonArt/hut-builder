@@ -39,7 +39,8 @@ import {
   LIGY_V_PORADI,
   tymyProLigu,
 } from "@/lib/tymyPodleLigy";
-import { najdiMetaTypuKarty } from "@/lib/hutdbTypKaret";
+import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
+import { najdiMetaTypuKarty, type NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
 import { NarodnostVyber } from "@/components/NarodnostVyber";
 import { TypKartyVyber } from "@/components/TypKartyVyber";
@@ -150,7 +151,11 @@ export function MujInventar() {
 
   const tymyProAktualniLigu = useMemo(() => tymyProLigu(liga), [liga]);
 
-  const { typyKaret: hutdbTypyKaret } = useMergedTypyKaret();
+  const { typyKaret: hutdbTypyKaret, aliasMapZBaze } = useMergedTypyKaret();
+  const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
+    () => ({ radky: hutdbTypyKaret, aliasMapZBaze }),
+    [hutdbTypyKaret, aliasMapZBaze],
+  );
 
   const xFactoryKatalogSerazeny = useMemo(
     () =>
@@ -543,7 +548,7 @@ export function MujInventar() {
       return { ok: false, chyba: "Neplatná národnost." };
     }
 
-    if (!najdiMetaTypuKarty(typKarty)) {
+    if (!najdiMetaTypuKarty(typKarty, typKartyMetaOpts)) {
       return { ok: false, chyba: "Vyber typ karty." };
     }
 
@@ -561,7 +566,7 @@ export function MujInventar() {
     );
 
     const typKartyUlozit =
-      najdiMetaTypuKarty(typKarty)?.hodnotaFiltru ?? typKarty.trim();
+      najdiMetaTypuKarty(typKarty, typKartyMetaOpts)?.hodnotaFiltru ?? typKarty.trim();
 
     const xfUlozit = xFactory
       .filter((x) => x.label.trim())
@@ -609,6 +614,7 @@ export function MujInventar() {
     editujiSlug,
     prodano,
     karty,
+    typKartyMetaOpts,
   ]);
 
   const shodnySeSnapshotemKatalogu = useMemo(() => {
@@ -756,6 +762,7 @@ export function MujInventar() {
   const formZakazany = !user || authLoading || ukladamKartu;
 
   return (
+    <TypKartyMetaOptsProvider value={typKartyMetaOpts}>
     <div className="space-y-10">
       <div>
         <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Můj Inventář</h2>
@@ -1251,5 +1258,6 @@ export function MujInventar() {
         )}
       </section>
     </div>
+    </TypKartyMetaOptsProvider>
   );
 }
