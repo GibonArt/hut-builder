@@ -86,8 +86,11 @@ function filtrujVysledkyPodleTypuBonusu<T extends { kombinace: RadekBonusKombina
   return radky.filter((x) => x.kombinace.bonusTyp === typ);
 }
 
-/** Sestupně = nejvyšší číselná hodnota bonusu první; při stejné hodnotě zachová původní pořadí. */
+/** Sestupně = nejvyšší první (OVR součet nebo hodnota bonusu podle režimu). */
 type SmerRazeniHodnotyBonusu = "sestupne" | "vzestupne";
+
+/** Výchozí řazení = součet OVR hráčů ve formaci; volitelně jen podle čísla u bonusu. */
+type TypRazeniVysledku = "ovr_soucet" | "bonus_hodnota";
 
 function hodnotaBonusuCiselne(r: RadekBonusKombinaceUi): number {
   const h = r.bonusHodnota;
@@ -95,12 +98,35 @@ function hodnotaBonusuCiselne(r: RadekBonusKombinaceUi): number {
   return h;
 }
 
-function seraditPodleHodnotyBonusu<T extends { kombinace: RadekBonusKombinaceUi }>(
-  radky: readonly T[],
+function soucetOvrUtocnaFormace(v: UtocnaFormaceVysledek): number {
+  return v.lk.ovr + v.c.ovr + v.pk.ovr;
+}
+
+function soucetOvrDvojice(v: DvojiceVysledek): number {
+  return v.a.ovr + v.b.ovr;
+}
+
+function seraditUtocneVysledky(
+  radky: readonly UtocnaFormaceVysledek[],
+  typ: TypRazeniVysledku,
   smer: SmerRazeniHodnotyBonusu,
-): T[] {
+): UtocnaFormaceVysledek[] {
   const sMetadaty = radky.map((row, puvodniIndex) => ({ row, puvodniIndex }));
   sMetadaty.sort((a, b) => {
+    if (typ === "ovr_soucet") {
+      const oa = soucetOvrUtocnaFormace(a.row);
+      const ob = soucetOvrUtocnaFormace(b.row);
+      if (oa !== ob) return smer === "sestupne" ? ob - oa : oa - ob;
+      const ba = hodnotaBonusuCiselne(a.row.kombinace);
+      const bb = hodnotaBonusuCiselne(b.row.kombinace);
+      const na = Number.isNaN(ba);
+      const nb = Number.isNaN(bb);
+      if (!na && !nb && ba !== bb) {
+        return smer === "sestupne" ? bb - ba : ba - bb;
+      }
+      if (na !== nb) return na ? 1 : -1;
+      return a.puvodniIndex - b.puvodniIndex;
+    }
     const va = hodnotaBonusuCiselne(a.row.kombinace);
     const vb = hodnotaBonusuCiselne(b.row.kombinace);
     const na = Number.isNaN(va);
@@ -110,6 +136,47 @@ function seraditPodleHodnotyBonusu<T extends { kombinace: RadekBonusKombinaceUi 
     if (nb) return -1;
     const rozdil = va - vb;
     if (rozdil !== 0) return smer === "sestupne" ? -rozdil : rozdil;
+    const oa = soucetOvrUtocnaFormace(a.row);
+    const ob = soucetOvrUtocnaFormace(b.row);
+    if (oa !== ob) return smer === "sestupne" ? ob - oa : oa - ob;
+    return a.puvodniIndex - b.puvodniIndex;
+  });
+  return sMetadaty.map((x) => x.row);
+}
+
+function seraditDvojiceVysledky(
+  radky: readonly DvojiceVysledek[],
+  typ: TypRazeniVysledku,
+  smer: SmerRazeniHodnotyBonusu,
+): DvojiceVysledek[] {
+  const sMetadaty = radky.map((row, puvodniIndex) => ({ row, puvodniIndex }));
+  sMetadaty.sort((a, b) => {
+    if (typ === "ovr_soucet") {
+      const oa = soucetOvrDvojice(a.row);
+      const ob = soucetOvrDvojice(b.row);
+      if (oa !== ob) return smer === "sestupne" ? ob - oa : oa - ob;
+      const ba = hodnotaBonusuCiselne(a.row.kombinace);
+      const bb = hodnotaBonusuCiselne(b.row.kombinace);
+      const na = Number.isNaN(ba);
+      const nb = Number.isNaN(bb);
+      if (!na && !nb && ba !== bb) {
+        return smer === "sestupne" ? bb - ba : ba - bb;
+      }
+      if (na !== nb) return na ? 1 : -1;
+      return a.puvodniIndex - b.puvodniIndex;
+    }
+    const va = hodnotaBonusuCiselne(a.row.kombinace);
+    const vb = hodnotaBonusuCiselne(b.row.kombinace);
+    const na = Number.isNaN(va);
+    const nb = Number.isNaN(vb);
+    if (na && nb) return a.puvodniIndex - b.puvodniIndex;
+    if (na) return 1;
+    if (nb) return -1;
+    const rozdil = va - vb;
+    if (rozdil !== 0) return smer === "sestupne" ? -rozdil : rozdil;
+    const oa = soucetOvrDvojice(a.row);
+    const ob = soucetOvrDvojice(b.row);
+    if (oa !== ob) return smer === "sestupne" ? ob - oa : oa - ob;
     return a.puvodniIndex - b.puvodniIndex;
   });
   return sMetadaty.map((x) => x.row);
@@ -595,6 +662,8 @@ export function OptimalizatorFormaci() {
    */
   const [smerRazeniHodnotyBonusu, setSmerRazeniHodnotyBonusu] =
     useState<SmerRazeniHodnotyBonusu>("sestupne");
+  const [typRazeniVysledku, setTypRazeniVysledku] = useState<TypRazeniVysledku>("ovr_soucet");
+  const [kridlaVzajemna, setKridlaVzajemna] = useState(false);
   /**
    * Po „Hledat“: filtrování řádků podle toho, zda stejná sestava hráčů splňuje víc typů bonusů (PLAT/CLK/BS).
    * Dynamické hodnoty „BS+PLAT“ atd. odpovídají přesné množině typů u té sestavy v plném výsledku.
@@ -637,6 +706,8 @@ export function OptimalizatorFormaci() {
       setFiltryPoHledani(null);
       setFiltrPrekryvBonusu("vse");
       setSmerRazeniHodnotyBonusu("sestupne");
+      setTypRazeniVysledku("ovr_soucet");
+      setKridlaVzajemna(false);
     }
   }, [user?.id]);
 
@@ -711,8 +782,11 @@ export function OptimalizatorFormaci() {
   const typBonusuAplikovany = filtryPoHledani?.typBonusuFiltr ?? "vse";
 
   const vysledkyUtok = useMemo(
-    () => spoctiUtocneFormace(kartyVeFiltru, utocneRadky, narodnostiVolby),
-    [kartyVeFiltru, utocneRadky, narodnostiVolby],
+    () =>
+      spoctiUtocneFormace(kartyVeFiltru, utocneRadky, narodnostiVolby, {
+        kridlaVzajemna,
+      }),
+    [kartyVeFiltru, utocneRadky, narodnostiVolby, kridlaVzajemna],
   );
 
   const vysledkyObrana = useMemo(
@@ -852,16 +926,16 @@ export function OptimalizatorFormaci() {
   }, [golmaniZobrazenoPoPrekryvu, zakazaneIdGolmani]);
 
   const utokZobrazenoPoVylouceniSerazeno = useMemo(
-    () => seraditPodleHodnotyBonusu(utokZobrazenoPoVylouceni, smerRazeniHodnotyBonusu),
-    [utokZobrazenoPoVylouceni, smerRazeniHodnotyBonusu],
+    () => seraditUtocneVysledky(utokZobrazenoPoVylouceni, typRazeniVysledku, smerRazeniHodnotyBonusu),
+    [utokZobrazenoPoVylouceni, typRazeniVysledku, smerRazeniHodnotyBonusu],
   );
   const obranaZobrazenoPoVylouceniSerazeno = useMemo(
-    () => seraditPodleHodnotyBonusu(obranaZobrazenoPoVylouceni, smerRazeniHodnotyBonusu),
-    [obranaZobrazenoPoVylouceni, smerRazeniHodnotyBonusu],
+    () => seraditDvojiceVysledky(obranaZobrazenoPoVylouceni, typRazeniVysledku, smerRazeniHodnotyBonusu),
+    [obranaZobrazenoPoVylouceni, typRazeniVysledku, smerRazeniHodnotyBonusu],
   );
   const golmaniZobrazenoPoVylouceniSerazeno = useMemo(
-    () => seraditPodleHodnotyBonusu(golmaniZobrazenoPoVylouceni, smerRazeniHodnotyBonusu),
-    [golmaniZobrazenoPoVylouceni, smerRazeniHodnotyBonusu],
+    () => seraditDvojiceVysledky(golmaniZobrazenoPoVylouceni, typRazeniVysledku, smerRazeniHodnotyBonusu),
+    [golmaniZobrazenoPoVylouceni, typRazeniVysledku, smerRazeniHodnotyBonusu],
   );
 
   useEffect(() => {
@@ -998,10 +1072,12 @@ export function OptimalizatorFormaci() {
           )}
           : útok (LK + C + PK), obrana (LO + PO) a dvojice brankářů (G + G). Symboly z kombinace musí pokrýt
           všechny příslušné pozice v libovolném pořadí (LK nemusí odpovídat prvnímu uloženému parametru).
-          Zobrazí se jen plné shody — žádné částečné trojice ani dvojice. U každého výsledku můžeš připnout
-          sestavy podle typu bonusu (PLAT / CLK / BS): útok max. 4 na typ, obrana max. 3 na typ, brankáři max. 1
-          na typ. Ze seznamu se pak skryjí všechny varianty, které sdílejí alespoň jednoho hráče s některou z
-          připnutých sestav v dané sekci (sjednocení množin hráčů). Karty v inventáři označené jako{" "}
+          Zobrazí se jen plné shody — žádné částečné trojice ani dvojice. Výsledky se výchozí řadí podle součtu OVR
+          hráčů ve sestavě (útok LK + C + PK, obrana a brankáři součet dvojice); lze přepnout na řazení podle čísla
+          bonusu u rovnítka. U každého výsledku můžeš připnout sestavy podle typu bonusu (PLAT / CLK / BS): útok max.
+          4 na typ, obrana max. 3 na typ, brankáři max. 1 na typ. Ze seznamu se pak skryjí všechny varianty, které
+          sdílejí alespoň jednoho hráče s některou z připnutých sestav v dané sekci (sjednocení množin hráčů). Karty v
+          inventáři označené jako{" "}
           <span className="text-zinc-300">Prodáno</span> se do výpočtu nezahrnují.
         </p>
       </header>
@@ -1030,8 +1106,8 @@ export function OptimalizatorFormaci() {
               Filtry formací
             </h3>
             <p className="mt-1 text-xs text-[var(--hut-muted)]/90">
-              OVR: prázdné pole = bez limitu. Typ bonusu zužuje výsledky podle hodnoty z Nastavení bonusů. Pozice (LK,
-              C, PK / LO, PO / G) se vždy dodrží. Kombinace se dopočítají až po kliknutí na{" "}
+              OVR: prázdné pole = bez limitu. Typ bonusu zužuje výsledky podle hodnoty z Nastavení bonusů. Útok: LK, C,
+              PK (volitelně záměna křídel níže); obrana LO, PO; brankáři G. Kombinace se dopočítají až po kliknutí na{" "}
               <span className="text-zinc-300">Hledat</span> — úvodní načtení stránky tak zůstane rychlé.
             </p>
             <div
@@ -1104,6 +1180,22 @@ export function OptimalizatorFormaci() {
                 {chybaOvrRozsah}
               </p>
             ) : null}
+            <div className="mt-5 flex max-w-2xl flex-wrap items-start gap-3">
+              <input
+                id="opt-kridla-vzajemna"
+                type="checkbox"
+                checked={kridlaVzajemna}
+                onChange={(e) => setKridlaVzajemna(e.target.checked)}
+                className="mt-1 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
+              />
+              <label
+                htmlFor="opt-kridla-vzajemna"
+                className="cursor-pointer text-xs leading-relaxed text-[var(--hut-muted)]"
+              >
+                <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> na slot LK lze dát hráče s
+                pozicí LK nebo PK, na slot PK také LK nebo PK (tři různí hráči). Centr zůstává jen pozice C.
+              </label>
+            </div>
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -1265,14 +1357,53 @@ export function OptimalizatorFormaci() {
               <div
                 className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--hut-border)]/80 pt-3"
                 role="group"
-                aria-label="Řazení podle číselné hodnoty bonusu"
+                aria-label="Kritérium řazení výsledků"
               >
                 <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
-                  Řadit podle bonusu
+                  Řadit podle
                 </span>
                 <button
                   type="button"
-                  title="Nejvyšší uvedená hodnota (PLAT / CLK / BS) nahoře"
+                  title="Součet OVR hráčů ve formaci (útok tři hráči, dvojice dva)"
+                  onClick={() => setTypRazeniVysledku("ovr_soucet")}
+                  className={[
+                    btnFiltrClass,
+                    typRazeniVysledku === "ovr_soucet"
+                      ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                      : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                  ].join(" ")}
+                >
+                  Součet OVR
+                </button>
+                <button
+                  type="button"
+                  title="Číslo u rovnítka u uložené kombinace (PLAT / CLK / BS)"
+                  onClick={() => setTypRazeniVysledku("bonus_hodnota")}
+                  className={[
+                    btnFiltrClass,
+                    typRazeniVysledku === "bonus_hodnota"
+                      ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                      : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                  ].join(" ")}
+                >
+                  Hodnota bonusu
+                </button>
+              </div>
+              <div
+                className="mt-2 flex flex-wrap items-center gap-2"
+                role="group"
+                aria-label="Směr řazení"
+              >
+                <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+                  Směr
+                </span>
+                <button
+                  type="button"
+                  title={
+                    typRazeniVysledku === "ovr_soucet"
+                      ? "Nejvyšší součet OVR nahoře"
+                      : "Nejvyšší uvedená hodnota bonusu nahoře"
+                  }
                   onClick={() => setSmerRazeniHodnotyBonusu("sestupne")}
                   className={[
                     btnFiltrClass,
@@ -1285,7 +1416,11 @@ export function OptimalizatorFormaci() {
                 </button>
                 <button
                   type="button"
-                  title="Nejnižší uvedená hodnota nahoře"
+                  title={
+                    typRazeniVysledku === "ovr_soucet"
+                      ? "Nejnižší součet OVR nahoře"
+                      : "Nejnižší hodnota bonusu nahoře"
+                  }
                   onClick={() => setSmerRazeniHodnotyBonusu("vzestupne")}
                   className={[
                     btnFiltrClass,
@@ -1298,8 +1433,8 @@ export function OptimalizatorFormaci() {
                 </button>
               </div>
               <p className="mt-2 text-[11px] leading-relaxed text-[var(--hut-muted)]/90">
-                Řadí všechny tři seznamy stejně — podle čísla u rovnítka u dané uložené kombinace (PLAT, CLK i BS
-                se porovnávají číselně).
+                Platí pro všechny tři seznamy (útok, obrana, brankáři). Při shodě se použije druhé kritérium (bonus
+                nebo OVR) a pak původní pořadí z výpočtu.
               </p>
             </div>
           ) : null}

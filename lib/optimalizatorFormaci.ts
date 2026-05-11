@@ -154,6 +154,14 @@ export function prirazeniSymboluDvojice(
   return null;
 }
 
+export type SpoctiUtocneFormaceOpts = {
+  /**
+   * Když true, na slot „levé křídlo“ lze dát hráče s pozicí LK nebo PK a na „pravé křídlo“ také LK nebo PK
+   * (stejná sada křídel, tři různí hráči). Centr zůstává jen C.
+   */
+  kridlaVzajemna?: boolean;
+};
+
 /**
  * Útočné trojice LK + C + PK; každý ze tří symbolů kombinace připadne některé pozici (libovolné pořadí).
  */
@@ -161,10 +169,13 @@ export function spoctiUtocneFormace(
   karty: readonly HutCard[],
   radkyKombinaci: readonly RadekBonusKombinaceUi[],
   narodnostiVolby: readonly NarodnostVolba[],
+  opts?: SpoctiUtocneFormaceOpts | null,
 ): UtocnaFormaceVysledek[] {
-  const lk = karty.filter((k) => k.pozice === "LK");
+  const kridlaVzajemna = Boolean(opts?.kridlaVzajemna);
+  const kridla: HutCard[] = karty.filter((k) => k.pozice === "LK" || k.pozice === "PK");
+  const lk = kridlaVzajemna ? kridla : karty.filter((k) => k.pozice === "LK");
   const c = karty.filter((k) => k.pozice === "C");
-  const pk = karty.filter((k) => k.pozice === "PK");
+  const pk = kridlaVzajemna ? kridla : karty.filter((k) => k.pozice === "PK");
   const out: UtocnaFormaceVysledek[] = [];
 
   for (const r of radkyKombinaci) {
