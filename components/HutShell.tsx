@@ -42,12 +42,6 @@ const NAV_UCET = {
   hint: "Heslo a obnova",
 };
 
-const NAV_ELH_ROZVRH = {
-  href: "/elh-rozvrh" as const,
-  label: "ELH rozvrh",
-  hint: "Dvojité kolo, 5 fází",
-};
-
 /** Sekce přepínané jen na domovské stránce `/` (ne samostatné routy). */
 export type HutSection = "inventar" | "optimalizator";
 
@@ -117,7 +111,6 @@ export function HutShell({
 
   const naDomovske = pathname === "/";
   const naMojeKarty = pathname === "/moje-karty";
-  const naElhRozvrh = pathname === "/elh-rozvrh";
   const naNastaveniBonusu = pathname === "/nastaveni-bonusu";
   const naNastaveniUctu = pathname === "/nastaveni-uctu";
   const naAdminUzivatele = pathname === "/admin/uzivatele";
@@ -126,9 +119,6 @@ export function HutShell({
   const headerSectionHint = (() => {
     if (naMojeKarty) {
       return "Přehled tvých uložených karet — úprava probíhá v Inventáři na úvodní stránce.";
-    }
-    if (naElhRozvrh) {
-      return "Generátor kol Tipsport extraligy — každý s každým 2× (doma / venku), 5 fází sezóny.";
     }
     if (naNastaveniUctu) {
       return "Změna hesla a odkaz na obnovu přístupu e-mailem.";
@@ -251,27 +241,6 @@ export function HutShell({
               ].join(" ")}
             >
               Všechny karty v inventáři
-            </span>
-          </Link>
-
-          <Link
-            href={NAV_ELH_ROZVRH.href}
-            onClick={zavritMobilniMenu}
-            className={[
-              "group rounded-xl px-3 py-3 text-left transition-colors",
-              naElhRozvrh
-                ? "bg-[var(--hut-surface-raised)] text-white shadow-[0_0_28px_var(--hut-focus-glow)] ring-1 ring-[var(--hut-focus)]/55"
-                : "text-[var(--hut-muted)] hover:bg-[var(--hut-surface-raised)]/60 hover:text-zinc-200",
-            ].join(" ")}
-          >
-            <span className="block text-sm font-medium">{NAV_ELH_ROZVRH.label}</span>
-            <span
-              className={[
-                "mt-0.5 block text-xs transition-colors",
-                naElhRozvrh ? "text-[var(--hut-muted)]" : "text-[var(--hut-muted)]/70",
-              ].join(" ")}
-            >
-              {NAV_ELH_ROZVRH.hint}
             </span>
           </Link>
 
