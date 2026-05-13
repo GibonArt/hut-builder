@@ -33,6 +33,7 @@ $$;
 
 revoke all on function public.admin_prehled_uzivatelu_karet() from public;
 grant execute on function public.admin_prehled_uzivatelu_karet() to authenticated;
+grant execute on function public.admin_prehled_uzivatelu_karet() to service_role;
 
 comment on function public.admin_prehled_uzivatelu_karet() is
   'Admin: seznam uživatelů a počet řádků v public.cards. Volitelné jen pro gibonart@gmail.com (JWT email).';

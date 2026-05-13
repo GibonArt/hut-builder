@@ -59,3 +59,7 @@ create policy "cards_update_own"
 create policy "cards_delete_own"
   on public.cards for delete
   using (auth.uid() = user_id);
+
+-- PostgREST / supabase-js: explicitní oprávnění (Supabase — nové tabulky v public od května 2025).
+grant select, insert, update, delete on public.cards to authenticated;
+grant select, insert, update, delete on public.cards to service_role;

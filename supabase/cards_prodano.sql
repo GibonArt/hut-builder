@@ -106,4 +106,4 @@ end;
 $$;
 
 revoke all on function public.cards_kopiruj_kartu_do_inventare(uuid, text) from public;
-grant execute on function public.cards_kopiruj_kartu_do_inventare(uuid, text) to authenticated;
+grant execute on function public.cards_kopiruj_kartu_do_inventare(uuid, text) to authenticated, service_role;

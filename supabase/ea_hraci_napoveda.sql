@@ -28,3 +28,5 @@ create policy "ea_hraci_napoveda_select_authenticated"
   using (true);
 
 grant select on public.ea_hraci_napoveda to authenticated;
+-- Skript `npm run ea-ratings` používá SUPABASE_SERVICE_ROLE_KEY (obchází RLS, potřebuje tabulková práva).
+grant select, insert, update, delete on public.ea_hraci_napoveda to service_role;

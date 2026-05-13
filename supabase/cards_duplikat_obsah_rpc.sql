@@ -125,6 +125,23 @@ grant execute on function public.cards_ma_duplicitni_obsah(
   uuid,
   text
 ) to authenticated;
+grant execute on function public.cards_ma_duplicitni_obsah(
+  text,
+  smallint,
+  text,
+  text,
+  text,
+  text,
+  text,
+  text,
+  numeric,
+  smallint,
+  jsonb,
+  uuid,
+  boolean,
+  uuid,
+  text
+) to service_role;
 
 comment on function public.cards_ma_duplicitni_obsah is
   'Vrací true, pokud tento uživatel už má jiný řádek se shodným obsahem polí (včetně prodáno). Volitelně vyloučí jeden slug (úprava vlastní karty).';

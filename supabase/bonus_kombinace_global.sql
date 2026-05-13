@@ -46,6 +46,7 @@ comment on function public.je_bonus_kombinace_editor() is
   'true jen pro účty, které smí měnit sdílené bonus kombinace; drž v souladu s lib/bonusAdmin.ts';
 
 grant execute on function public.je_bonus_kombinace_editor() to authenticated;
+grant execute on function public.je_bonus_kombinace_editor() to service_role;
 
 drop trigger if exists bonus_kombinace_global_updated_at on public.bonus_kombinace_global;
 create trigger bonus_kombinace_global_updated_at
@@ -53,6 +54,7 @@ create trigger bonus_kombinace_global_updated_at
   for each row execute procedure public.set_bonus_kombinace_updated_at();
 
 grant select, insert, update, delete on public.bonus_kombinace_global to authenticated;
+grant select, insert, update, delete on public.bonus_kombinace_global to service_role;
 
 alter table public.bonus_kombinace_global enable row level security;
 

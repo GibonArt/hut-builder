@@ -51,3 +51,7 @@ create policy "bonus_kombinace_update_own"
 create policy "bonus_kombinace_delete_own"
   on public.bonus_kombinace_nastaveni for delete
   using (auth.uid() = user_id);
+
+-- PostgREST / supabase-js (Supabase — explicitní GRANT pro public).
+grant select, insert, update, delete on public.bonus_kombinace_nastaveni to authenticated;
+grant select, insert, update, delete on public.bonus_kombinace_nastaveni to service_role;

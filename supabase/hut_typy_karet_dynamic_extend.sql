@@ -12,3 +12,6 @@ comment on column public.hut_typy_karet_dynamic.popis_cs is
 
 comment on column public.hut_typy_karet_dynamic.aliases is
   'Alternativní zápisy typu (zkratky, EA text) → mapují na hodnota_filtru při vyhledávání meta.';
+
+-- PostgREST / supabase-js — doplnění oprávnění (idempotentní).
+grant select, insert, update, delete on public.hut_typy_karet_dynamic to authenticated, service_role;

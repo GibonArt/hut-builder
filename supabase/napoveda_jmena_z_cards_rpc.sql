@@ -42,6 +42,7 @@ $$;
 
 revoke all on function public.napoveda_jmena_z_cards() from public;
 grant execute on function public.napoveda_jmena_z_cards() to authenticated;
+grant execute on function public.napoveda_jmena_z_cards() to service_role;
 
 comment on function public.napoveda_jmena_z_cards() is
   'Nápověda: agregace jmen z cards + OVR, plat, národnost, typ karty, atributy z poslední úpravy daného jména+týmu.';

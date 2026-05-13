@@ -41,7 +41,7 @@ as $$
 $$;
 
 revoke all on function public.cards_globalni_katalog() from public;
-grant execute on function public.cards_globalni_katalog() to authenticated;
+grant execute on function public.cards_globalni_katalog() to authenticated, service_role;
 
 comment on function public.cards_globalni_katalog is
   'Seznam karet ostatních uživatelů pro přidání kopie do vlastního inventáře.';
@@ -93,7 +93,7 @@ revoke all on function public.cards_najdi_id_shodneho_obsahu(
 ) from public;
 grant execute on function public.cards_najdi_id_shodneho_obsahu(
   text, smallint, text, text, text, text, text, text, numeric, smallint, jsonb
-) to authenticated;
+) to authenticated, service_role;
 
 -- 3) Zkopíruje obsah karty (podle UUID řádku) do inventáře volajícího s novým slugem.
 create or replace function public.cards_kopiruj_kartu_do_inventare(
@@ -194,7 +194,7 @@ end;
 $$;
 
 revoke all on function public.cards_kopiruj_kartu_do_inventare(uuid, text) from public;
-grant execute on function public.cards_kopiruj_kartu_do_inventare(uuid, text) to authenticated;
+grant execute on function public.cards_kopiruj_kartu_do_inventare(uuid, text) to authenticated, service_role;
 
 comment on function public.cards_kopiruj_kartu_do_inventare is
   'Vloží kopii karty jiného uživatele do inventáře přihlášeného účtu (nový card_slug).';

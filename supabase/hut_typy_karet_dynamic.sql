@@ -50,3 +50,4 @@ create policy "hut_typy_dynamic_delete_editor"
 
 grant select on public.hut_typy_karet_dynamic to authenticated;
 grant insert, update, delete on public.hut_typy_karet_dynamic to authenticated;
+grant select, insert, update, delete on public.hut_typy_karet_dynamic to service_role;
