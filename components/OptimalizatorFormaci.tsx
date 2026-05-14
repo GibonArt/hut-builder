@@ -11,6 +11,7 @@ import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 import {
   formatujBonusVRadkuNahled,
   nactiBonusKombinaceSdilene,
+  novyRadekBonusu,
   type BonusKombinaceParametr,
   type RadekBonusKombinaceUi,
   TYPY_BONUSU_KOMBINACE,
@@ -208,41 +209,45 @@ function klicHracuDvojiceIde(v: DvojiceVysledek): string {
     .join("|");
 }
 
-function mapaTypuBonusuNaSestavuUtok(
-  radky: readonly UtocnaFormaceVysledek[],
-): Map<string, Set<TypBonusuKombinace>> {
-  const m = new Map<string, Set<TypBonusuKombinace>>();
+/** Pro danou sestavu hráčů: typ bonusu → hodnota z DB (při více řádcích stejného typu bere maximum). */
+type MapaBonusuNaSestavu = Map<string, Map<TypBonusuKombinace, number>>;
+
+function pridejBonusDoMapySestavy(
+  m: MapaBonusuNaSestavu,
+  klic: string,
+  typ: TypBonusuKombinace,
+  hodnota: number | null | undefined,
+): void {
+  const h = hodnota != null && Number.isFinite(hodnota) ? hodnota : null;
+  if (h === null) return;
+  let inner = m.get(klic);
+  if (!inner) {
+    inner = new Map();
+    m.set(klic, inner);
+  }
+  const prev = inner.get(typ);
+  inner.set(typ, prev == null || !Number.isFinite(prev) ? h : Math.max(prev, h));
+}
+
+function mapaTypuBonusuNaSestavuUtok(radky: readonly UtocnaFormaceVysledek[]): MapaBonusuNaSestavu {
+  const m: MapaBonusuNaSestavu = new Map();
   for (const v of radky) {
-    const k = klicHracuUtokTrojice(v);
-    let s = m.get(k);
-    if (!s) {
-      s = new Set();
-      m.set(k, s);
-    }
-    s.add(v.kombinace.bonusTyp);
+    pridejBonusDoMapySestavy(m, klicHracuUtokTrojice(v), v.kombinace.bonusTyp, v.kombinace.bonusHodnota);
   }
   return m;
 }
 
-function mapaTypuBonusuNaSestavuDvojice(
-  radky: readonly DvojiceVysledek[],
-): Map<string, Set<TypBonusuKombinace>> {
-  const m = new Map<string, Set<TypBonusuKombinace>>();
+function mapaTypuBonusuNaSestavuDvojice(radky: readonly DvojiceVysledek[]): MapaBonusuNaSestavu {
+  const m: MapaBonusuNaSestavu = new Map();
   for (const v of radky) {
-    const k = klicHracuDvojiceIde(v);
-    let s = m.get(k);
-    if (!s) {
-      s = new Set();
-      m.set(k, s);
-    }
-    s.add(v.kombinace.bonusTyp);
+    pridejBonusDoMapySestavy(m, klicHracuDvojiceIde(v), v.kombinace.bonusTyp, v.kombinace.bonusHodnota);
   }
   return m;
 }
 
 function filtrujPodlePrekryvuTypuBonusu<T extends { kombinace: RadekBonusKombinaceUi }>(
   radky: readonly T[],
-  mapaSestava: Map<string, Set<TypBonusuKombinace>>,
+  mapaSestava: MapaBonusuNaSestavu,
   klicSestavy: (v: T) => string,
   filtr: "vse" | "jen-jeden" | string,
 ): T[] {
@@ -262,7 +267,7 @@ function filtrujPodlePrekryvuTypuBonusu<T extends { kombinace: RadekBonusKombina
   });
 }
 
-function klicePrekryvuZMapy(mapa: Map<string, Set<TypBonusuKombinace>>): string[] {
+function klicePrekryvuZMapy(mapa: MapaBonusuNaSestavu): string[] {
   const out = new Set<string>();
   for (const s of mapa.values()) {
     if (s.size < 2) continue;
@@ -271,12 +276,25 @@ function klicePrekryvuZMapy(mapa: Map<string, Set<TypBonusuKombinace>>): string[
   return [...out].sort((a, b) => a.localeCompare(b));
 }
 
-function dalsiTypyBonusuProRadek(
+type DalsiBonusPrekryv = { typ: TypBonusuKombinace; hodnota: number };
+
+function formatBonusHodnotaProPrekryv(typ: TypBonusuKombinace, hodnota: number): string {
+  return formatujBonusVRadkuNahled({
+    ...novyRadekBonusu(),
+    bonusTyp: typ,
+    bonusHodnota: hodnota,
+  });
+}
+
+function dalsiBonusyPrekryvuProRadek(
   rowTyp: TypBonusuKombinace,
-  s: ReadonlySet<TypBonusuKombinace> | undefined,
-): TypBonusuKombinace[] {
-  if (!s || s.size < 2) return [];
-  return TYPY_BONUSU_KOMBINACE.filter((t) => s.has(t) && t !== rowTyp);
+  inner: ReadonlyMap<TypBonusuKombinace, number> | undefined,
+): DalsiBonusPrekryv[] {
+  if (!inner || inner.size < 2) return [];
+  return TYPY_BONUSU_KOMBINACE.filter((t) => inner.has(t) && t !== rowTyp).map((t) => ({
+    typ: t,
+    hodnota: inner.get(t) as number,
+  }));
 }
 
 function maUtokSpolecnehoHrace(
@@ -488,14 +506,14 @@ function UtocnaFormaceObsah({
   narodnostiVolby,
   zobrazitTlacitkoVyber,
   onVybratProFiltrHrace,
-  dalsiTypyBonusuNaStejneSestave,
+  dalsiBonusyPrekryvu,
 }: {
   v: UtocnaFormaceVysledek;
   narodnostiVolby: ReturnType<typeof vsechnyNarodnostiCS>;
   zobrazitTlacitkoVyber: boolean;
   onVybratProFiltrHrace: () => void;
-  /** Jiné typy bonusů (PLAT/CLK/BS), které u téže trojice hráčů sedí na jiném řádku v DB. */
-  dalsiTypyBonusuNaStejneSestave?: TypBonusuKombinace[];
+  /** Jiné bonusy (PLAT/CLK/BS + hodnota z DB), které u téže trojice hráčů sedí na jiném řádku kombinace. */
+  dalsiBonusyPrekryvu?: DalsiBonusPrekryv[];
 }) {
   const sym = prirazeniSymboluUtok(v.lk, v.c, v.pk, v.kombinace, narodnostiVolby);
   const celkovyPlat = soucetPlatuKaret([v.lk, v.c, v.pk]);
@@ -507,17 +525,24 @@ function UtocnaFormaceObsah({
         narodnostiVolby={narodnostiVolby}
         celkovyPlat={celkovyPlat}
       />
-      {dalsiTypyBonusuNaStejneSestave?.length ? (
+      {dalsiBonusyPrekryvu?.length ? (
         <p
           className="mt-2 rounded-md border border-amber-500/35 bg-amber-950/40 px-2.5 py-2 text-[11px] leading-snug text-amber-100/95"
           role="status"
         >
           <span className="font-semibold text-amber-50">Překryv bonusů:</span> stejná trojice hráčů splňuje v
-          databázi i typy{" "}
-          <span className="font-mono font-semibold text-amber-200">
-            {dalsiTypyBonusuNaStejneSestave.join(", ")}
-          </span>{" "}
-          (jiný řádek kombinace — ve hře můžeš získat víc bonusů najednou).
+          databázi na jiných řádcích kombinace také{" "}
+          {dalsiBonusyPrekryvu.map((x, i) => (
+            <span key={x.typ}>
+              {i > 0 ? ", " : ""}
+              <span className="font-mono font-semibold text-amber-200">{x.typ}</span>{" "}
+              <span className="tabular-nums text-amber-100/90">
+                ({formatBonusHodnotaProPrekryv(x.typ, x.hodnota)})
+              </span>
+            </span>
+          ))}
+          {" "}
+          — jiný řádek kombinace; ve hře můžeš získat víc bonusů najednou.
         </p>
       ) : null}
       {zobrazitTlacitkoVyber ? (
@@ -562,7 +587,7 @@ function DvojiceFormaceObsah({
   roleA,
   roleB,
   filtrHint,
-  dalsiTypyBonusuNaStejneSestave,
+  dalsiBonusyPrekryvu,
 }: {
   v: DvojiceVysledek;
   narodnostiVolby: ReturnType<typeof vsechnyNarodnostiCS>;
@@ -571,7 +596,7 @@ function DvojiceFormaceObsah({
   roleA: Pozice | "G1" | "G2";
   roleB: Pozice | "G1" | "G2";
   filtrHint: string;
-  dalsiTypyBonusuNaStejneSestave?: TypBonusuKombinace[];
+  dalsiBonusyPrekryvu?: DalsiBonusPrekryv[];
 }) {
   const sym = prirazeniSymboluDvojice(v.a, v.b, v.kombinace, narodnostiVolby);
   const celkovyPlat = soucetPlatuKaret([v.a, v.b]);
@@ -584,17 +609,24 @@ function DvojiceFormaceObsah({
         narodnostiVolby={narodnostiVolby}
         celkovyPlat={celkovyPlat}
       />
-      {dalsiTypyBonusuNaStejneSestave?.length ? (
+      {dalsiBonusyPrekryvu?.length ? (
         <p
           className="mt-2 rounded-md border border-amber-500/35 bg-amber-950/40 px-2.5 py-2 text-[11px] leading-snug text-amber-100/95"
           role="status"
         >
           <span className="font-semibold text-amber-50">Překryv bonusů:</span> stejná dvojice hráčů splňuje v
-          databázi i typy{" "}
-          <span className="font-mono font-semibold text-amber-200">
-            {dalsiTypyBonusuNaStejneSestave.join(", ")}
-          </span>{" "}
-          (jiný řádek kombinace).
+          databázi na jiných řádcích kombinace také{" "}
+          {dalsiBonusyPrekryvu.map((x, i) => (
+            <span key={x.typ}>
+              {i > 0 ? ", " : ""}
+              <span className="font-mono font-semibold text-amber-200">{x.typ}</span>{" "}
+              <span className="tabular-nums text-amber-100/90">
+                ({formatBonusHodnotaProPrekryv(x.typ, x.hodnota)})
+              </span>
+            </span>
+          ))}
+          {" "}
+          — jiný řádek kombinace.
         </p>
       ) : null}
       {zobrazitTlacitkoVyber ? (
@@ -1476,7 +1508,7 @@ export function OptimalizatorFormaci() {
                         {vyberyUtok[typ].map((klic) => {
                           const v = mapaUtok.get(klic);
                           if (!v) return null;
-                          const dalsiPin = dalsiTypyBonusuProRadek(
+                          const dalsiPin = dalsiBonusyPrekryvuProRadek(
                             v.kombinace.bonusTyp,
                             mapaBonusuUtok.get(klicHracuUtokTrojice(v)),
                           );
@@ -1508,7 +1540,7 @@ export function OptimalizatorFormaci() {
                                 narodnostiVolby={narodnostiVolby}
                                 zobrazitTlacitkoVyber={false}
                                 onVybratProFiltrHrace={() => {}}
-                                dalsiTypyBonusuNaStejneSestave={
+                                dalsiBonusyPrekryvu={
                                   dalsiPin.length ? dalsiPin : undefined
                                 }
                               />
@@ -1542,7 +1574,7 @@ export function OptimalizatorFormaci() {
                         {vyberyObrana[typ].map((klic) => {
                           const v = mapaObrana.get(klic);
                           if (!v) return null;
-                          const dalsiPin = dalsiTypyBonusuProRadek(
+                          const dalsiPin = dalsiBonusyPrekryvuProRadek(
                             v.kombinace.bonusTyp,
                             mapaBonusuObrana.get(klicHracuDvojiceIde(v)),
                           );
@@ -1577,7 +1609,7 @@ export function OptimalizatorFormaci() {
                                 roleA="LO"
                                 roleB="PO"
                                 filtrHint="obranné dvojice"
-                                dalsiTypyBonusuNaStejneSestave={
+                                dalsiBonusyPrekryvu={
                                   dalsiPin.length ? dalsiPin : undefined
                                 }
                               />
@@ -1611,7 +1643,7 @@ export function OptimalizatorFormaci() {
                         {vyberyGolmani[typ].map((klic) => {
                           const v = mapaGolmani.get(klic);
                           if (!v) return null;
-                          const dalsiPin = dalsiTypyBonusuProRadek(
+                          const dalsiPin = dalsiBonusyPrekryvuProRadek(
                             v.kombinace.bonusTyp,
                             mapaBonusuGolmani.get(klicHracuDvojiceIde(v)),
                           );
@@ -1646,7 +1678,7 @@ export function OptimalizatorFormaci() {
                                 roleA="G1"
                                 roleB="G2"
                                 filtrHint="brankářské dvojice"
-                                dalsiTypyBonusuNaStejneSestave={
+                                dalsiBonusyPrekryvu={
                                   dalsiPin.length ? dalsiPin : undefined
                                 }
                               />
@@ -1690,7 +1722,7 @@ export function OptimalizatorFormaci() {
             ) : null}
             <ul className="mt-4 space-y-4">
               {utokZobrazenoPoVylouceniSerazeno.map((v) => {
-                const dalsi = dalsiTypyBonusuProRadek(
+                const dalsi = dalsiBonusyPrekryvuProRadek(
                   v.kombinace.bonusTyp,
                   mapaBonusuUtok.get(klicHracuUtokTrojice(v)),
                 );
@@ -1707,7 +1739,7 @@ export function OptimalizatorFormaci() {
                       narodnostiVolby={narodnostiVolby}
                       zobrazitTlacitkoVyber
                       onVybratProFiltrHrace={() => pridatUtok(v)}
-                      dalsiTypyBonusuNaStejneSestave={dalsi.length ? dalsi : undefined}
+                      dalsiBonusyPrekryvu={dalsi.length ? dalsi : undefined}
                     />
                   </li>
                 );
@@ -1745,7 +1777,7 @@ export function OptimalizatorFormaci() {
             ) : null}
             <ul className="mt-4 space-y-4">
               {obranaZobrazenoPoVylouceniSerazeno.map((v) => {
-                const dalsi = dalsiTypyBonusuProRadek(
+                const dalsi = dalsiBonusyPrekryvuProRadek(
                   v.kombinace.bonusTyp,
                   mapaBonusuObrana.get(klicHracuDvojiceIde(v)),
                 );
@@ -1765,7 +1797,7 @@ export function OptimalizatorFormaci() {
                       roleA="LO"
                       roleB="PO"
                       filtrHint="obranné dvojice"
-                      dalsiTypyBonusuNaStejneSestave={dalsi.length ? dalsi : undefined}
+                      dalsiBonusyPrekryvu={dalsi.length ? dalsi : undefined}
                     />
                   </li>
                 );
@@ -1802,7 +1834,7 @@ export function OptimalizatorFormaci() {
             ) : null}
             <ul className="mt-4 space-y-4">
               {golmaniZobrazenoPoVylouceniSerazeno.map((v) => {
-                const dalsi = dalsiTypyBonusuProRadek(
+                const dalsi = dalsiBonusyPrekryvuProRadek(
                   v.kombinace.bonusTyp,
                   mapaBonusuGolmani.get(klicHracuDvojiceIde(v)),
                 );
@@ -1822,7 +1854,7 @@ export function OptimalizatorFormaci() {
                       roleA="G1"
                       roleB="G2"
                       filtrHint="brankářské dvojice"
-                      dalsiTypyBonusuNaStejneSestave={dalsi.length ? dalsi : undefined}
+                      dalsiBonusyPrekryvu={dalsi.length ? dalsi : undefined}
                     />
                   </li>
                 );
