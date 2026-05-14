@@ -1,5 +1,9 @@
 import type { HutCard } from "@/types";
-import type { BonusKombinaceParametr, RadekBonusKombinaceUi } from "@/lib/bonusKombinaceDb";
+import {
+  klicLogickeKombinace,
+  type BonusKombinaceParametr,
+  type RadekBonusKombinaceUi,
+} from "@/lib/bonusKombinaceDb";
 import type { NarodnostVolba } from "@/lib/narodnosti";
 
 /**
@@ -185,14 +189,19 @@ export function spoctiUtocneFormace(
   const c = karty.filter((k) => k.pozice === "C");
   const pk = kridlaVzajemna ? kridla : karty.filter((k) => k.pozice === "PK");
   const out: UtocnaFormaceVysledek[] = [];
+  const videnyRadek = new Set<string>();
 
   for (const r of radkyKombinaci) {
+    const kR = klicLogickeKombinace(r);
     for (const kLK of lk) {
       for (const kC of c) {
         if (kC.id === kLK.id) continue;
         for (const kPK of pk) {
           if (kPK.id === kLK.id || kPK.id === kC.id) continue;
           if (!trojiceSplnujeKombinaciUtok(kLK, kC, kPK, r, narodnostiVolby)) continue;
+          const klic = `${kR}|${kLK.id}|${kC.id}|${kPK.id}`;
+          if (videnyRadek.has(klic)) continue;
+          videnyRadek.add(klic);
           out.push({ kombinace: r, lk: kLK, c: kC, pk: kPK });
         }
       }
@@ -215,12 +224,17 @@ export function spoctiObranneDvojice(
   const lo = loPoVzajemne ? loNeboPo : karty.filter((k) => k.pozice === "LO");
   const po = loPoVzajemne ? loNeboPo : karty.filter((k) => k.pozice === "PO");
   const out: DvojiceVysledek[] = [];
+  const videnyRadek = new Set<string>();
 
   for (const r of radkyKombinaci) {
+    const kR = klicLogickeKombinace(r);
     for (const kLO of lo) {
       for (const kPO of po) {
         if (kLO.id === kPO.id) continue;
         if (!dvojiceSplnujeDvaParametry(kLO, kPO, r, narodnostiVolby)) continue;
+        const klic = `${kR}|${kLO.id}|${kPO.id}`;
+        if (videnyRadek.has(klic)) continue;
+        videnyRadek.add(klic);
         out.push({ kombinace: r, a: kLO, b: kPO });
       }
     }
@@ -239,13 +253,18 @@ export function spoctiGolmanskeDvojice(
 ): DvojiceVysledek[] {
   const gs = karty.filter((k) => k.pozice === "G");
   const out: DvojiceVysledek[] = [];
+  const videnyRadek = new Set<string>();
 
   for (const r of radkyKombinaci) {
+    const kR = klicLogickeKombinace(r);
     for (let i = 0; i < gs.length; i++) {
       for (let j = i + 1; j < gs.length; j++) {
         const g1 = gs[i]!;
         const g2 = gs[j]!;
         if (!dvojiceSplnujeDvaParametry(g1, g2, r, narodnostiVolby)) continue;
+        const klic = `${kR}|${g1.id}|${g2.id}`;
+        if (videnyRadek.has(klic)) continue;
+        videnyRadek.add(klic);
         out.push({ kombinace: r, a: g1, b: g2 });
       }
     }

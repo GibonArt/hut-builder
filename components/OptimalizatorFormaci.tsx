@@ -10,6 +10,7 @@ import { nactiKartyUzivatele } from "@/lib/cardsDb";
 import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 import {
   formatujBonusVRadkuNahled,
+  klicLogickeKombinace,
   nactiBonusKombinaceSdilene,
   novyRadekBonusu,
   type BonusKombinaceParametr,
@@ -184,13 +185,15 @@ function seraditDvojiceVysledky(
 }
 
 function klicUtocnaFormace(v: UtocnaFormaceVysledek): string {
-  return `${v.kombinace.id}|${v.lk.id}|${v.c.id}|${v.pk.id}`;
+  return `${klicLogickeKombinace(v.kombinace)}|${v.lk.id}|${v.c.id}|${v.pk.id}`;
 }
 
-/** Jednoznačný klíč dvojice (pořadí karet v řádku nehraje roli). */
-function klicDvojiceVysledek(v: DvojiceVysledek): string {
-  const [x, y] = [v.a.id, v.b.id].slice().sort();
-  return `${v.kombinace.id}|${x}|${y}`;
+/**
+ * Jednoznačný klíč jednoho řádku výsledku (logická kombinace + pořadí hráčů ve slotech a → b).
+ * U obrany se záměnou LO/PO rozliší prohozené sloty; pro překryv bonusů dál používej `klicHracuDvojiceIde`.
+ */
+function klicRadkuDvojice(v: DvojiceVysledek): string {
+  return `${klicLogickeKombinace(v.kombinace)}|${v.a.id}|${v.b.id}`;
 }
 
 /** Klíč trojice hráčů (LK/C/PK) — pro detekci překryvu typů bonusů. */
@@ -207,6 +210,13 @@ function klicHracuDvojiceIde(v: DvojiceVysledek): string {
     .slice()
     .sort()
     .join("|");
+}
+
+function stejnaDvojiceHracuAKombinace(a: DvojiceVysledek, b: DvojiceVysledek): boolean {
+  return (
+    klicLogickeKombinace(a.kombinace) === klicLogickeKombinace(b.kombinace) &&
+    klicHracuDvojiceIde(a) === klicHracuDvojiceIde(b)
+  );
 }
 
 /** Pro danou sestavu hráčů: typ bonusu → hodnota z DB (při více řádcích stejného typu bere maximum). */
@@ -909,13 +919,13 @@ export function OptimalizatorFormaci() {
 
   const mapaObrana = useMemo(() => {
     const m = new Map<string, DvojiceVysledek>();
-    for (const x of vysledkyObrana) m.set(klicDvojiceVysledek(x), x);
+    for (const x of vysledkyObrana) m.set(klicRadkuDvojice(x), x);
     return m;
   }, [vysledkyObrana]);
 
   const mapaGolmani = useMemo(() => {
     const m = new Map<string, DvojiceVysledek>();
-    for (const x of vysledkyGolmani) m.set(klicDvojiceVysledek(x), x);
+    for (const x of vysledkyGolmani) m.set(klicRadkuDvojice(x), x);
     return m;
   }, [vysledkyGolmani]);
 
@@ -989,7 +999,7 @@ export function OptimalizatorFormaci() {
   }, [vysledkyUtok]);
 
   useEffect(() => {
-    const valid = new Set(vysledkyObrana.map((x) => klicDvojiceVysledek(x)));
+    const valid = new Set(vysledkyObrana.map((x) => klicRadkuDvojice(x)));
     setVyberyObrana((prev) => {
       let changed = false;
       const next = prazdneVyberyPodleTypu();
@@ -1002,7 +1012,7 @@ export function OptimalizatorFormaci() {
   }, [vysledkyObrana]);
 
   useEffect(() => {
-    const valid = new Set(vysledkyGolmani.map((x) => klicDvojiceVysledek(x)));
+    const valid = new Set(vysledkyGolmani.map((x) => klicRadkuDvojice(x)));
     setVyberyGolmani((prev) => {
       let changed = false;
       const next = prazdneVyberyPodleTypu();
@@ -1028,10 +1038,18 @@ export function OptimalizatorFormaci() {
   };
 
   const pridatObrana = (v: DvojiceVysledek) => {
-    const klic = klicDvojiceVysledek(v);
+    const klic = klicRadkuDvojice(v);
     const typ = v.kombinace.bonusTyp;
     setVyberyObrana((prev) => {
       if (prev[typ].includes(klic)) return prev;
+      if (
+        prev[typ].some((k) => {
+          const w = mapaObrana.get(k);
+          return w !== undefined && stejnaDvojiceHracuAKombinace(w, v);
+        })
+      ) {
+        return prev;
+      }
       if (prev[typ].length >= MAX_VYBER_OBRANA_NA_TYP) {
         toast.error(`Obrana: nejvýše ${MAX_VYBER_OBRANA_NA_TYP} dvojice s bonusem ${typ}.`);
         return prev;
@@ -1041,7 +1059,7 @@ export function OptimalizatorFormaci() {
   };
 
   const pridatGolmani = (v: DvojiceVysledek) => {
-    const klic = klicDvojiceVysledek(v);
+    const klic = klicRadkuDvojice(v);
     const typ = v.kombinace.bonusTyp;
     setVyberyGolmani((prev) => {
       if (prev[typ].includes(klic)) return prev;
@@ -1806,7 +1824,7 @@ export function OptimalizatorFormaci() {
                 );
                 return (
                   <li
-                    key={klicDvojiceVysledek(v)}
+                    key={klicRadkuDvojice(v)}
                     className={[
                       polozkaFormaceClass,
                       dalsi.length ? "border-l-2 border-amber-400/45 bg-amber-950/15" : "",
@@ -1863,7 +1881,7 @@ export function OptimalizatorFormaci() {
                 );
                 return (
                   <li
-                    key={klicDvojiceVysledek(v)}
+                    key={klicRadkuDvojice(v)}
                     className={[
                       polozkaFormaceClass,
                       dalsi.length ? "border-l-2 border-amber-400/45 bg-amber-950/15" : "",

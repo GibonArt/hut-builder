@@ -253,6 +253,15 @@ export function radkyDoJsonb(
   }));
 }
 
+/**
+ * Stabilní klíč řádku kombinace podle uložených parametrů a bonusu (bez `id`).
+ * `id` v UI řádku se při každém parsování z JSON často generuje znovu — pro mapy a připnutí
+ * používej tento klíč místo `r.id`.
+ */
+export function klicLogickeKombinace(r: RadekBonusKombinaceUi): string {
+  return JSON.stringify(radkyDoJsonb([r])[0]);
+}
+
 export function jeKompletniParametr(p: BonusKombinaceParametr): boolean {
   switch (p.typ) {
     case "narodnost":
