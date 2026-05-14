@@ -162,6 +162,14 @@ export type SpoctiUtocneFormaceOpts = {
   kridlaVzajemna?: boolean;
 };
 
+export type SpoctiObranneDvojiceOpts = {
+  /**
+   * Když true, na slot LO lze dát hráče s pozicí LO nebo PO a na PO také LO nebo PO
+   * (stejná sada „křídel“ obrany, dva různí hráči).
+   */
+  loPoVzajemne?: boolean;
+};
+
 /**
  * Útočné trojice LK + C + PK; každý ze tří symbolů kombinace připadne některé pozici (libovolné pořadí).
  */
@@ -200,9 +208,12 @@ export function spoctiObranneDvojice(
   karty: readonly HutCard[],
   radkyKombinaci: readonly RadekBonusKombinaceUi[],
   narodnostiVolby: readonly NarodnostVolba[],
+  opts?: SpoctiObranneDvojiceOpts | null,
 ): DvojiceVysledek[] {
-  const lo = karty.filter((k) => k.pozice === "LO");
-  const po = karty.filter((k) => k.pozice === "PO");
+  const loPoVzajemne = Boolean(opts?.loPoVzajemne);
+  const loNeboPo: HutCard[] = karty.filter((k) => k.pozice === "LO" || k.pozice === "PO");
+  const lo = loPoVzajemne ? loNeboPo : karty.filter((k) => k.pozice === "LO");
+  const po = loPoVzajemne ? loNeboPo : karty.filter((k) => k.pozice === "PO");
   const out: DvojiceVysledek[] = [];
 
   for (const r of radkyKombinaci) {

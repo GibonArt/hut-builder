@@ -696,6 +696,7 @@ export function OptimalizatorFormaci() {
     useState<SmerRazeniHodnotyBonusu>("sestupne");
   const [typRazeniVysledku, setTypRazeniVysledku] = useState<TypRazeniVysledku>("ovr_soucet");
   const [kridlaVzajemna, setKridlaVzajemna] = useState(false);
+  const [loPoVzajemne, setLoPoVzajemne] = useState(false);
   /**
    * Po „Hledat“: filtrování řádků podle toho, zda stejná sestava hráčů splňuje víc typů bonusů (PLAT/CLK/BS).
    * Dynamické hodnoty „BS+PLAT“ atd. odpovídají přesné množině typů u té sestavy v plném výsledku.
@@ -740,6 +741,7 @@ export function OptimalizatorFormaci() {
       setSmerRazeniHodnotyBonusu("sestupne");
       setTypRazeniVysledku("ovr_soucet");
       setKridlaVzajemna(false);
+      setLoPoVzajemne(false);
     }
   }, [user?.id]);
 
@@ -822,8 +824,11 @@ export function OptimalizatorFormaci() {
   );
 
   const vysledkyObrana = useMemo(
-    () => spoctiObranneDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby),
-    [kartyVeFiltru, obranneRadky, narodnostiVolby],
+    () =>
+      spoctiObranneDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby, {
+        loPoVzajemne,
+      }),
+    [kartyVeFiltru, obranneRadky, narodnostiVolby, loPoVzajemne],
   );
 
   const vysledkyGolmani = useMemo(
@@ -1212,21 +1217,39 @@ export function OptimalizatorFormaci() {
                 {chybaOvrRozsah}
               </p>
             ) : null}
-            <div className="mt-5 flex max-w-2xl flex-wrap items-start gap-3">
-              <input
-                id="opt-kridla-vzajemna"
-                type="checkbox"
-                checked={kridlaVzajemna}
-                onChange={(e) => setKridlaVzajemna(e.target.checked)}
-                className="mt-1 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
-              />
-              <label
-                htmlFor="opt-kridla-vzajemna"
-                className="cursor-pointer text-xs leading-relaxed text-[var(--hut-muted)]"
-              >
-                <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> na slot LK lze dát hráče s
-                pozicí LK nebo PK, na slot PK také LK nebo PK (tři různí hráči). Centr zůstává jen pozice C.
-              </label>
+            <div className="mt-5 flex max-w-2xl flex-col gap-4">
+              <div className="flex flex-wrap items-start gap-3">
+                <input
+                  id="opt-kridla-vzajemna"
+                  type="checkbox"
+                  checked={kridlaVzajemna}
+                  onChange={(e) => setKridlaVzajemna(e.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
+                />
+                <label
+                  htmlFor="opt-kridla-vzajemna"
+                  className="cursor-pointer text-xs leading-relaxed text-[var(--hut-muted)]"
+                >
+                  <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> na slot LK lze dát hráče s
+                  pozicí LK nebo PK, na slot PK také LK nebo PK (tři různí hráči). Centr zůstává jen pozice C.
+                </label>
+              </div>
+              <div className="flex flex-wrap items-start gap-3">
+                <input
+                  id="opt-lo-po-vzajemne"
+                  type="checkbox"
+                  checked={loPoVzajemne}
+                  onChange={(e) => setLoPoVzajemne(e.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
+                />
+                <label
+                  htmlFor="opt-lo-po-vzajemne"
+                  className="cursor-pointer text-xs leading-relaxed text-[var(--hut-muted)]"
+                >
+                  <span className="font-medium text-zinc-200">Záměna stran (obrana):</span> na slot LO lze dát hráče s
+                  pozicí LO nebo PO, na slot PO také LO nebo PO (dva různí hráči).
+                </label>
+              </div>
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <button
