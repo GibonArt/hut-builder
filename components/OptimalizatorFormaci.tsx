@@ -37,6 +37,7 @@ import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import { TypKartyMiniLogo } from "@/components/TypKartyIkona";
 import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
+import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { TymLogo } from "@/components/TymLogo";
 
 const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
@@ -1110,6 +1111,7 @@ export function OptimalizatorFormaci() {
 
   return (
     <TypKartyMetaOptsProvider value={typKartyMetaOpts}>
+    <>
     <div className="space-y-8 sm:space-y-10">
       <header>
         <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Optimalizátor formací</h2>
@@ -1906,6 +1908,8 @@ export function OptimalizatorFormaci() {
         </>
       )}
     </div>
+    <FloatingZpetNahoru />
+    </>
     </TypKartyMetaOptsProvider>
   );
 }
