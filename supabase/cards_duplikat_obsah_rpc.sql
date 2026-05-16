@@ -1,9 +1,9 @@
--- Kontrola duplicitního obsahu karty pouze uvnitř inventáře daného uživatele (stejná sada polí
--- jako u jiného jeho řádku v `cards`). Jiný účet se shodným střídáním tedy nebrání uložení.
+-- Kontrola duplicitního obsahu karty pouze uvnitř inventáře daného uživatele.
+-- Porovnává všechna pole kromě X-Faktorů (`atributy`) a `card_slug`.
 -- Spusť v Supabase SQL Editor po cards_setup.sql.
 -- Aplikace volá přes supabase.rpc('cards_ma_duplicitni_obsah', …).
 --
--- Migrace: staré signatury funkce, aby se po úpravách vytvořila právě jedna verze.
+-- Migrace: staré signatury funkce (včetně parametru p_atributy).
 drop function if exists public.cards_ma_duplicitni_obsah(
   text,
   smallint,
@@ -32,6 +32,23 @@ drop function if exists public.cards_ma_duplicitni_obsah(
   smallint,
   jsonb,
   uuid,
+  uuid,
+  text
+);
+drop function if exists public.cards_ma_duplicitni_obsah(
+  text,
+  smallint,
+  text,
+  text,
+  text,
+  text,
+  text,
+  text,
+  numeric,
+  smallint,
+  jsonb,
+  uuid,
+  boolean,
   uuid,
   text
 );
@@ -47,7 +64,6 @@ create or replace function public.cards_ma_duplicitni_obsah(
   p_typ_karty text,
   p_plat numeric,
   p_ap smallint,
-  p_atributy jsonb,
   p_pouze_pro_user_id uuid,
   p_prodano boolean,
   p_vyloucit_user_id uuid default null,
@@ -77,10 +93,6 @@ as $$
         (c.ap is null and p_ap is null)
         or (c.ap = p_ap)
       )
-      and (
-        (c.atributy is null and (p_atributy is null))
-        or (c.atributy is not null and p_atributy is not null and c.atributy = p_atributy)
-      )
       and not (
         p_vyloucit_user_id is not null
         and p_vyloucit_card_slug is not null
@@ -101,7 +113,6 @@ revoke all on function public.cards_ma_duplicitni_obsah(
   text,
   numeric,
   smallint,
-  jsonb,
   uuid,
   boolean,
   uuid,
@@ -119,7 +130,6 @@ grant execute on function public.cards_ma_duplicitni_obsah(
   text,
   numeric,
   smallint,
-  jsonb,
   uuid,
   boolean,
   uuid,
@@ -136,7 +146,6 @@ grant execute on function public.cards_ma_duplicitni_obsah(
   text,
   numeric,
   smallint,
-  jsonb,
   uuid,
   boolean,
   uuid,
@@ -144,4 +153,4 @@ grant execute on function public.cards_ma_duplicitni_obsah(
 ) to service_role;
 
 comment on function public.cards_ma_duplicitni_obsah is
-  'Vrací true, pokud tento uživatel už má jiný řádek se shodným obsahem polí (včetně prodáno). Volitelně vyloučí jeden slug (úprava vlastní karty).';
+  'Vrací true, pokud uživatel už má jiný řádek se shodnými údaji (bez X-Faktorů; včetně prodáno). Volitelně vyloučí jeden slug.';

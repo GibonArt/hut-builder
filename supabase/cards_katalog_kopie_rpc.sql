@@ -47,6 +47,20 @@ comment on function public.cards_globalni_katalog is
   'Seznam karet ostatních uživatelů pro přidání kopie do vlastního inventáře.';
 
 -- 2) Najde UUID prvního řádku se shodným obsahem (libovolný uživatel).
+drop function if exists public.cards_najdi_id_shodneho_obsahu(
+  text,
+  smallint,
+  text,
+  text,
+  text,
+  text,
+  text,
+  text,
+  numeric,
+  smallint,
+  jsonb
+);
+
 create or replace function public.cards_najdi_id_shodneho_obsahu(
   p_jmeno text,
   p_ovr smallint,
@@ -57,8 +71,7 @@ create or replace function public.cards_najdi_id_shodneho_obsahu(
   p_liga text,
   p_typ_karty text,
   p_plat numeric,
-  p_ap smallint,
-  p_atributy jsonb
+  p_ap smallint
 ) returns uuid
 language sql
 stable
@@ -81,18 +94,17 @@ as $$
       (c.ap is null and p_ap is null)
       or (c.ap = p_ap)
     )
-    and (
-      (c.atributy is null and (p_atributy is null))
-      or (c.atributy is not null and p_atributy is not null and c.atributy = p_atributy)
-    )
   limit 1;
 $$;
 
 revoke all on function public.cards_najdi_id_shodneho_obsahu(
   text, smallint, text, text, text, text, text, text, numeric, smallint, jsonb
 ) from public;
+revoke all on function public.cards_najdi_id_shodneho_obsahu(
+  text, smallint, text, text, text, text, text, text, numeric, smallint
+) from public;
 grant execute on function public.cards_najdi_id_shodneho_obsahu(
-  text, smallint, text, text, text, text, text, text, numeric, smallint, jsonb
+  text, smallint, text, text, text, text, text, text, numeric, smallint
 ) to authenticated, service_role;
 
 -- 3) Zkopíruje obsah karty (podle UUID řádku) do inventáře volajícího s novým slugem.
@@ -149,10 +161,6 @@ begin
       and (
         (c.ap is null and (v_src).ap is null)
         or (c.ap = (v_src).ap)
-      )
-      and (
-        (c.atributy is null and (v_src).atributy is null)
-        or (c.atributy = (v_src).atributy)
       )
   ) then
     raise exception 'jiz_v_inventari';

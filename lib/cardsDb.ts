@@ -116,7 +116,7 @@ export function hutCardToInsertRow(userId: string, card: HutCard) {
 
 /** Uživatelsky čitelná chyba — u tohoto účtu už existuje jiná karta se stejným obsahem. */
 export const CHYBA_DUPLICITNI_OBSAH_KARTY =
-  "Karta se stejnými údaji už ve tvém inventáři existuje. Duplikát nelze uložit.";
+  "Karta se stejnými údaji (kromě X-Faktorů) už ve tvém inventáři existuje. Duplikát nelze uložit.";
 
 async function maDuplicitniObsah(
   supabase: SupabaseClient,
@@ -136,7 +136,6 @@ async function maDuplicitniObsah(
     p_typ_karty: row.typ_karty,
     p_plat: row.plat,
     p_ap: row.ap ?? null,
-    p_atributy: row.atributy ?? null,
     p_pouze_pro_user_id: proUzivateleId,
     p_prodano: row.prodano === true,
     p_vyloucit_user_id: vyloucit?.userId ?? null,
@@ -186,8 +185,10 @@ export async function vlozKartu(
   return { error: null };
 }
 
-/** Obsah řádku v DB jako u ukládání, ale bez příznaku prodáno (pro rozlišení kopií v inventáři). */
-function radkaZHutCardBezProdano(card: HutCard) {
+/**
+ * Pole pro kontrolu duplicity — vše kromě X-Faktorů (`atributy`) a `card_slug`.
+ */
+function radkaZHutCardProDuplicitu(card: HutCard) {
   const r = dataRadkuZHutCard(card);
   return {
     jmeno: r.jmeno,
@@ -200,14 +201,38 @@ function radkaZHutCardBezProdano(card: HutCard) {
     typ_karty: r.typ_karty,
     plat: r.plat,
     ap: r.ap ?? null,
-    atributy: r.atributy ?? null,
+    prodano: r.prodano,
   };
+}
+
+function radkaZHutCardProDuplicituBezProdano(card: HutCard) {
+  const { prodano: _p, ...rest } = radkaZHutCardProDuplicitu(card);
+  return rest;
+}
+
+function jsouRadkyProDuplicituStejne(
+  a: ReturnType<typeof radkaZHutCardProDuplicitu>,
+  b: ReturnType<typeof radkaZHutCardProDuplicitu>,
+): boolean {
+  return (
+    a.jmeno === b.jmeno &&
+    a.ovr === b.ovr &&
+    a.pozice === b.pozice &&
+    a.preferovana_ruka === b.preferovana_ruka &&
+    a.narodnost === b.narodnost &&
+    a.tym === b.tym &&
+    a.liga === b.liga &&
+    a.typ_karty === b.typ_karty &&
+    a.plat === b.plat &&
+    a.ap === b.ap &&
+    a.prodano === b.prodano
+  );
 }
 
 /** Stejné údaje jako při duplicitní kontrole v DB, ale ignoruje „Prodáno“. */
 export function jsouKartyStejneKromeProdano(a: HutCard, b: HutCard): boolean {
-  const ra = radkaZHutCardBezProdano(a);
-  const rb = radkaZHutCardBezProdano(b);
+  const ra = radkaZHutCardProDuplicituBezProdano(a);
+  const rb = radkaZHutCardProDuplicituBezProdano(b);
   return (
     ra.jmeno === rb.jmeno &&
     ra.ovr === rb.ovr &&
@@ -218,8 +243,7 @@ export function jsouKartyStejneKromeProdano(a: HutCard, b: HutCard): boolean {
     ra.liga === rb.liga &&
     ra.typ_karty === rb.typ_karty &&
     ra.plat === rb.plat &&
-    ra.ap === rb.ap &&
-    JSON.stringify(ra.atributy) === JSON.stringify(rb.atributy)
+    ra.ap === rb.ap
   );
 }
 
@@ -231,23 +255,11 @@ export function jeZmenaJenProdano(puvodni: HutCard, nova: HutCard): boolean {
   return jsouKartyStejneKromeProdano(puvodni, nova);
 }
 
-/** Porovnání obsahu karty (bez `id` / slug) — shoda s řádkem v DB / snapshotem z katalogu. */
+/** Porovnání obsahu karty (bez `id` / slug a bez X-Faktorů) — shoda s řádkem v DB / katalogem. */
 export function jsouKartyObsahoveStejne(a: HutCard, b: HutCard): boolean {
-  const ra = dataRadkuZHutCard(a);
-  const rb = dataRadkuZHutCard(b);
-  return (
-    ra.jmeno === rb.jmeno &&
-    ra.ovr === rb.ovr &&
-    ra.pozice === rb.pozice &&
-    ra.preferovana_ruka === rb.preferovana_ruka &&
-    ra.narodnost === rb.narodnost &&
-    ra.tym === rb.tym &&
-    ra.liga === rb.liga &&
-    ra.typ_karty === rb.typ_karty &&
-    ra.plat === rb.plat &&
-    (ra.ap ?? null) === (rb.ap ?? null) &&
-    ra.prodano === rb.prodano &&
-    JSON.stringify(ra.atributy ?? null) === JSON.stringify(rb.atributy ?? null)
+  return jsouRadkyProDuplicituStejne(
+    radkaZHutCardProDuplicitu(a),
+    radkaZHutCardProDuplicitu(b),
   );
 }
 
@@ -306,19 +318,18 @@ export async function najdiUuidZdrojeProShodnyObsah(
   supabase: SupabaseClient,
   card: HutCard,
 ): Promise<{ uuid: string | null; error: Error | null }> {
-  const row = dataRadkuZHutCard(card);
+  const dupRow = radkaZHutCardProDuplicitu(card);
   const { data, error } = await supabase.rpc("cards_najdi_id_shodneho_obsahu", {
-    p_jmeno: row.jmeno,
-    p_ovr: row.ovr,
-    p_pozice: row.pozice,
-    p_preferovana_ruka: row.preferovana_ruka,
-    p_narodnost: row.narodnost,
-    p_tym: row.tym,
-    p_liga: row.liga,
-    p_typ_karty: row.typ_karty,
-    p_plat: row.plat,
-    p_ap: row.ap ?? null,
-    p_atributy: row.atributy ?? null,
+    p_jmeno: dupRow.jmeno,
+    p_ovr: dupRow.ovr,
+    p_pozice: dupRow.pozice,
+    p_preferovana_ruka: dupRow.preferovana_ruka,
+    p_narodnost: dupRow.narodnost,
+    p_tym: dupRow.tym,
+    p_liga: dupRow.liga,
+    p_typ_karty: dupRow.typ_karty,
+    p_plat: dupRow.plat,
+    p_ap: dupRow.ap,
   });
   if (error) {
     return { uuid: null, error: new Error(error.message) };

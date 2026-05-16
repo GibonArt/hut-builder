@@ -49,6 +49,7 @@ import { TymVyber } from "@/components/TymVyber";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
 import { EaHracNapoveda } from "@/components/EaHracNapoveda";
+import { JmenoKartyNapoveda } from "@/components/JmenoKartyNapoveda";
 import { KatalogHromadnyImport } from "@/components/KatalogHromadnyImport";
 import { KatalogKaretVyber } from "@/components/KatalogKaretVyber";
 import {
@@ -877,14 +878,16 @@ export function MujInventar() {
               <label htmlFor="inv-jmeno" className={labelClass}>
                 Jméno <OznaPovinne />
               </label>
-              <input
+              <JmenoKartyNapoveda
                 id="inv-jmeno"
-                className={inputClass}
-                required
                 value={jmeno}
-                onChange={(e) => setJmeno(e.target.value)}
-                placeholder="Connor McDavid"
-                autoComplete="name"
+                onChange={setJmeno}
+                disabled={formZakazany}
+                userId={user?.id ?? null}
+                vlastniKarty={karty}
+                inventarPocet={karty.length}
+                inputClassName={inputClass}
+                required
               />
             </div>
 

@@ -33,8 +33,11 @@ grant execute on function public.cards_globalni_katalog() to authenticated, serv
 revoke all on function public.cards_najdi_id_shodneho_obsahu(
   text, smallint, text, text, text, text, text, text, numeric, smallint, jsonb
 ) from public;
+revoke all on function public.cards_najdi_id_shodneho_obsahu(
+  text, smallint, text, text, text, text, text, text, numeric, smallint
+) from public;
 grant execute on function public.cards_najdi_id_shodneho_obsahu(
-  text, smallint, text, text, text, text, text, text, numeric, smallint, jsonb
+  text, smallint, text, text, text, text, text, text, numeric, smallint
 ) to authenticated, service_role;
 
 revoke all on function public.cards_kopiruj_kartu_do_inventare(uuid, text) from public;
@@ -52,7 +55,6 @@ revoke all on function public.cards_ma_duplicitni_obsah(
   text,
   numeric,
   smallint,
-  jsonb,
   uuid,
   boolean,
   uuid,
@@ -69,7 +71,6 @@ grant execute on function public.cards_ma_duplicitni_obsah(
   text,
   numeric,
   smallint,
-  jsonb,
   uuid,
   boolean,
   uuid,

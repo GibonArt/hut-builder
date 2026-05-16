@@ -62,10 +62,6 @@ begin
         (c.ap is null and (v_src).ap is null)
         or (c.ap = (v_src).ap)
       )
-      and (
-        (c.atributy is null and (v_src).atributy is null)
-        or (c.atributy = (v_src).atributy)
-      )
   ) then
     raise exception 'jiz_v_inventari';
   end if;
