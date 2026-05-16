@@ -24,9 +24,6 @@ import {
   aktualizujJenAtributyKarty,
   aktualizujKartu,
   CHYBA_DUPLICITNI_OBSAH_KARTY,
-  ceskaZpravaKopieKarty,
-  jsouKartyObsahoveStejne,
-  kopirujKartuZKatalogu,
   nactiKartyUzivatele,
   smazKartuPodleSlug,
   vlozKartu,
@@ -50,7 +47,6 @@ import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
 import { JmenoKartyNapoveda } from "@/components/JmenoKartyNapoveda";
 import { KatalogHromadnyImport } from "@/components/KatalogHromadnyImport";
-import { KatalogKaretVyber } from "@/components/KatalogKaretVyber";
 import {
   EA_POZICE_NA_HUT,
   najdiLiguATymPodleEa,
@@ -143,11 +139,6 @@ export function MujInventar() {
   /** Po výběru z komunitní DB nápovědy — zobrazit upozornění k ověření údajů. */
   const [upozorneniKartovaNapoveda, setUpozorneniKartovaNapoveda] = useState(false);
 
-  /** UUID řádku `cards.id` ve zdrojové DB (katalog cizích uživatelů). */
-  const [katalogZdrojUuid, setKatalogZdrojUuid] = useState<string | null>(null);
-  /** Snapshot obsahu pro rozhodnutí kopie vs. ruční insert. */
-  const [katalogSnapshot, setKatalogSnapshot] = useState<HutCard | null>(null);
-
   const tymyProAktualniLigu = useMemo(() => tymyProLigu(liga), [liga]);
 
   const { typyKaret: hutdbTypyKaret, aliasMapZBaze } = useMergedTypyKaret();
@@ -167,8 +158,6 @@ export function MujInventar() {
   const priVyberuEaHrace = useCallback(
     (h: EaNhl26Hrac) => {
       navratPoUlozeniPath.current = null;
-      setKatalogZdrojUuid(null);
-      setKatalogSnapshot(null);
       setProdano(false);
       setJmeno(h.jmeno);
       setFormError(null);
@@ -331,8 +320,6 @@ export function MujInventar() {
     setFormError(null);
     setUpozorneniKartovaNapoveda(false);
     setFormDirty(false);
-    setKatalogZdrojUuid(null);
-    setKatalogSnapshot(null);
     setProdano(false);
   }, []);
 
@@ -346,10 +333,6 @@ export function MujInventar() {
 
   const naplnFormZKarty = useCallback(
     (k: HutCard, rezim: "editovat" | "kopie" = "editovat") => {
-      if (rezim === "editovat") {
-        setKatalogZdrojUuid(null);
-        setKatalogSnapshot(null);
-      }
       setJmeno(k.jmeno);
       setOvr(String(k.ovr));
       setPozice(k.pozice);
@@ -617,29 +600,6 @@ export function MujInventar() {
     typKartyMetaOpts,
   ]);
 
-  const shodnySeSnapshotemKatalogu = useMemo(() => {
-    if (!katalogZdrojUuid || !katalogSnapshot) return false;
-    const v = sestavKartuZFormulare();
-    if (!v.ok) return false;
-    return jsouKartyObsahoveStejne(v.nova, katalogSnapshot);
-  }, [
-    katalogZdrojUuid,
-    katalogSnapshot,
-    sestavKartuZFormulare,
-  ]);
-
-  const priVyberuZKatalogu = useCallback(
-    (dbId: string, k: HutCard) => {
-      navratPoUlozeniPath.current = null;
-      naplnFormZKarty(k, "kopie");
-      setKatalogZdrojUuid(dbId);
-      setKatalogSnapshot({ ...k });
-      setFormDirty(false);
-      toast.info("Údaje z katalogu — před uložením zkontroluj. „Přidat mezi mé karty“ použij jen pokud nic neměníš.");
-    },
-    [naplnFormZKarty],
-  );
-
   const priHromadnePridaneZKatalogu = useCallback((nove: HutCard[]) => {
     if (nove.length === 0) return;
     setKarty((prev) => [...prev, ...nove]);
@@ -691,28 +651,6 @@ export function MujInventar() {
       setKarty((prev) =>
         prev.map((c) => (c.id === editujiSlug ? nova : c)),
       );
-      dokoncitUlozeniAFreshForm();
-      return;
-    }
-
-    if (
-      katalogZdrojUuid &&
-      katalogSnapshot &&
-      jsouKartyObsahoveStejne(nova, katalogSnapshot)
-    ) {
-      const { error: errKopie } = await kopirujKartuZKatalogu(
-        supabase,
-        katalogZdrojUuid,
-        finalId,
-      );
-      setUkladamKartu(false);
-      if (errKopie) {
-        setFormError(ceskaZpravaKopieKarty(errKopie.message));
-        return;
-      }
-      const ulozena: HutCard = { ...katalogSnapshot, id: finalId };
-      toast.success("Karta byla přidána do inventáře (kopie ze sdílené databáze).");
-      setKarty((prev) => [...prev, ulozena]);
       dokoncitUlozeniAFreshForm();
       return;
     }
@@ -838,12 +776,7 @@ export function MujInventar() {
           className="mt-6 min-w-0 border-0 p-0 disabled:opacity-55 [&:disabled]:pointer-events-none"
         >
         <div className="grid gap-5 sm:grid-cols-2">
-          <div className="sm:col-span-2 space-y-4">
-            <KatalogKaretVyber
-              userId={user?.id ?? null}
-              disabled={formZakazany}
-              onVybrat={priVyberuZKatalogu}
-            />
+          <div className="sm:col-span-2">
             <KatalogHromadnyImport
               userId={user?.id ?? null}
               stavajiciKarty={karty}
@@ -1131,13 +1064,7 @@ export function MujInventar() {
             disabled={narodnostiVolby.length === 0 || formZakazany}
             className="min-h-12 w-full touch-manipulation rounded-full border border-zinc-600 bg-[var(--hut-btn)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:border-zinc-500 hover:bg-[var(--hut-btn-hover)] disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-0 sm:w-auto sm:py-2.5"
           >
-            {ukladamKartu
-              ? "Ukládám…"
-              : editujiSlug
-                ? "Uložit změny"
-                : katalogZdrojUuid
-                  ? "Přidat mezi mé karty"
-                  : "Přidat kartu"}
+            {ukladamKartu ? "Ukládám…" : editujiSlug ? "Uložit změny" : "Přidat kartu"}
           </button>
           <button
             type="button"
@@ -1151,13 +1078,6 @@ export function MujInventar() {
             {editujiSlug ? "Zrušit úpravu" : "Vymazat formulář"}
           </button>
         </div>
-        {katalogZdrojUuid && !editujiSlug && !shodnySeSnapshotemKatalogu ? (
-          <p className="mt-3 text-xs leading-snug text-amber-200/90" role="status">
-            Upravil jsi údaje oproti výběru z katalogu — odesláním se uloží jako běžná nová karta (kontrola duplicit jen u
-            tvých uložených karet). Chceš‑li čistou kopii z databáze, znovu vyber řádek v katalogu nebo vymazat
-            formulář.
-          </p>
-        ) : null}
         </fieldset>
       </form>
 
