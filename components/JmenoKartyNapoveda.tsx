@@ -48,40 +48,19 @@ export function JmenoKartyNapoveda({
   const rootRef = useRef<HTMLDivElement>(null);
 
   const [hraci, setHraci] = useState<EaNhl26Hrac[]>([]);
-  const [nacitam, setNacitam] = useState(false);
-  const [fetchChyba, setFetchChyba] = useState<string | null>(null);
-  const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [otevreno, setOtevreno] = useState(false);
   const [vybranyIdx, setVybranyIdx] = useState(0);
 
-  const nactiSeznam = useCallback(
-    async (options?: { silent?: boolean }) => {
-      if (!userId) {
-        setHraci([]);
-        return;
-      }
-      const silent = options?.silent === true;
-      if (!silent) {
-        setNacitam(true);
-        setFetchChyba(null);
-      }
-      const { data, syncedAt: st, error } = await nactiNapoveduHracu(supabase, {
-        nacistAgregaciZeVsechKaret: true,
-      });
-      if (!silent) setNacitam(false);
-      if (error) {
-        if (!silent) {
-          setFetchChyba(error.message);
-          setHraci([]);
-        }
-      } else {
-        setHraci(data);
-        setSyncedAt(st);
-        if (!silent) setFetchChyba(null);
-      }
-    },
-    [supabase, userId],
-  );
+  const nactiSeznam = useCallback(async () => {
+    if (!userId) {
+      setHraci([]);
+      return;
+    }
+    const { data, error } = await nactiNapoveduHracu(supabase, {
+      nacistAgregaciZeVsechKaret: true,
+    });
+    if (!error) setHraci(data);
+  }, [supabase, userId]);
 
   useEffect(() => {
     void nactiSeznam();
@@ -90,7 +69,7 @@ export function JmenoKartyNapoveda({
   useEffect(() => {
     if (!userId) return;
     const tichyRefresh = () => {
-      void nactiSeznam({ silent: true });
+      void nactiSeznam();
     };
     const intervalId = window.setInterval(tichyRefresh, 120_000);
     const priViditelnosti = () => {
@@ -105,11 +84,8 @@ export function JmenoKartyNapoveda({
     };
   }, [userId, nactiSeznam]);
 
-  const prazdny = !nacitam && !fetchChyba && hraci.length === 0;
-  const maNapovedu = Boolean(userId) && !prazdny && !fetchChyba;
-
   const vysledky = useMemo(() => {
-    if (!maNapovedu || nacitam || !value.trim()) return [];
+    if (!userId || hraci.length === 0 || !value.trim()) return [];
     const out: EaNhl26Hrac[] = [];
     for (const h of hraci) {
       if (shoda(h, value)) {
@@ -118,7 +94,7 @@ export function JmenoKartyNapoveda({
       }
     }
     return out;
-  }, [value, maNapovedu, nacitam, hraci]);
+  }, [value, userId, hraci]);
 
   useEffect(() => {
     setVybranyIdx(0);
@@ -160,10 +136,6 @@ export function JmenoKartyNapoveda({
     }
   };
 
-  const syncLabel = syncedAt ? syncedAt.slice(0, 10) : "—";
-  const pocetEa = hraci.filter((x) => x.source === "ea").length;
-  const pocetDb = hraci.filter((x) => x.source === "card").length;
-
   if (!userId) {
     return (
       <input
@@ -200,18 +172,6 @@ export function JmenoKartyNapoveda({
         aria-expanded={otevreno && vysledky.length > 0}
         aria-autocomplete="list"
       />
-      {nacitam ? (
-        <p className="mt-1 text-[10px] text-[var(--hut-muted)]">Načítám jména (EA + databáze)…</p>
-      ) : fetchChyba ? (
-        <p className="mt-1 text-[10px] text-red-300/90">Nápověda: {fetchChyba}</p>
-      ) : prazdny ? (
-        <p className="mt-1 text-[10px] text-amber-200/90">
-          Nápověda prázdná — spusť v Supabase{" "}
-          <code className="font-mono">ea_hraci_napoveda.sql</code> a{" "}
-          <code className="font-mono">napoveda_jmena_z_cards_rpc.sql</code>, pak{" "}
-          <code className="font-mono">npm run ea-ratings</code>.
-        </p>
-      ) : null}
       {otevreno && vysledky.length > 0 ? (
         <ul
           role="listbox"
@@ -241,12 +201,6 @@ export function JmenoKartyNapoveda({
             </li>
           ))}
         </ul>
-      ) : null}
-      {maNapovedu && !nacitam ? (
-        <p className="mt-1 text-[10px] leading-snug text-[var(--hut-muted)]/75">
-          Nápověda: EA ({pocetEa}) + karty v DB ({pocetDb}) · sync {syncLabel}. Výběr z listu doplní údaje (u EA jen
-          pozici/tým; u DB i OVR, plat…). U řádku <span className="text-zinc-400">DB</span> údaje zkontroluj.
-        </p>
       ) : null}
     </div>
   );
