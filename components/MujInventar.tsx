@@ -48,7 +48,6 @@ import { TymHledacNapricLigami } from "@/components/TymHledacNapricLigami";
 import { TymVyber } from "@/components/TymVyber";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
-import { EaHracNapoveda } from "@/components/EaHracNapoveda";
 import { JmenoKartyNapoveda } from "@/components/JmenoKartyNapoveda";
 import { KatalogHromadnyImport } from "@/components/KatalogHromadnyImport";
 import { KatalogKaretVyber } from "@/components/KatalogKaretVyber";
@@ -141,8 +140,6 @@ export function MujInventar() {
   const [editujiSlug, setEditujiSlug] = useState<string | null>(null);
   /** Jen při úpravě karty — prodané karty nejdou do optimalizátoru, zůstávají v DB. */
   const [prodano, setProdano] = useState(false);
-  /** Inkrementace vyčistí pole „Hledat hráče“ v `EaHracNapoveda` (po uložení / zrušení). */
-  const [eaNapovedaVycistit, setEaNapovedaVycistit] = useState(0);
   /** Po výběru z komunitní DB nápovědy — zobrazit upozornění k ověření údajů. */
   const [upozorneniKartovaNapoveda, setUpozorneniKartovaNapoveda] = useState(false);
 
@@ -333,7 +330,6 @@ export function MujInventar() {
     setEditujiSlug(null);
     setFormError(null);
     setUpozorneniKartovaNapoveda(false);
-    setEaNapovedaVycistit((n) => n + 1);
     setFormDirty(false);
     setKatalogZdrojUuid(null);
     setKatalogSnapshot(null);
@@ -854,24 +850,6 @@ export function MujInventar() {
               disabled={formZakazany}
               onKartyPridany={priHromadnePridaneZKatalogu}
             />
-            <EaHracNapoveda
-              userId={user?.id ?? null}
-              inventarPocet={karty.length}
-              onVybrat={priVyberuEaHrace}
-              disabled={formZakazany}
-              vycisteniDotazuVerze={eaNapovedaVycistit}
-            />
-            {upozorneniKartovaNapoveda ? (
-              <p
-                className="rounded-lg border border-sky-500/35 bg-sky-950/35 px-3 py-2.5 text-sm leading-snug text-sky-100/95"
-                role="status"
-              >
-                Údaje byly doplněny z <strong className="font-semibold text-white">poslední uložené karty</strong> se
-                stejným jménem a týmem v databázi (náhled z komunity). Před uložením je{" "}
-                <strong className="font-semibold text-white">zkontroluj</strong> — může jít o jinou variantu karty (OVR,
-                typ, X-Faktory…), která se liší třeba jen v jedné hodnotě.
-              </p>
-            ) : null}
           </div>
           <div className="sm:col-span-2 grid grid-cols-1 gap-5 md:grid-cols-6 md:items-end">
             <div className="min-w-0 md:col-span-2">
@@ -882,9 +860,9 @@ export function MujInventar() {
                 id="inv-jmeno"
                 value={jmeno}
                 onChange={setJmeno}
+                onVybratHrace={priVyberuEaHrace}
                 disabled={formZakazany}
                 userId={user?.id ?? null}
-                vlastniKarty={karty}
                 inventarPocet={karty.length}
                 inputClassName={inputClass}
                 required
@@ -963,6 +941,18 @@ export function MujInventar() {
               />
             </div>
           </div>
+
+          {upozorneniKartovaNapoveda ? (
+            <p
+              className="sm:col-span-2 rounded-lg border border-sky-500/35 bg-sky-950/35 px-3 py-2.5 text-sm leading-snug text-sky-100/95"
+              role="status"
+            >
+              Údaje byly doplněny z <strong className="font-semibold text-white">poslední uložené karty</strong> se
+              stejným jménem a týmem v databázi. Před uložením je{" "}
+              <strong className="font-semibold text-white">zkontroluj</strong> — může jít o jinou variantu (OVR, typ,
+              X-Faktory…).
+            </p>
+          ) : null}
 
           <fieldset className="sm:col-span-2 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-4">
             <legend className="px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]">
