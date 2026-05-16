@@ -13,6 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { vsechnyNarodnostiCS } from "@/lib/narodnosti";
 import { HUT_POZICE, HUT_POZICE_ZKRATKA } from "@/lib/hutPozice";
+import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { HutShell } from "@/components/HutShell";
 import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
@@ -162,6 +163,7 @@ export function MojeKartySeznam() {
       mainStyle={HUT_FORM_PAGE_BG}
       mainInnerClassName="relative z-0 mx-auto max-w-6xl"
     >
+      <>
       <div className="flex min-h-full w-full flex-col">
         <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Moje karty</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
@@ -354,6 +356,8 @@ export function MojeKartySeznam() {
           </ul>
         )}
       </div>
+      <FloatingZpetNahoru />
+      </>
     </HutShell>
   );
 }

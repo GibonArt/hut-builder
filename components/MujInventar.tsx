@@ -46,6 +46,7 @@ import { NarodnostVyber } from "@/components/NarodnostVyber";
 import { TypKartyVyber } from "@/components/TypKartyVyber";
 import { TymHledacNapricLigami } from "@/components/TymHledacNapricLigami";
 import { TymVyber } from "@/components/TymVyber";
+import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
 import { EaHracNapoveda } from "@/components/EaHracNapoveda";
 import { KatalogHromadnyImport } from "@/components/KatalogHromadnyImport";
@@ -595,6 +596,8 @@ export function MujInventar() {
     if (xfUlozit.length) nova.xFactory = xfUlozit;
     if (editujiSlug) {
       nova.prodano = prodano;
+      const zdrojova = karty.find((c) => c.id === editujiSlug);
+      if (zdrojova?.ap != null) nova.ap = zdrojova.ap;
     }
 
     return { ok: true, nova, finalId };
@@ -664,12 +667,21 @@ export function MujInventar() {
     setUkladamKartu(true);
 
     if (editujiSlug) {
-      const errUloz = (await aktualizujKartu(supabase, user.id, editujiSlug, nova))
-        .error;
+      const puvodni = karty.find((c) => c.id === editujiSlug);
+      const errUloz = (
+        await aktualizujKartu(supabase, user.id, editujiSlug, nova, puvodni ?? null)
+      ).error;
       setUkladamKartu(false);
       if (errUloz) {
         const msg = errUloz.message.toLowerCase();
-        if (msg.includes("duplicate") || msg.includes("unique")) {
+        if (
+          errUloz.message === CHYBA_DUPLICITNI_OBSAH_KARTY ||
+          errUloz.message.includes("stejnými údaji")
+        ) {
+          setFormError(
+            "Kartu se shodnými údaji už v inventáři máš — u dvou kopií nejdřív jednu smaž, nebo u jedné označ Prodáno a ulož znovu.",
+          );
+        } else if (msg.includes("duplicate") || msg.includes("unique")) {
           setFormError(
             "Karta s tímto ID (slug z jména + OVR) už existuje. Změň OVR nebo jméno.",
           );
@@ -763,6 +775,7 @@ export function MujInventar() {
 
   return (
     <TypKartyMetaOptsProvider value={typKartyMetaOpts}>
+    <>
     <div className="space-y-10">
       <div>
         <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Můj Inventář</h2>
@@ -1258,6 +1271,8 @@ export function MujInventar() {
         )}
       </section>
     </div>
+    <FloatingZpetNahoru />
+    </>
     </TypKartyMetaOptsProvider>
   );
 }

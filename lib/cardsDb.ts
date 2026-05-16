@@ -186,6 +186,51 @@ export async function vlozKartu(
   return { error: null };
 }
 
+/** Obsah řádku v DB jako u ukládání, ale bez příznaku prodáno (pro rozlišení kopií v inventáři). */
+function radkaZHutCardBezProdano(card: HutCard) {
+  const r = dataRadkuZHutCard(card);
+  return {
+    jmeno: r.jmeno,
+    ovr: r.ovr,
+    pozice: r.pozice,
+    preferovana_ruka: r.preferovana_ruka,
+    narodnost: r.narodnost,
+    tym: r.tym,
+    liga: r.liga,
+    typ_karty: r.typ_karty,
+    plat: r.plat,
+    ap: r.ap ?? null,
+    atributy: r.atributy ?? null,
+  };
+}
+
+/** Stejné údaje jako při duplicitní kontrole v DB, ale ignoruje „Prodáno“. */
+export function jsouKartyStejneKromeProdano(a: HutCard, b: HutCard): boolean {
+  const ra = radkaZHutCardBezProdano(a);
+  const rb = radkaZHutCardBezProdano(b);
+  return (
+    ra.jmeno === rb.jmeno &&
+    ra.ovr === rb.ovr &&
+    ra.pozice === rb.pozice &&
+    ra.preferovana_ruka === rb.preferovana_ruka &&
+    ra.narodnost === rb.narodnost &&
+    ra.tym === rb.tym &&
+    ra.liga === rb.liga &&
+    ra.typ_karty === rb.typ_karty &&
+    ra.plat === rb.plat &&
+    ra.ap === rb.ap &&
+    JSON.stringify(ra.atributy) === JSON.stringify(rb.atributy)
+  );
+}
+
+/** Uložená karta se liší jen příznakem prodáno (typicky označit jednu z dvou kopií). */
+export function jeZmenaJenProdano(puvodni: HutCard, nova: HutCard): boolean {
+  const p = puvodni.prodano === true;
+  const n = nova.prodano === true;
+  if (p === n) return false;
+  return jsouKartyStejneKromeProdano(puvodni, nova);
+}
+
 /** Porovnání obsahu karty (bez `id` / slug) — shoda s řádkem v DB / snapshotem z katalogu. */
 export function jsouKartyObsahoveStejne(a: HutCard, b: HutCard): boolean {
   const ra = dataRadkuZHutCard(a);
@@ -341,13 +386,20 @@ export async function aktualizujKartu(
   userId: string,
   puvodniSlug: string,
   card: HutCard,
+  /** Snapshot řádku před úpravou (z UI) — při změně jen „Prodáno“ neblokovat duplicitu druhé kopie. */
+  puvodniKarta?: HutCard | null,
 ): Promise<{ error: Error | null }> {
-  const dup = await maDuplicitniObsah(supabase, card, userId, {
-    userId,
-    cardSlug: puvodniSlug,
-  });
-  if (dup.error) return { error: dup.error };
-  if (dup.duplikat) return { error: new Error(CHYBA_DUPLICITNI_OBSAH_KARTY) };
+  const preskocitKontroluDuplicit =
+    puvodniKarta != null && jeZmenaJenProdano(puvodniKarta, card);
+
+  if (!preskocitKontroluDuplicit) {
+    const dup = await maDuplicitniObsah(supabase, card, userId, {
+      userId,
+      cardSlug: puvodniSlug,
+    });
+    if (dup.error) return { error: dup.error };
+    if (dup.duplikat) return { error: new Error(CHYBA_DUPLICITNI_OBSAH_KARTY) };
+  }
 
   const { error } = await supabase
     .from("cards")

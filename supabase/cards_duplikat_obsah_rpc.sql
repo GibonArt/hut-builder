@@ -63,7 +63,7 @@ as $$
     from public.cards c
     where
       c.user_id = p_pouze_pro_user_id
-      and c.prodano = p_prodano
+      and c.prodano is not distinct from p_prodano
       and trim(c.jmeno) = trim(p_jmeno)
       and c.ovr = p_ovr
       and c.pozice = p_pozice
