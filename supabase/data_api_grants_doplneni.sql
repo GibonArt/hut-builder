@@ -30,15 +30,8 @@ grant execute on function public.admin_prehled_uzivatelu_karet() to authenticate
 revoke all on function public.cards_globalni_katalog() from public;
 grant execute on function public.cards_globalni_katalog() to authenticated, service_role;
 
-revoke all on function public.cards_najdi_id_shodneho_obsahu(
-  text, smallint, text, text, text, text, text, text, numeric, smallint, jsonb
-) from public;
-revoke all on function public.cards_najdi_id_shodneho_obsahu(
-  text, smallint, text, text, text, text, text, text, numeric, smallint
-) from public;
-grant execute on function public.cards_najdi_id_shodneho_obsahu(
-  text, smallint, text, text, text, text, text, text, numeric, smallint
-) to authenticated, service_role;
+-- cards_najdi_id_shodneho_obsahu: vytvoření + grant jen v cards_katalog_kopie_rpc.sql
+-- (tady ne — GRANT na neexistující funkci spadne, pokud jsi ještě nespustil katalog).
 
 revoke all on function public.cards_kopiruj_kartu_do_inventare(uuid, text) from public;
 grant execute on function public.cards_kopiruj_kartu_do_inventare(uuid, text) to authenticated,

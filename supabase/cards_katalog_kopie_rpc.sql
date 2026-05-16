@@ -46,7 +46,7 @@ grant execute on function public.cards_globalni_katalog() to authenticated, serv
 comment on function public.cards_globalni_katalog is
   'Seznam karet ostatních uživatelů pro přidání kopie do vlastního inventáře.';
 
--- 2) Najde UUID prvního řádku se shodným obsahem (libovolný uživatel).
+-- 2) Najde UUID prvního řádku se shodným obsahem (libovolný uživatel; bez X-Faktorů).
 drop function if exists public.cards_najdi_id_shodneho_obsahu(
   text,
   smallint,
@@ -59,6 +59,18 @@ drop function if exists public.cards_najdi_id_shodneho_obsahu(
   numeric,
   smallint,
   jsonb
+);
+drop function if exists public.cards_najdi_id_shodneho_obsahu(
+  text,
+  smallint,
+  text,
+  text,
+  text,
+  text,
+  text,
+  text,
+  numeric,
+  smallint
 );
 
 create or replace function public.cards_najdi_id_shodneho_obsahu(
@@ -97,9 +109,6 @@ as $$
   limit 1;
 $$;
 
-revoke all on function public.cards_najdi_id_shodneho_obsahu(
-  text, smallint, text, text, text, text, text, text, numeric, smallint, jsonb
-) from public;
 revoke all on function public.cards_najdi_id_shodneho_obsahu(
   text, smallint, text, text, text, text, text, text, numeric, smallint
 ) from public;
