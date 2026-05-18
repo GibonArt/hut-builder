@@ -38,15 +38,13 @@ import { TypKartyMiniLogo } from "@/components/TypKartyIkona";
 import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
+import { InventarKartaHledac } from "@/components/InventarKartaHledac";
 import { TymLogo } from "@/components/TymLogo";
 
 const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
 
 const inputClass =
   "box-border min-h-11 w-full max-w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2.5 text-base text-white tabular-nums outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:max-w-[10rem] sm:min-h-0 sm:py-2 sm:text-sm";
-
-const selectHracClass =
-  "box-border min-h-11 w-full max-w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2.5 text-base text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:min-h-0 sm:max-w-xl sm:py-2 sm:text-sm";
 
 const btnFiltrClass =
   "touch-manipulation rounded-full border px-3 py-2 text-xs font-semibold tracking-wide transition-colors sm:py-1.5";
@@ -1332,38 +1330,68 @@ export function OptimalizatorFormaci() {
                 </button>
               ))}
             </div>
-            <h4 className="mt-6 text-xs font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
-              OVR
-            </h4>
-            <div className="mt-3 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-end sm:gap-6">
-              <div className="w-full sm:w-auto">
-                <label htmlFor="opt-min-ovr" className={labelClass}>
-                  Minimální OVR
+            <div className="mt-6 grid grid-cols-1 items-end gap-4 md:grid-cols-2 xl:grid-cols-12">
+              <div className="min-w-0 md:col-span-1 xl:col-span-3">
+                <p className={labelClass}>OVR</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="min-w-0">
+                    <label htmlFor="opt-min-ovr" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                      Min.
+                    </label>
+                    <input
+                      id="opt-min-ovr"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="—"
+                      value={minOvrStr}
+                      onChange={(e) => setMinOvrStr(e.target.value)}
+                      className={`${inputClass} sm:max-w-none`}
+                      aria-invalid={minOvrStr.trim() !== "" && minOvr === null}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <label htmlFor="opt-max-ovr" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                      Max.
+                    </label>
+                    <input
+                      id="opt-max-ovr"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="—"
+                      value={maxOvrStr}
+                      onChange={(e) => setMaxOvrStr(e.target.value)}
+                      className={`${inputClass} sm:max-w-none`}
+                      aria-invalid={maxOvrStr.trim() !== "" && maxOvr === null}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="min-w-0 md:col-span-1 xl:col-span-5">
+                <label htmlFor="opt-hrac" className={labelClass}>
+                  Hráč z inventáře
                 </label>
-                <input
-                  id="opt-min-ovr"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="—"
-                  value={minOvrStr}
-                  onChange={(e) => setMinOvrStr(e.target.value)}
-                  className={inputClass}
-                  aria-invalid={minOvrStr.trim() !== "" && minOvr === null}
+                <InventarKartaHledac
+                  id="opt-hrac"
+                  karty={kartyProVyberHrace}
+                  value={hracKartaId}
+                  onChange={setHracKartaId}
+                  disabled={loadingKarty || kartyProVyberHrace.length === 0}
                 />
               </div>
-              <div className="w-full sm:w-auto">
-                <label htmlFor="opt-max-ovr" className={labelClass}>
-                  Maximální OVR
+              <div className="min-w-0 md:col-span-2 xl:col-span-4">
+                <label htmlFor="opt-max-rozpocet" className={labelClass}>
+                  Rozpočet (max. plat celkem, mil.)
                 </label>
                 <input
-                  id="opt-max-ovr"
+                  id="opt-max-rozpocet"
                   type="text"
-                  inputMode="numeric"
-                  placeholder="—"
-                  value={maxOvrStr}
-                  onChange={(e) => setMaxOvrStr(e.target.value)}
-                  className={inputClass}
-                  aria-invalid={maxOvrStr.trim() !== "" && maxOvr === null}
+                  inputMode="decimal"
+                  placeholder="např. 12"
+                  value={maxRozpocetMilStr}
+                  onChange={(e) => setMaxRozpocetMilStr(e.target.value)}
+                  className={`${inputClass} sm:max-w-none`}
+                  aria-invalid={maxRozpocetMilStr.trim() !== "" && maxRozpocetMil === null}
+                  autoComplete="off"
                 />
               </div>
             </div>
@@ -1378,80 +1406,39 @@ export function OptimalizatorFormaci() {
                 {chybaOvrRozsah}
               </p>
             ) : null}
-            <h4 className="mt-6 text-xs font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
-              Hráč z inventáře
-            </h4>
-            <div className="mt-3 w-full">
-              <label htmlFor="opt-hrac" className={labelClass}>
-                Konkrétní karta
-              </label>
-              <select
-                id="opt-hrac"
-                value={hracKartaId}
-                onChange={(e) => setHracKartaId(e.target.value)}
-                className={selectHracClass}
-                disabled={loadingKarty || kartyProVyberHrace.length === 0}
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label
+                htmlFor="opt-kridla-vzajemna"
+                className="flex cursor-pointer items-start gap-2.5 text-xs leading-snug text-[var(--hut-muted)]"
               >
-                <option value="">— Všichni hráči —</option>
-                {kartyProVyberHrace.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {popisekKartyProVyber(k)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <h4 className="mt-6 text-xs font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
-              Rozpočet
-            </h4>
-            <div className="mt-3 w-full sm:w-auto">
-              <label htmlFor="opt-max-rozpocet" className={labelClass}>
-                Max. plat celkem (mil.)
-              </label>
-              <input
-                id="opt-max-rozpocet"
-                type="text"
-                inputMode="decimal"
-                placeholder="např. 12"
-                value={maxRozpocetMilStr}
-                onChange={(e) => setMaxRozpocetMilStr(e.target.value)}
-                className={inputClass}
-                aria-invalid={maxRozpocetMilStr.trim() !== "" && maxRozpocetMil === null}
-                autoComplete="off"
-              />
-            </div>
-            <div className="mt-5 flex max-w-2xl flex-col gap-4">
-              <div className="flex flex-wrap items-start gap-3">
                 <input
                   id="opt-kridla-vzajemna"
                   type="checkbox"
                   checked={kridlaVzajemna}
                   onChange={(e) => setKridlaVzajemna(e.target.checked)}
-                  className="mt-1 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
                 />
-                <label
-                  htmlFor="opt-kridla-vzajemna"
-                  className="cursor-pointer text-xs leading-relaxed text-[var(--hut-muted)]"
-                >
-                  <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> na slot LK lze dát hráče s
-                  pozicí LK nebo PK, na slot PK také LK nebo PK (tři různí hráči). Centr zůstává jen pozice C.
-                </label>
-              </div>
-              <div className="flex flex-wrap items-start gap-3">
+                <span className="min-w-0">
+                  <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> LK a PK vzájemně (tři různí
+                  hráči, C jen pozice C).
+                </span>
+              </label>
+              <label
+                htmlFor="opt-lo-po-vzajemne"
+                className="flex cursor-pointer items-start gap-2.5 text-xs leading-snug text-[var(--hut-muted)]"
+              >
                 <input
                   id="opt-lo-po-vzajemne"
                   type="checkbox"
                   checked={loPoVzajemne}
                   onChange={(e) => setLoPoVzajemne(e.target.checked)}
-                  className="mt-1 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
                 />
-                <label
-                  htmlFor="opt-lo-po-vzajemne"
-                  className="cursor-pointer text-xs leading-relaxed text-[var(--hut-muted)]"
-                >
-                  <span className="font-medium text-zinc-200">Záměna stran (obrana):</span> na slot LO lze dát hráče s
-                  pozicí LO nebo PO, na slot PO také LO nebo PO (dva různí hráči).
-                </label>
-              </div>
+                <span className="min-w-0">
+                  <span className="font-medium text-zinc-200">Záměna stran (obrana):</span> LO a PO vzájemně (dva různí
+                  hráči).
+                </span>
+              </label>
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <button
