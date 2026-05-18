@@ -45,6 +45,9 @@ const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
 const inputClass =
   "box-border min-h-11 w-full max-w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2.5 text-base text-white tabular-nums outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:max-w-[10rem] sm:min-h-0 sm:py-2 sm:text-sm";
 
+const selectHracClass =
+  "box-border min-h-11 w-full max-w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2.5 text-base text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:min-h-0 sm:max-w-xl sm:py-2 sm:text-sm";
+
 const btnFiltrClass =
   "touch-manipulation rounded-full border px-3 py-2 text-xs font-semibold tracking-wide transition-colors sm:py-1.5";
 
@@ -77,6 +80,8 @@ type SnapshotFiltryOptimalizatoru = {
   maxOvrStr: string;
   /** Prázdné = bez limitu; jinak max. součet platů ve formaci (mil. v textu). */
   maxRozpocetMilStr: string;
+  /** Prázdné = všichni; jinak `HutCard.id` — jen formace obsahující tuto kartu z inventáře. */
+  hracKartaId: string;
   typBonusuFiltr: TypBonusuKombinace | "vse";
 };
 
@@ -398,6 +403,28 @@ function filtrujDvojicePodleMaxRozpoctu(
   return radky.filter((v) => soucetPlatuKaret([v.a, v.b]) <= maxPlatAbsolutni);
 }
 
+function filtrujUtokPodleHrace(
+  radky: readonly UtocnaFormaceVysledek[],
+  kartaId: string | null,
+): UtocnaFormaceVysledek[] {
+  if (!kartaId) return [...radky];
+  return radky.filter(
+    (v) => v.lk.id === kartaId || v.c.id === kartaId || v.pk.id === kartaId,
+  );
+}
+
+function filtrujDvojicePodleHrace(
+  radky: readonly DvojiceVysledek[],
+  kartaId: string | null,
+): DvojiceVysledek[] {
+  if (!kartaId) return [...radky];
+  return radky.filter((v) => v.a.id === kartaId || v.b.id === kartaId);
+}
+
+function popisekKartyProVyber(k: HutCard): string {
+  return `${k.jmeno} · ${k.ovr} OVR · ${HUT_POZICE_ZKRATKA[k.pozice]} · ${k.tym}`;
+}
+
 function parseOvrVolitelne(raw: string): number | null {
   const t = raw.trim();
   if (!t) return null;
@@ -717,6 +744,7 @@ export function OptimalizatorFormaci() {
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
   const [maxRozpocetMilStr, setMaxRozpocetMilStr] = useState("");
+  const [hracKartaId, setHracKartaId] = useState("");
   const [typBonusuFiltr, setTypBonusuFiltr] = useState<TypBonusuKombinace | "vse">("vse");
   /** Hodnoty filtrů použité u posledního výpočtu (klik „Hledat“). Dokud je null, náročné výpočty neběží. */
   const [filtryPoHledani, setFiltryPoHledani] = useState<SnapshotFiltryOptimalizatoru | null>(
@@ -772,9 +800,10 @@ export function OptimalizatorFormaci() {
       filtryPoHledani.minOvrStr !== minOvrStr ||
       filtryPoHledani.maxOvrStr !== maxOvrStr ||
       filtryPoHledani.maxRozpocetMilStr !== maxRozpocetMilStr ||
+      filtryPoHledani.hracKartaId !== hracKartaId ||
       filtryPoHledani.typBonusuFiltr !== typBonusuFiltr
     );
-  }, [filtryPoHledani, minOvrStr, maxOvrStr, maxRozpocetMilStr, typBonusuFiltr]);
+  }, [filtryPoHledani, minOvrStr, maxOvrStr, maxRozpocetMilStr, hracKartaId, typBonusuFiltr]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -784,8 +813,25 @@ export function OptimalizatorFormaci() {
       setTypRazeniVysledku("ovr_soucet");
       setKridlaVzajemna(false);
       setLoPoVzajemne(false);
+      setHracKartaId("");
     }
   }, [user?.id]);
+
+  const kartyProVyberHrace = useMemo(() => {
+    return karty
+      .filter((k) => !k.prodano)
+      .sort(
+        (a, b) =>
+          a.jmeno.localeCompare(b.jmeno, "cs") || b.ovr - a.ovr || a.id.localeCompare(b.id),
+      );
+  }, [karty]);
+
+  useEffect(() => {
+    if (!hracKartaId) return;
+    if (!kartyProVyberHrace.some((k) => k.id === hracKartaId)) {
+      setHracKartaId("");
+    }
+  }, [kartyProVyberHrace, hracKartaId]);
 
   useEffect(() => {
     if (!filtryPoHledani) setFiltrPrekryvBonusu("vse");
@@ -862,6 +908,16 @@ export function OptimalizatorFormaci() {
     return parseMaxRozpocetVolitelne(filtryPoHledani.maxRozpocetMilStr);
   }, [filtryPoHledani]);
 
+  const hracKartaIdAplikovany = useMemo(() => {
+    const id = filtryPoHledani?.hracKartaId?.trim() ?? "";
+    return id || null;
+  }, [filtryPoHledani]);
+
+  const vybranaKartaAplikovana = useMemo(() => {
+    if (!hracKartaIdAplikovany) return null;
+    return karty.find((k) => k.id === hracKartaIdAplikovany) ?? null;
+  }, [hracKartaIdAplikovany, karty]);
+
   const vysledkyUtok = useMemo(
     () =>
       spoctiUtocneFormace(kartyVeFiltru, utocneRadky, narodnostiVolby, {
@@ -909,6 +965,19 @@ export function OptimalizatorFormaci() {
     [golmaniZobrazeno, maxRozpocetAplikovany],
   );
 
+  const utokZobrazenoPoHracovi = useMemo(
+    () => filtrujUtokPodleHrace(utokZobrazenoPoRozpoctu, hracKartaIdAplikovany),
+    [utokZobrazenoPoRozpoctu, hracKartaIdAplikovany],
+  );
+  const obranaZobrazenoPoHracovi = useMemo(
+    () => filtrujDvojicePodleHrace(obranaZobrazenoPoRozpoctu, hracKartaIdAplikovany),
+    [obranaZobrazenoPoRozpoctu, hracKartaIdAplikovany],
+  );
+  const golmaniZobrazenoPoHracovi = useMemo(
+    () => filtrujDvojicePodleHrace(golmaniZobrazenoPoRozpoctu, hracKartaIdAplikovany),
+    [golmaniZobrazenoPoRozpoctu, hracKartaIdAplikovany],
+  );
+
   const mapaBonusuUtok = useMemo(
     () => mapaTypuBonusuNaSestavuUtok(vysledkyUtok),
     [vysledkyUtok],
@@ -933,32 +1002,32 @@ export function OptimalizatorFormaci() {
   const utokZobrazenoPoPrekryvu = useMemo(
     () =>
       filtrujPodlePrekryvuTypuBonusu(
-        utokZobrazenoPoRozpoctu,
+        utokZobrazenoPoHracovi,
         mapaBonusuUtok,
         klicHracuUtokTrojice,
         filtrPrekryvBonusu,
       ),
-    [utokZobrazenoPoRozpoctu, mapaBonusuUtok, filtrPrekryvBonusu],
+    [utokZobrazenoPoHracovi, mapaBonusuUtok, filtrPrekryvBonusu],
   );
   const obranaZobrazenoPoPrekryvu = useMemo(
     () =>
       filtrujPodlePrekryvuTypuBonusu(
-        obranaZobrazenoPoRozpoctu,
+        obranaZobrazenoPoHracovi,
         mapaBonusuObrana,
         klicHracuDvojiceIde,
         filtrPrekryvBonusu,
       ),
-    [obranaZobrazenoPoRozpoctu, mapaBonusuObrana, filtrPrekryvBonusu],
+    [obranaZobrazenoPoHracovi, mapaBonusuObrana, filtrPrekryvBonusu],
   );
   const golmaniZobrazenoPoPrekryvu = useMemo(
     () =>
       filtrujPodlePrekryvuTypuBonusu(
-        golmaniZobrazenoPoRozpoctu,
+        golmaniZobrazenoPoHracovi,
         mapaBonusuGolmani,
         klicHracuDvojiceIde,
         filtrPrekryvBonusu,
       ),
-    [golmaniZobrazenoPoRozpoctu, mapaBonusuGolmani, filtrPrekryvBonusu],
+    [golmaniZobrazenoPoHracovi, mapaBonusuGolmani, filtrPrekryvBonusu],
   );
 
   const mapaUtok = useMemo(() => {
@@ -1132,12 +1201,28 @@ export function OptimalizatorFormaci() {
       toast.error("Žádná neprodaná karta k výpočtu.");
       return;
     }
+    if (hracKartaId) {
+      const k = karty.find((c) => c.id === hracKartaId && !c.prodano);
+      if (!k) {
+        toast.error("Vybraná karta už není v inventáři (nebo je prodaná).");
+        return;
+      }
+      const min = parseOvrVolitelne(minOvrStr);
+      const max = parseOvrVolitelne(maxOvrStr);
+      if (filtrujKartyPodleOvr([k], min, max).length === 0) {
+        toast.error(
+          "Vybraná karta neprochází filtry OVR — uprav OVR nebo zruš výběr hráče.",
+        );
+        return;
+      }
+    }
     startTransition(() => {
       setFiltrPrekryvBonusu("vse");
       setFiltryPoHledani({
         minOvrStr,
         maxOvrStr,
         maxRozpocetMilStr,
+        hracKartaId,
         typBonusuFiltr,
       });
     });
@@ -1181,8 +1266,8 @@ export function OptimalizatorFormaci() {
           )}
           : útok (LK + C + PK), obrana (LO + PO) a dvojice brankářů (G + G). Symboly z kombinace musí pokrýt
           všechny příslušné pozice v libovolném pořadí (LK nemusí odpovídat prvnímu uloženému parametru).
-          Zobrazí se jen plné shody — žádné částečné trojice ani dvojice. Volitelně omezíš sestavy maximálním součtem
-          platů (rozpočet formace). Výsledky se výchozí řadí podle součtu OVR
+          Zobrazí se jen plné shody — žádné částečné trojice ani dvojice. Můžeš vybrat konkrétní kartu z inventáře
+          (jen formace s tímto hráčem) nebo omezit sestavy maximálním součtem platů (rozpočet formace). Výsledky se výchozí řadí podle součtu OVR
           hráčů ve sestavě (útok LK + C + PK, obrana a brankáři součet dvojice); lze přepnout na řazení podle čísla
           bonusu u rovnítka. U každého výsledku můžeš připnout sestavy podle typu bonusu (PLAT / CLK / BS): útok max.
           4 na typ, obrana max. 3 na typ, brankáři max. 1 na typ. Ze seznamu se pak skryjí všechny varianty, které
@@ -1217,7 +1302,8 @@ export function OptimalizatorFormaci() {
             </h3>
             <p className="mt-1 text-xs text-[var(--hut-muted)]/90">
               OVR a rozpočet: prázdné pole = bez limitu. Rozpočet = součet platů všech hráčů v dané sestavě (útok 3
-              karty, obrana / brankáři 2 karty), ve stejných milionech jako u karet v inventáři. Typ bonusu zužuje
+              karty, obrana / brankáři 2 karty), ve stejných milionech jako u karet v inventáři. Výběr hráče z tvého
+              inventáře zobrazí jen formace, kde daná karta figuruje. Typ bonusu zužuje
               výsledky podle hodnoty z Nastavení bonusů. Kombinace se dopočítají až po kliknutí na{" "}
               <span className="text-zinc-300">Hledat</span> — úvodní načtení stránky tak zůstane rychlé.
             </p>
@@ -1292,6 +1378,28 @@ export function OptimalizatorFormaci() {
                 {chybaOvrRozsah}
               </p>
             ) : null}
+            <h4 className="mt-6 text-xs font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+              Hráč z inventáře
+            </h4>
+            <div className="mt-3 w-full">
+              <label htmlFor="opt-hrac" className={labelClass}>
+                Konkrétní karta
+              </label>
+              <select
+                id="opt-hrac"
+                value={hracKartaId}
+                onChange={(e) => setHracKartaId(e.target.value)}
+                className={selectHracClass}
+                disabled={loadingKarty || kartyProVyberHrace.length === 0}
+              >
+                <option value="">— Všichni hráči —</option>
+                {kartyProVyberHrace.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {popisekKartyProVyber(k)}
+                  </option>
+                ))}
+              </select>
+            </div>
             <h4 className="mt-6 text-xs font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
               Rozpočet
             </h4>
@@ -1396,7 +1504,7 @@ export function OptimalizatorFormaci() {
           {!nacitani && !filtryPoHledani && !chybaKarty && karty.length > 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--hut-border)] bg-[var(--hut-surface)]/40 px-4 py-6 text-center sm:px-6">
               <p className="text-sm leading-relaxed text-[var(--hut-muted)]">
-                Nastav filtry výše (OVR, rozpočet, typ bonusu) a klikni na <strong className="text-zinc-200">Hledat</strong>. Teprve
+                Nastav filtry výše (OVR, hráč, rozpočet, typ bonusu) a klikni na <strong className="text-zinc-200">Hledat</strong>. Teprve
                 potom proběhne výpočet kombinací — úvodní načtení stránky je rychlejší.
               </p>
             </div>
@@ -1408,11 +1516,13 @@ export function OptimalizatorFormaci() {
                 V úvaze: {kartyVeFiltru.length} karet
                 {utocneRadky.length ? ` · ${utocneRadky.length} útočných kombinací` : ""}
                 {obranneRadky.length ? ` · ${obranneRadky.length} obranných kombinací` : ""}
-                {maxRozpocetAplikovany !== null
-                  ? ` · max. plat ≤ ${formatovatPlatVMil(maxRozpocetAplikovany)}: útok ${utokZobrazenoPoRozpoctu.length}, obrana ${obranaZobrazenoPoRozpoctu.length}, brankáři ${golmaniZobrazenoPoRozpoctu.length}`
-                  : filtryPoHledani.typBonusuFiltr !== "vse"
-                    ? ` · zobrazeno jen ${filtryPoHledani.typBonusuFiltr}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
-                    : ` · výsledků: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`}
+                {hracKartaIdAplikovany && vybranaKartaAplikovana
+                  ? ` · hráč ${vybranaKartaAplikovana.jmeno}: útok ${utokZobrazenoPoHracovi.length}, obrana ${obranaZobrazenoPoHracovi.length}, brankáři ${golmaniZobrazenoPoHracovi.length}`
+                  : maxRozpocetAplikovany !== null
+                    ? ` · max. plat ≤ ${formatovatPlatVMil(maxRozpocetAplikovany)}: útok ${utokZobrazenoPoRozpoctu.length}, obrana ${obranaZobrazenoPoRozpoctu.length}, brankáři ${golmaniZobrazenoPoRozpoctu.length}`
+                    : filtryPoHledani.typBonusuFiltr !== "vse"
+                      ? ` · zobrazeno jen ${filtryPoHledani.typBonusuFiltr}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
+                      : ` · výsledků: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`}
                 {maVybranouUtok || maVybranouObranu || maVybraneGolmany
                   ? ` · po výběru hráčů: útok ${utokZobrazenoPoVylouceni.length}/${utokZobrazenoPoPrekryvu.length}, obrana ${obranaZobrazenoPoVylouceni.length}/${obranaZobrazenoPoPrekryvu.length}, brankáři ${golmaniZobrazenoPoVylouceni.length}/${golmaniZobrazenoPoPrekryvu.length}`
                   : ""}
@@ -1838,6 +1948,15 @@ export function OptimalizatorFormaci() {
                 {formatovatPlatVMil(maxRozpocetAplikovany)} — zkus vyšší limit nebo jiné karty.
               </p>
             ) : null}
+            {utokZobrazenoPoRozpoctu.length > 0 &&
+            utokZobrazenoPoHracovi.length === 0 &&
+            hracKartaIdAplikovany &&
+            vybranaKartaAplikovana ? (
+              <p className="mt-2 text-sm text-[var(--hut-muted)]">
+                {vybranaKartaAplikovana.jmeno} není v žádné útočné formaci při zvolených filtrech — zkus jinou pozici
+                (útok vyžaduje LK/C/PK), uvolnit OVR nebo zrušit výběr hráče.
+              </p>
+            ) : null}
             {utokZobrazenoPoPrekryvu.length > 0 &&
             utokZobrazenoPoVylouceni.length === 0 &&
             maVybranouUtok &&
@@ -1899,6 +2018,14 @@ export function OptimalizatorFormaci() {
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
                 Žádná obranná dvojice se nevejde do rozpočtu do{" "}
                 {formatovatPlatVMil(maxRozpocetAplikovany)}.
+              </p>
+            ) : null}
+            {obranaZobrazenoPoRozpoctu.length > 0 &&
+            obranaZobrazenoPoHracovi.length === 0 &&
+            hracKartaIdAplikovany &&
+            vybranaKartaAplikovana ? (
+              <p className="mt-2 text-sm text-[var(--hut-muted)]">
+                {vybranaKartaAplikovana.jmeno} není v žádné obranné dvojici — zkontroluj pozici (LO/PO) nebo filtry.
               </p>
             ) : null}
             {obranaZobrazenoPoPrekryvu.length > 0 &&
@@ -1964,6 +2091,14 @@ export function OptimalizatorFormaci() {
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
                 Žádná brankářská dvojice se nevejde do rozpočtu do{" "}
                 {formatovatPlatVMil(maxRozpocetAplikovany)}.
+              </p>
+            ) : null}
+            {golmaniZobrazenoPoRozpoctu.length > 0 &&
+            golmaniZobrazenoPoHracovi.length === 0 &&
+            hracKartaIdAplikovany &&
+            vybranaKartaAplikovana ? (
+              <p className="mt-2 text-sm text-[var(--hut-muted)]">
+                {vybranaKartaAplikovana.jmeno} není v žádné brankářské dvojici — pozice musí být G.
               </p>
             ) : null}
             {golmaniZobrazenoPoPrekryvu.length > 0 &&
