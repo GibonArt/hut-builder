@@ -327,12 +327,17 @@ function maDvojiceSpolecnehoHrace(
   return zakazaneId.has(v.a.id) || zakazaneId.has(v.b.id);
 }
 
-const MAX_VYBER_UTOK_NA_TYP = 4;
-const MAX_VYBER_OBRANA_NA_TYP = 3;
-const MAX_VYBER_GOLMAN_NA_TYP = 1;
+/** Max. připnutých řádků na celou soupisku (všechny typy bonusu dohromady). */
+const MAX_VYBER_UTOK = 4;
+const MAX_VYBER_OBRANA = 3;
+const MAX_VYBER_GOLMAN = 1;
 
 function prazdneVyberyPodleTypu(): Record<TypBonusuKombinace, string[]> {
   return { PLAT: [], CLK: [], BS: [] };
+}
+
+function pocetPripnutych(vybery: Record<TypBonusuKombinace, string[]>): number {
+  return TYPY_BONUSU_KOMBINACE.reduce((n, t) => n + vybery[t].length, 0);
 }
 
 function zakazaneIdZUtokKlicu(
@@ -608,10 +613,10 @@ function UtocnaFormaceObsah({
       {zobrazitTlacitkoVyber ? (
         <div className="mt-3">
           <button type="button" className={btnVyberFiltrClass} onClick={onVybratProFiltrHrace}>
-            Vybrat — skrýt ostatní sestavy se stejným hráčem
+            Přidat do soupisky
           </button>
           <p className="mt-1.5 text-[11px] leading-snug text-[var(--hut-muted)]">
-            Z výsledků zmizí všechny útočné formace, kde je LK, C nebo PK kterýkoli z těchto tří hráčů.
+            Připne řádek do soupisky a skryje ostatní útočné formace se stejným hráčem (LK, C nebo PK).
           </p>
         </div>
       ) : null}
@@ -692,10 +697,10 @@ function DvojiceFormaceObsah({
       {zobrazitTlacitkoVyber ? (
         <div className="mt-3">
           <button type="button" className={btnVyberFiltrClass} onClick={onVybratProFiltrHrace}>
-            Vybrat — skrýt ostatní sestavy se stejným hráčem
+            Přidat do soupisky
           </button>
           <p className="mt-1.5 text-[11px] leading-snug text-[var(--hut-muted)]">
-            Z výsledků zmizí všechny {filtrHint}, kde je kterýkoli z těchto dvou hráčů.
+            Připne řádek do soupisky a skryje ostatní {filtrHint} se stejným hráčem.
           </p>
         </div>
       ) : null}
@@ -1102,6 +1107,58 @@ export function OptimalizatorFormaci() {
     [golmaniZobrazenoPoVylouceni, typRazeniVysledku, smerRazeniHodnotyBonusu],
   );
 
+  const soupiska = useMemo(() => {
+    let platUtok = 0;
+    let platObrana = 0;
+    let platGolmani = 0;
+    const hracIds = new Set<string>();
+
+    for (const typ of TYPY_BONUSU_KOMBINACE) {
+      for (const klic of vyberyUtok[typ]) {
+        const v = mapaUtok.get(klic);
+        if (!v) continue;
+        platUtok += soucetPlatuKaret([v.lk, v.c, v.pk]);
+        hracIds.add(v.lk.id);
+        hracIds.add(v.c.id);
+        hracIds.add(v.pk.id);
+      }
+      for (const klic of vyberyObrana[typ]) {
+        const v = mapaObrana.get(klic);
+        if (!v) continue;
+        platObrana += soucetPlatuKaret([v.a, v.b]);
+        hracIds.add(v.a.id);
+        hracIds.add(v.b.id);
+      }
+      for (const klic of vyberyGolmani[typ]) {
+        const v = mapaGolmani.get(klic);
+        if (!v) continue;
+        platGolmani += soucetPlatuKaret([v.a, v.b]);
+        hracIds.add(v.a.id);
+        hracIds.add(v.b.id);
+      }
+    }
+
+    const pocetUtok = pocetPripnutych(vyberyUtok);
+    const pocetObrana = pocetPripnutych(vyberyObrana);
+    const pocetGolmani = pocetPripnutych(vyberyGolmani);
+    let pocetRadku = 0;
+    for (const typ of TYPY_BONUSU_KOMBINACE) {
+      pocetRadku += vyberyUtok[typ].length + vyberyObrana[typ].length + vyberyGolmani[typ].length;
+    }
+
+    return {
+      pocetUtok,
+      pocetObrana,
+      pocetGolmani,
+      platUtok,
+      platObrana,
+      platGolmani,
+      platCelkem: platUtok + platObrana + platGolmani,
+      unikatniHracu: hracIds.size,
+      pocetRadku,
+    };
+  }, [vyberyUtok, vyberyObrana, vyberyGolmani, mapaUtok, mapaObrana, mapaGolmani]);
+
   useEffect(() => {
     const valid = new Set(vysledkyUtok.map((x) => klicUtocnaFormace(x)));
     setVyberyUtok((prev) => {
@@ -1146,8 +1203,8 @@ export function OptimalizatorFormaci() {
     const typ = v.kombinace.bonusTyp;
     setVyberyUtok((prev) => {
       if (prev[typ].includes(klic)) return prev;
-      if (prev[typ].length >= MAX_VYBER_UTOK_NA_TYP) {
-        toast.error(`Útok: nejvýše ${MAX_VYBER_UTOK_NA_TYP} sestavy s bonusem ${typ}.`);
+      if (pocetPripnutych(prev) >= MAX_VYBER_UTOK) {
+        toast.error(`Soupiska — útok: nejvýše ${MAX_VYBER_UTOK} připnuté sestavy celkem.`);
         return prev;
       }
       return { ...prev, [typ]: [...prev[typ], klic] };
@@ -1167,8 +1224,8 @@ export function OptimalizatorFormaci() {
       ) {
         return prev;
       }
-      if (prev[typ].length >= MAX_VYBER_OBRANA_NA_TYP) {
-        toast.error(`Obrana: nejvýše ${MAX_VYBER_OBRANA_NA_TYP} dvojice s bonusem ${typ}.`);
+      if (pocetPripnutych(prev) >= MAX_VYBER_OBRANA) {
+        toast.error(`Soupiska — obrana: nejvýše ${MAX_VYBER_OBRANA} připnuté dvojice celkem.`);
         return prev;
       }
       return { ...prev, [typ]: [...prev[typ], klic] };
@@ -1180,8 +1237,8 @@ export function OptimalizatorFormaci() {
     const typ = v.kombinace.bonusTyp;
     setVyberyGolmani((prev) => {
       if (prev[typ].includes(klic)) return prev;
-      if (prev[typ].length >= MAX_VYBER_GOLMAN_NA_TYP) {
-        toast.error(`Brankáři: nejvýše ${MAX_VYBER_GOLMAN_NA_TYP} dvojice s bonusem ${typ}.`);
+      if (pocetPripnutych(prev) >= MAX_VYBER_GOLMAN) {
+        toast.error(`Soupiska — brankáři: nejvýše ${MAX_VYBER_GOLMAN} připnutá dvojice.`);
         return prev;
       }
       return { ...prev, [typ]: [...prev[typ], klic] };
@@ -1267,8 +1324,9 @@ export function OptimalizatorFormaci() {
           Zobrazí se jen plné shody — žádné částečné trojice ani dvojice. Můžeš vybrat konkrétní kartu z inventáře
           (jen formace s tímto hráčem) nebo omezit sestavy maximálním součtem platů (rozpočet formace). Výsledky se výchozí řadí podle součtu OVR
           hráčů ve sestavě (útok LK + C + PK, obrana a brankáři součet dvojice); lze přepnout na řazení podle čísla
-          bonusu u rovnítka. U každého výsledku můžeš připnout sestavy podle typu bonusu (PLAT / CLK / BS): útok max.
-          4 na typ, obrana max. 3 na typ, brankáři max. 1 na typ. Ze seznamu se pak skryjí všechny varianty, které
+          bonusu u rovnítka. Připnutím sestav skládáš soupisku (útok max. {MAX_VYBER_UTOK}, obrana max.{" "}
+          {MAX_VYBER_OBRANA}, brankáři max. {MAX_VYBER_GOLMAN}) — v panelu připnutých se sčítá plat všech řádků. Ze
+          seznamu se pak skryjí všechny varianty, které
           sdílejí alespoň jednoho hráče s některou z připnutých sestav v dané sekci (sjednocení množin hráčů). Karty v
           inventáři označené jako{" "}
           <span className="text-zinc-300">Prodáno</span> se do výpočtu nezahrnují.
@@ -1690,23 +1748,25 @@ export function OptimalizatorFormaci() {
           {filtryPoHledani && !nacitani && zobrazitPripnutouSekci ? (
             <section
               className="space-y-4 rounded-xl border border-[var(--hut-lime)]/40 bg-[var(--hut-surface-raised)]/90 p-4 shadow-inner shadow-black/15 sm:p-5"
-              aria-label="Vybrané sestavy pro filtrování podle hráčů"
+              aria-label="Soupiska — připnuté sestavy"
             >
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
-                  Připnuté sestavy (filtr hráčů)
+                  Soupiska (připnuté sestavy)
                 </h3>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--hut-muted)]">
-                  Ze seznamů níže jsou skryté varianty, které sdílejí alespoň jednoho hráče s některou z
-                  připnutých sestav v dané sekci (sjednocení hráčů ze všech připnutí). Limity: útok 4 / typ
-                  bonusu, obrana 3 / typ, brankáři 1 / typ.
+                  Skládáš kompletní soupisku: útok max. {MAX_VYBER_UTOK} řádků, obrana max. {MAX_VYBER_OBRANA},
+                  brankáři max. {MAX_VYBER_GOLMAN}. Ze seznamů níže jsou skryté varianty se stejným hráčem v dané
+                  sekci. Plat se sčítá po řádcích (stejný hráč ve více řádcích se počítá vícekrát).
                 </p>
               </div>
 
               {maVybranouUtok && zobrazitSekciUtok ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="text-xs font-semibold text-white">Útočná formace (LK · C · PK)</p>
+                    <p className="text-xs font-semibold text-white">
+                      Útočná formace (LK · C · PK) — {soupiska.pocetUtok}/{MAX_VYBER_UTOK}
+                    </p>
                     <button
                       type="button"
                       className={btnZrusitVyberClass}
@@ -1719,7 +1779,8 @@ export function OptimalizatorFormaci() {
                     vyberyUtok[typ].length === 0 ? null : (
                       <div key={typ} className="space-y-2">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
-                          Bonus {typ} ({vyberyUtok[typ].length}/{MAX_VYBER_UTOK_NA_TYP})
+                          Bonus {typ}
+                          {vyberyUtok[typ].length > 1 ? ` · ${vyberyUtok[typ].length} řádky` : null}
                         </p>
                         {vyberyUtok[typ].map((klic) => {
                           const v = mapaUtok.get(klic);
@@ -1772,7 +1833,9 @@ export function OptimalizatorFormaci() {
               {maVybranouObranu && zobrazitSekciObranu ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="text-xs font-semibold text-white">Obranná dvojice (LO · PO)</p>
+                    <p className="text-xs font-semibold text-white">
+                      Obranná dvojice (LO · PO) — {soupiska.pocetObrana}/{MAX_VYBER_OBRANA}
+                    </p>
                     <button
                       type="button"
                       className={btnZrusitVyberClass}
@@ -1785,7 +1848,8 @@ export function OptimalizatorFormaci() {
                     vyberyObrana[typ].length === 0 ? null : (
                       <div key={typ} className="space-y-2">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
-                          Bonus {typ} ({vyberyObrana[typ].length}/{MAX_VYBER_OBRANA_NA_TYP})
+                          Bonus {typ}
+                          {vyberyObrana[typ].length > 1 ? ` · ${vyberyObrana[typ].length} řádky` : null}
                         </p>
                         {vyberyObrana[typ].map((klic) => {
                           const v = mapaObrana.get(klic);
@@ -1841,7 +1905,9 @@ export function OptimalizatorFormaci() {
               {maVybraneGolmany && zobrazitSekciGolmany ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="text-xs font-semibold text-white">Brankářská dvojice (G · G)</p>
+                    <p className="text-xs font-semibold text-white">
+                      Brankářská dvojice (G · G) — {soupiska.pocetGolmani}/{MAX_VYBER_GOLMAN}
+                    </p>
                     <button
                       type="button"
                       className={btnZrusitVyberClass}
@@ -1854,7 +1920,7 @@ export function OptimalizatorFormaci() {
                     vyberyGolmani[typ].length === 0 ? null : (
                       <div key={typ} className="space-y-2">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
-                          Bonus {typ} ({vyberyGolmani[typ].length}/{MAX_VYBER_GOLMAN_NA_TYP})
+                          Bonus {typ}
                         </p>
                         {vyberyGolmani[typ].map((klic) => {
                           const v = mapaGolmani.get(klic);
@@ -1904,6 +1970,49 @@ export function OptimalizatorFormaci() {
                       </div>
                     ),
                   )}
+                </div>
+              ) : null}
+
+              {soupiska.pocetRadku > 0 ? (
+                <div className="mt-2 flex flex-col gap-3 border-t border-[var(--hut-border)] pt-4 sm:flex-row sm:items-end sm:justify-between">
+                  <p className="text-xs leading-relaxed text-[var(--hut-muted)]">
+                    Řádky: útok {soupiska.pocetUtok}/{MAX_VYBER_UTOK}, obrana {soupiska.pocetObrana}/
+                    {MAX_VYBER_OBRANA}, brankáři {soupiska.pocetGolmani}/{MAX_VYBER_GOLMAN}
+                    {soupiska.pocetRadku > soupiska.unikatniHracu ? (
+                      <>
+                        {" "}
+                        · <span className="text-zinc-300">{soupiska.unikatniHracu} unikátních hráčů</span> (plat
+                        řádků může být vyšší)
+                      </>
+                    ) : null}
+                    {maxRozpocetAplikovany !== null ? (
+                      <>
+                        {" "}
+                        · limit filtru{" "}
+                        <span className="tabular-nums text-zinc-300">
+                          {formatovatPlatVMil(maxRozpocetAplikovany)}
+                        </span>
+                        {soupiska.platCelkem > maxRozpocetAplikovany ? (
+                          <span className="text-amber-200/95"> — nad rozpočtem</span>
+                        ) : (
+                          <span className="text-[var(--hut-lime)]"> — vejde se</span>
+                        )}
+                      </>
+                    ) : null}
+                  </p>
+                  <div className="shrink-0 text-left sm:text-right">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+                      Plat soupisky celkem
+                    </p>
+                    <p className="text-xl font-semibold tabular-nums text-white">
+                      {formatovatPlatVMil(soupiska.platCelkem)}
+                    </p>
+                    <p className="mt-0.5 text-[11px] tabular-nums text-[var(--hut-muted)]">
+                      útok {formatovatPlatVMil(soupiska.platUtok)} · obrana{" "}
+                      {formatovatPlatVMil(soupiska.platObrana)} · brankáři{" "}
+                      {formatovatPlatVMil(soupiska.platGolmani)}
+                    </p>
+                  </div>
                 </div>
               ) : null}
             </section>
