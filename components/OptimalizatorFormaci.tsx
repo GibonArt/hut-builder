@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  startTransition,
+} from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
@@ -1431,6 +1438,25 @@ export function OptimalizatorFormaci() {
   const hledatDisabled =
     nacitani || !!chybaKarty || !!chybaKomb || !karty.some((k) => !k.prodano);
 
+  const maNastaveneFiltryFormulare =
+    minOvrStr.trim() !== "" ||
+    maxOvrStr.trim() !== "" ||
+    maxRozpocetMilStr.trim() !== "" ||
+    hracKartaId !== "" ||
+    typBonusuFiltr !== "vse" ||
+    kridlaVzajemna ||
+    loPoVzajemne;
+
+  const vymazatFiltryFormulare = useCallback(() => {
+    setMinOvrStr("");
+    setMaxOvrStr("");
+    setMaxRozpocetMilStr("");
+    setHracKartaId("");
+    setTypBonusuFiltr("vse");
+    setKridlaVzajemna(false);
+    setLoPoVzajemne(false);
+  }, []);
+
   const zobrazitSekciUtok = sekceQuickFiltr === "vse" || sekceQuickFiltr === "utok";
   const zobrazitSekciObranu = sekceQuickFiltr === "vse" || sekceQuickFiltr === "obrana";
   const zobrazitSekciGolmany = sekceQuickFiltr === "vse" || sekceQuickFiltr === "golmani";
@@ -1650,6 +1676,16 @@ export function OptimalizatorFormaci() {
               >
                 Hledat
               </button>
+              {maNastaveneFiltryFormulare ? (
+                <button
+                  type="button"
+                  className="touch-manipulation rounded-full border border-[var(--hut-border)] bg-transparent px-4 py-2.5 text-sm font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-45 sm:py-2"
+                  disabled={nacitani}
+                  onClick={vymazatFiltryFormulare}
+                >
+                  Vymazat filtry
+                </button>
+              ) : null}
               {filtryPoHledani ? (
                 <button
                   type="button"

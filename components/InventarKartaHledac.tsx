@@ -84,6 +84,10 @@ export function InventarKartaHledac({ id, karty, value, onChange, disabled }: Pr
     setOtevreno(false);
   };
 
+  const zrusitVyber = () => {
+    vyber("");
+  };
+
   return (
     <div ref={rootRef} className="relative w-full">
       <input
@@ -116,8 +120,20 @@ export function InventarKartaHledac({ id, karty, value, onChange, disabled }: Pr
         aria-autocomplete="list"
         aria-expanded={zobrazPanel}
         aria-controls={zobrazPanel ? listId : undefined}
-        className={inputClass}
+        className={[inputClass, value && !disabled ? "pr-10" : ""].filter(Boolean).join(" ")}
       />
+
+      {value && !disabled ? (
+        <button
+          type="button"
+          title="Odstranit výběr hráče"
+          aria-label="Odstranit výběr hráče"
+          onClick={zrusitVyber}
+          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 touch-manipulation items-center justify-center rounded-md text-lg leading-none text-[var(--hut-muted)] transition-colors hover:bg-white/10 hover:text-white"
+        >
+          ×
+        </button>
+      ) : null}
 
       {zobrazPanel ? (
         <div
