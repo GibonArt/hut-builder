@@ -357,11 +357,19 @@ export function HutShell({
           </p>
           <p className="mt-2 text-[11px] leading-snug">
             <Link
+              href="/navod"
+              onClick={zavritMobilniMenu}
+              className="text-[var(--hut-muted)] underline decoration-zinc-600 underline-offset-2 transition-colors hover:text-zinc-300"
+            >
+              Návod
+            </Link>
+            {" · "}
+            <Link
               href="/o-aplikaci"
               onClick={zavritMobilniMenu}
               className="text-[var(--hut-muted)] underline decoration-zinc-600 underline-offset-2 transition-colors hover:text-zinc-300"
             >
-              O aplikaci a datech
+              O aplikaci
             </Link>
           </p>
         </div>

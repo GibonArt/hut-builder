@@ -26,6 +26,39 @@ export default function OAplikaciPage() {
             <strong className="font-medium text-zinc-200">Supabase</strong> pod tvým účtem.
             Slouží ke sdílení dat v rámci komunity (např. nápovědy při zadávání karet).
           </p>
+          <p className="rounded-lg border border-[var(--hut-lime)]/25 bg-[var(--hut-lime)]/[0.06] px-4 py-3 text-sm">
+            <Link href="/navod" className="font-medium text-[var(--hut-lime)] underline underline-offset-2">
+              Návod k použití
+            </Link>{" "}
+            — kompletní how-to: inventář, optimalizátor, soupiska a časté otázky.
+          </p>
+          <section className="rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-4">
+            <h2 className="text-sm font-semibold text-zinc-200">Co aplikace umí</h2>
+            <ul className="mt-3 list-inside list-disc space-y-2 text-sm">
+              <li>
+                <strong className="font-medium text-zinc-300">Můj inventář</strong> — karty,
+                nápověda z EA a komunity, hromadný import z katalogu, označení prodaných karet.
+              </li>
+              <li>
+                <strong className="font-medium text-zinc-300">Moje karty</strong> — přehled,
+                úpravy a mazání.
+              </li>
+              <li>
+                <strong className="font-medium text-zinc-300">Optimalizátor formací</strong> —
+                hledání útočných, obranných a brankářských sestav podle bonusů (PLAT, CLK, BS),
+                filtrů OVR, rozpočtu a konkrétního hráče; skládání soupisky (4+3+1) s ukládáním v
+                prohlížeči.
+              </li>
+              <li>
+                <strong className="font-medium text-zinc-300">Nastavení bonusů</strong> — pravidla
+                kombinací (pro správce komunity).
+              </li>
+            </ul>
+            <p className="mt-3 text-xs text-[var(--hut-muted)]/90">
+              Uložená soupiska v optimalizátoru zůstává jen v tomto prohlížeči (localStorage), ne na
+              serveru.
+            </p>
+          </section>
           <p>
             Nepředáváme hesla třetím stranám — přihlášení zajišťuje Supabase Auth. Pokud máš
             otázky k mazání účtu nebo exportu dat, kontaktuj správce projektu.
