@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, startTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
@@ -40,6 +40,16 @@ import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { InventarKartaHledac } from "@/components/InventarKartaHledac";
 import { TymLogo } from "@/components/TymLogo";
+import {
+  SOUPISKA_POZADOVANE,
+  jeKompletniSoupiska,
+  nactiUlozenouSoupisku,
+  obnovVyberyZNactenych,
+  pocetRadkuSoupisky,
+  smazUlozenouSoupisku,
+  ulozSoupiskuOpt,
+  type UlozenaSoupiskaOptV1,
+} from "@/lib/optimalizatorSoupiskaStorage";
 
 const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
 
@@ -780,6 +790,12 @@ export function OptimalizatorFormaci() {
   const [vyberyGolmani, setVyberyGolmani] = useState<Record<TypBonusuKombinace, string[]>>(
     () => prazdneVyberyPodleTypu(),
   );
+  const [ulozenaSoupiskaMeta, setUlozenaSoupiskaMeta] = useState<UlozenaSoupiskaOptV1 | null>(
+    null,
+  );
+  const preskocitAutoUlozeniRef = useRef(false);
+  /** Po prvním Hledat v této relaci načteme uloženou soupisku z prohlížeče. */
+  const obnovenoPoHledatRef = useRef(false);
 
   const minOvr = useMemo(() => parseOvrVolitelne(minOvrStr), [minOvrStr]);
   const maxOvr = useMemo(() => parseOvrVolitelne(maxOvrStr), [maxOvrStr]);
@@ -817,7 +833,10 @@ export function OptimalizatorFormaci() {
       setKridlaVzajemna(false);
       setLoPoVzajemne(false);
       setHracKartaId("");
+      setUlozenaSoupiskaMeta(null);
+      return;
     }
+    setUlozenaSoupiskaMeta(nactiUlozenouSoupisku(user.id));
   }, [user?.id]);
 
   const kartyProVyberHrace = useMemo(() => {
@@ -1159,6 +1178,95 @@ export function OptimalizatorFormaci() {
     };
   }, [vyberyUtok, vyberyObrana, vyberyGolmani, mapaUtok, mapaObrana, mapaGolmani]);
 
+  const kompletniSoupiska = jeKompletniSoupiska({
+    utok: soupiska.pocetUtok,
+    obrana: soupiska.pocetObrana,
+    golmani: soupiska.pocetGolmani,
+  });
+
+  const ulozitKompletniSoupisku = useCallback(() => {
+    if (!user?.id) return;
+    if (!kompletniSoupiska) {
+      toast.error(
+        `Kompletní soupiska = ${SOUPISKA_POZADOVANE.utok} útok + ${SOUPISKA_POZADOVANE.obrana} obrana + ${SOUPISKA_POZADOVANE.golmani} brankář.`,
+      );
+      return;
+    }
+    ulozSoupiskuOpt(user.id, {
+      utok: vyberyUtok,
+      obrana: vyberyObrana,
+      golmani: vyberyGolmani,
+      platCelkem: soupiska.platCelkem,
+    });
+    setUlozenaSoupiskaMeta(nactiUlozenouSoupisku(user.id));
+    toast.success("Kompletní soupiska uložena v tomto prohlížeči.");
+  }, [
+    user?.id,
+    kompletniSoupiska,
+    vyberyUtok,
+    vyberyObrana,
+    vyberyGolmani,
+    soupiska.platCelkem,
+  ]);
+
+  const aplikovatUlozenouSoupisku = useCallback(
+    (ulozena: UlozenaSoupiskaOptV1, options?: { toast?: boolean }) => {
+      const validUtok = new Set(vysledkyUtok.map((x) => klicUtocnaFormace(x)));
+      const validObrana = new Set(vysledkyObrana.map((x) => klicRadkuDvojice(x)));
+      const validGolmani = new Set(vysledkyGolmani.map((x) => klicRadkuDvojice(x)));
+
+      const u = obnovVyberyZNactenych(ulozena.utok, validUtok);
+      const o = obnovVyberyZNactenych(ulozena.obrana, validObrana);
+      const g = obnovVyberyZNactenych(ulozena.golmani, validGolmani);
+
+      preskocitAutoUlozeniRef.current = true;
+      setVyberyUtok(u.vybery);
+      setVyberyObrana(o.vybery);
+      setVyberyGolmani(g.vybery);
+
+      if (options?.toast === false) return;
+
+      const preskoceno = u.preskoceno + o.preskoceno + g.preskoceno;
+      const nUtok = pocetPripnutych(u.vybery);
+      const nObr = pocetPripnutych(o.vybery);
+      const nG = pocetPripnutych(g.vybery);
+
+      if (preskoceno > 0) {
+        toast.warning(
+          `${preskoceno} řádků už v aktuálních výsledcích není — načteno útok ${nUtok}, obrana ${nObr}, brankáři ${nG}.`,
+        );
+      } else {
+        toast.success("Uložená soupiska načtena.");
+      }
+    },
+    [vysledkyUtok, vysledkyObrana, vysledkyGolmani],
+  );
+
+  const nacistUlozenouSoupisku = useCallback(() => {
+    if (!user?.id) return;
+    if (!filtryPoHledani) {
+      toast.error("Nejdřív spusť Hledat — načtení soupisky potřebuje aktuální výsledky.");
+      return;
+    }
+    const ulozena = nactiUlozenouSoupisku(user.id);
+    if (!ulozena) {
+      toast.error("Žádná uložená soupiska.");
+      return;
+    }
+    aplikovatUlozenouSoupisku(ulozena, { toast: true });
+  }, [user?.id, filtryPoHledani, aplikovatUlozenouSoupisku]);
+
+  const smazatUlozenouSoupisku = useCallback(() => {
+    if (!user?.id) return;
+    smazUlozenouSoupisku(user.id);
+    setUlozenaSoupiskaMeta(null);
+    preskocitAutoUlozeniRef.current = true;
+    setVyberyUtok(prazdneVyberyPodleTypu());
+    setVyberyObrana(prazdneVyberyPodleTypu());
+    setVyberyGolmani(prazdneVyberyPodleTypu());
+    toast.success("Uložená soupiska smazána.");
+  }, [user?.id]);
+
   useEffect(() => {
     const valid = new Set(vysledkyUtok.map((x) => klicUtocnaFormace(x)));
     setVyberyUtok((prev) => {
@@ -1197,6 +1305,41 @@ export function OptimalizatorFormaci() {
       return changed ? next : prev;
     });
   }, [vysledkyGolmani]);
+
+  useEffect(() => {
+    if (!user?.id || !filtryPoHledani || obnovenoPoHledatRef.current) return;
+    if (vysledkyUtok.length === 0 && vysledkyObrana.length === 0 && vysledkyGolmani.length === 0) {
+      return;
+    }
+    const ulozena = nactiUlozenouSoupisku(user.id);
+    obnovenoPoHledatRef.current = true;
+    if (!ulozena || pocetRadkuSoupisky(ulozena.utok) + pocetRadkuSoupisky(ulozena.obrana) + pocetRadkuSoupisky(ulozena.golmani) === 0) {
+      return;
+    }
+    aplikovatUlozenouSoupisku(ulozena, { toast: false });
+  }, [
+    user?.id,
+    filtryPoHledani,
+    vysledkyUtok,
+    vysledkyObrana,
+    vysledkyGolmani,
+    aplikovatUlozenouSoupisku,
+  ]);
+
+  useEffect(() => {
+    if (!user?.id || !filtryPoHledani) return;
+    if (preskocitAutoUlozeniRef.current) {
+      preskocitAutoUlozeniRef.current = false;
+      return;
+    }
+    ulozSoupiskuOpt(user.id, {
+      utok: vyberyUtok,
+      obrana: vyberyObrana,
+      golmani: vyberyGolmani,
+      platCelkem: soupiska.platCelkem,
+    });
+    setUlozenaSoupiskaMeta(nactiUlozenouSoupisku(user.id));
+  }, [user?.id, filtryPoHledani, vyberyUtok, vyberyObrana, vyberyGolmani, soupiska.platCelkem]);
 
   const pridatUtok = (v: UtocnaFormaceVysledek) => {
     const klic = klicUtocnaFormace(v);
@@ -1517,6 +1660,7 @@ export function OptimalizatorFormaci() {
                       setFiltrPrekryvBonusu("vse");
                       setSmerRazeniHodnotyBonusu("sestupne");
                       setFiltryPoHledani(null);
+                      obnovenoPoHledatRef.current = false;
                     });
                   }}
                 >
@@ -1755,10 +1899,20 @@ export function OptimalizatorFormaci() {
                   Soupiska (připnuté sestavy)
                 </h3>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--hut-muted)]">
-                  Skládáš kompletní soupisku: útok max. {MAX_VYBER_UTOK} řádků, obrana max. {MAX_VYBER_OBRANA},
-                  brankáři max. {MAX_VYBER_GOLMAN}. Ze seznamů níže jsou skryté varianty se stejným hráčem v dané
-                  sekci. Plat se sčítá po řádcích (stejný hráč ve více řádcích se počítá vícekrát).
+                  Skládáš soupisku: útok {SOUPISKA_POZADOVANE.utok}, obrana {SOUPISKA_POZADOVANE.obrana}, brankáři{" "}
+                  {SOUPISKA_POZADOVANE.golmani} řádků. Připnuté řádky se automaticky ukládají v tomto prohlížeči a po
+                  Hledat se obnoví. Plat se sčítá po řádcích.
                 </p>
+                {ulozenaSoupiskaMeta ? (
+                  <p className="mt-2 text-xs text-[var(--hut-lime)]/95">
+                    Uloženo{" "}
+                    {new Date(ulozenaSoupiskaMeta.ulozeno).toLocaleString("cs-CZ", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}{" "}
+                    · plat {formatovatPlatVMil(ulozenaSoupiskaMeta.platCelkem)}
+                  </p>
+                ) : null}
               </div>
 
               {maVybranouUtok && zobrazitSekciUtok ? (
@@ -1970,6 +2124,67 @@ export function OptimalizatorFormaci() {
                       </div>
                     ),
                   )}
+                </div>
+              ) : null}
+
+              {filtryPoHledani ? (
+                <div className="flex flex-wrap items-center gap-2 border-t border-[var(--hut-border)] pt-4">
+                  <button
+                    type="button"
+                    className={btnVyberFiltrClass}
+                    disabled={!kompletniSoupiska}
+                    title={
+                      kompletniSoupiska
+                        ? "Uložit 4+3+1 do prohlížeče"
+                        : `Potřeba ${SOUPISKA_POZADOVANE.utok} útok + ${SOUPISKA_POZADOVANE.obrana} obrana + ${SOUPISKA_POZADOVANE.golmani} brankář`
+                    }
+                    onClick={ulozitKompletniSoupisku}
+                  >
+                    Uložit kompletní soupisku
+                  </button>
+                  <button
+                    type="button"
+                    className={btnZrusitVyberClass}
+                    disabled={!ulozenaSoupiskaMeta}
+                    onClick={nacistUlozenouSoupisku}
+                  >
+                    Obnovit z uložené
+                  </button>
+                  {ulozenaSoupiskaMeta ? (
+                    <button
+                      type="button"
+                      className={btnZrusitVyberClass}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "Smazat uloženou soupisku z tohoto prohlížeče?",
+                          )
+                        ) {
+                          smazatUlozenouSoupisku();
+                        }
+                      }}
+                    >
+                      Smazat uloženou
+                    </button>
+                  ) : null}
+                  {!kompletniSoupiska && soupiska.pocetRadku > 0 ? (
+                    <span className="text-[11px] text-[var(--hut-muted)]">
+                      K uložení chybí{" "}
+                      {[
+                        soupiska.pocetUtok < SOUPISKA_POZADOVANE.utok
+                          ? `${SOUPISKA_POZADOVANE.utok - soupiska.pocetUtok} útok`
+                          : null,
+                        soupiska.pocetObrana < SOUPISKA_POZADOVANE.obrana
+                          ? `${SOUPISKA_POZADOVANE.obrana - soupiska.pocetObrana} obrana`
+                          : null,
+                        soupiska.pocetGolmani < SOUPISKA_POZADOVANE.golmani
+                          ? `${SOUPISKA_POZADOVANE.golmani - soupiska.pocetGolmani} brankář`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
 
