@@ -27,6 +27,7 @@ import {
 } from "@/lib/bonusKombinaceDb";
 import {
   filtrujKartyPodleOvr,
+  parseOvrVolitelne,
   prirazeniSymboluDvojice,
   prirazeniSymboluUtok,
   spoctiGolmanskeDvojice,
@@ -443,14 +444,6 @@ function filtrujDvojicePodleHrace(
 
 function popisekKartyProVyber(k: HutCard): string {
   return `${k.jmeno} · ${k.ovr} OVR · ${HUT_POZICE_ZKRATKA[k.pozice]} · ${k.tym}`;
-}
-
-function parseOvrVolitelne(raw: string): number | null {
-  const t = raw.trim();
-  if (!t) return null;
-  const n = Number.parseInt(t, 10);
-  if (!Number.isFinite(n) || n < 0 || n > 99) return null;
-  return n;
 }
 
 function ParamIkona({

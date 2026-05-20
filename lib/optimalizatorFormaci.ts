@@ -33,6 +33,15 @@ export function kartaSplnujeParametr(
   }
 }
 
+/** Prázdný řetězec = bez limitu; jinak celé číslo 0–99. */
+export function parseOvrVolitelne(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number.parseInt(t, 10);
+  if (!Number.isFinite(n) || n < 0 || n > 99) return null;
+  return n;
+}
+
 export function filtrujKartyPodleOvr(
   karty: readonly HutCard[],
   minOvr: number | null,

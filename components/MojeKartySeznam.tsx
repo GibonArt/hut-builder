@@ -18,11 +18,18 @@ import { HutShell } from "@/components/HutShell";
 import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
 import { seraditKarty, type RazeniKaret } from "@/lib/hutRazeniKaret";
+import {
+  filtrujKartyPodleOvr,
+  parseOvrVolitelne,
+} from "@/lib/optimalizatorFormaci";
 import { useRazeniKaret } from "@/lib/useRazeniKaret";
 import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 
 type FiltrPozice = Pozice | "vse";
 type FiltrProdano = "vse" | "neprodane" | "prodane";
+
+const ovrInputClass =
+  "box-border min-h-9 w-[4.25rem] rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-2 py-1.5 text-sm tabular-nums text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:min-h-8";
 
 function textPocetKaret(n: number): string {
   if (n === 1) return "1 karta";
@@ -40,6 +47,8 @@ export function MojeKartySeznam() {
   const [chyba, setChyba] = useState<string | null>(null);
   const [filtrPozice, setFiltrPozice] = useState<FiltrPozice>("vse");
   const [filtrProdano, setFiltrProdano] = useState<FiltrProdano>("vse");
+  const [minOvrStr, setMinOvrStr] = useState("");
+  const [maxOvrStr, setMaxOvrStr] = useState("");
   const [razeniKaret, nastavRazeniKaret] = useRazeniKaret();
   const [mazuId, setMazuId] = useState<string | null>(null);
 
@@ -79,6 +88,16 @@ export function MojeKartySeznam() {
     };
   }, [user?.id, supabase]);
 
+  const minOvr = useMemo(() => parseOvrVolitelne(minOvrStr), [minOvrStr]);
+  const maxOvr = useMemo(() => parseOvrVolitelne(maxOvrStr), [maxOvrStr]);
+  const chybaOvrRozsah =
+    minOvr !== null && maxOvr !== null && minOvr > maxOvr
+      ? "Minimální OVR nesmí být vyšší než maximální."
+      : null;
+  const neplatnyVstupOvr =
+    (minOvrStr.trim() !== "" && minOvr === null) ||
+    (maxOvrStr.trim() !== "" && maxOvr === null);
+
   const filtrovane = useMemo(() => {
     let rows = karty;
     if (filtrPozice !== "vse") {
@@ -89,8 +108,9 @@ export function MojeKartySeznam() {
     } else if (filtrProdano === "prodane") {
       rows = rows.filter((k) => k.prodano === true);
     }
+    rows = filtrujKartyPodleOvr(rows, minOvr, maxOvr);
     return rows;
-  }, [karty, filtrPozice, filtrProdano]);
+  }, [karty, filtrPozice, filtrProdano, minOvr, maxOvr]);
 
   const filtrovaneSerazene = useMemo(
     () => seraditKarty(filtrovane, razeniKaret),
@@ -167,8 +187,7 @@ export function MojeKartySeznam() {
       <div className="flex min-h-full w-full flex-col">
         <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Moje karty</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
-          Všechny uložené karty. Filtr podle pozice, prodaných (aktivní) karet a řazení podle OVR nebo pořadí
-          přidání.
+          Všechny uložené karty. Filtr podle OVR, pozice a prodaných karet; řazení podle OVR nebo pořadí přidání.
         </p>
 
         {user ? (
@@ -255,6 +274,44 @@ export function MojeKartySeznam() {
           <div
             className="flex min-w-0 flex-wrap items-center gap-2"
             role="group"
+            aria-label="Filtr podle OVR"
+          >
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+              OVR
+            </span>
+            <label className="sr-only" htmlFor="mk-min-ovr">
+              Minimální OVR
+            </label>
+            <input
+              id="mk-min-ovr"
+              type="text"
+              inputMode="numeric"
+              placeholder="min"
+              value={minOvrStr}
+              onChange={(e) => setMinOvrStr(e.target.value)}
+              className={ovrInputClass}
+              aria-invalid={minOvrStr.trim() !== "" && minOvr === null}
+            />
+            <span className="text-xs text-[var(--hut-muted)]" aria-hidden>
+              –
+            </span>
+            <label className="sr-only" htmlFor="mk-max-ovr">
+              Maximální OVR
+            </label>
+            <input
+              id="mk-max-ovr"
+              type="text"
+              inputMode="numeric"
+              placeholder="max"
+              value={maxOvrStr}
+              onChange={(e) => setMaxOvrStr(e.target.value)}
+              className={ovrInputClass}
+              aria-invalid={maxOvrStr.trim() !== "" && maxOvr === null}
+            />
+          </div>
+          <div
+            className="flex min-w-0 flex-wrap items-center gap-2"
+            role="group"
             aria-label="Filtr podle stavu (prodané karty)"
           >
             <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
@@ -304,6 +361,17 @@ export function MojeKartySeznam() {
           ) : null}
         </div>
 
+        {neplatnyVstupOvr ? (
+          <p className="mt-2 text-sm text-amber-200/90" role="alert">
+            OVR: celé číslo 0–99. Prázdné pole = bez limitu.
+          </p>
+        ) : null}
+        {chybaOvrRozsah ? (
+          <p className="mt-2 text-sm text-red-200/90" role="alert">
+            {chybaOvrRozsah}
+          </p>
+        ) : null}
+
         {chyba ? (
           <p
             className="mt-6 rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-200"
@@ -336,7 +404,7 @@ export function MojeKartySeznam() {
                 </p>
               </>
             ) : (
-              "Žádná karta pro zvolenou kombinaci filtrů (pozice, stav prodáno)."
+              "Žádná karta pro zvolenou kombinaci filtrů (OVR, pozice, prodáno)."
             )}
           </div>
         ) : (
