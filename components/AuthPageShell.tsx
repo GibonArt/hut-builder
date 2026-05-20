@@ -29,7 +29,7 @@ export const authFormPanelClass =
   "w-full max-w-md rounded-2xl border border-[var(--hut-border)] bg-[var(--hut-surface)]/52 p-6 shadow-[0_24px_48px_rgba(0,0,0,0.45)] md:p-8";
 
 export const authInputClass =
-  "w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2 text-sm text-white placeholder:text-[var(--hut-muted)]/50 outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)]";
+  "w-full max-w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2.5 text-base text-white placeholder:text-[var(--hut-muted)]/50 outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:py-2 sm:text-sm";
 
 export const authLabelClass =
   "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";

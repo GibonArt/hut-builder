@@ -29,7 +29,7 @@ type FiltrPozice = Pozice | "vse";
 type FiltrProdano = "vse" | "neprodane" | "prodane";
 
 const ovrInputClass =
-  "box-border min-h-9 w-[4.25rem] rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-2 py-1.5 text-sm tabular-nums text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:min-h-8";
+  "box-border min-h-9 w-[4.25rem] max-w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-2 py-1.5 text-base tabular-nums text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:min-h-8 sm:text-sm";
 
 function textPocetKaret(n: number): string {
   if (n === 1) return "1 karta";

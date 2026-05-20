@@ -53,9 +53,16 @@ html.dark {
 /* Menší zpoždění klepnutí na iOS; bez blokování zoomu uživatele */
 html {
   touch-action: manipulation;
+  overflow-x: clip;
+  width: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
+  overflow-x: clip;
+  width: 100%;
+  max-width: 100%;
   background-color: var(--hut-bg);
   background-image: radial-gradient(
     ellipse 120% 80% at 50% -20%,
@@ -63,6 +70,18 @@ body {
     transparent 55%
   );
   color: var(--foreground);
+}
+
+/*
+ * iOS Safari při focusu automaticky přiblíží stránku, pokud má pole font-size < 16px.
+ * Zoom pak často „zůstane“ a layout se posouvá do stran — řešíme min. 16px na mobilu.
+ */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]):not([type="image"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

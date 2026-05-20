@@ -29,6 +29,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: "#0a0a0a",
+  /** Klávesnice mění výšku viewportu místo „roztažení“ stránky (moderní mobilní prohlížeče). */
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

@@ -444,7 +444,7 @@ export function HutShell({
         <main
           id="obsah-aplikace"
           tabIndex={-1}
-          className={`flex min-h-0 flex-1 flex-col overflow-auto px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none sm:p-6 md:p-10 ${mainClassName ?? ""}`}
+          className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-auto px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none sm:p-6 md:p-10 ${mainClassName ?? ""}`}
           style={mainStyle}
         >
           <div className={`min-h-full w-full ${mainInnerClassName}`}>
