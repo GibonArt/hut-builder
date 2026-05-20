@@ -4,7 +4,9 @@ import { LIGY_V_PORADI, tymyProLigu } from "@/lib/tymyPodleLigy";
 /** Nápověda: EA tabulka + agregace z `cards` (RPC). */
 export type EaNhl26Hrac = {
   key: string;
-  source: "ea" | "card";
+  source: "ea" | "card" | "mine";
+  /** Jen u `source` mine — `card_slug` v inventáři uživatele. */
+  inventarKartaId?: string;
   /** EA player id; u řádku z karet komunity 0 */
   id: number;
   jmeno: string;

@@ -162,6 +162,40 @@ export function MujInventar() {
       setJmeno(h.jmeno);
       setFormError(null);
 
+      if (h.source === "mine" && h.inventarKartaId) {
+        const existujici = karty.find((k) => k.id === h.inventarKartaId);
+        if (!existujici) return;
+
+        setOvr(String(existujici.ovr));
+        setPozice(existujici.pozice);
+        setPreferovanaRuka(existujici.preferovanaRuka);
+        setLiga(existujici.liga);
+        setTym(existujici.tym);
+        setTypKarty(existujici.typKarty);
+        const mil = existujici.plat / 1_000_000;
+        setPlat(
+          Number.isFinite(mil)
+            ? mil.toLocaleString("cs-CZ", { maximumFractionDigits: 2 })
+            : "",
+        );
+        const kod =
+          narodnostiVolby.find((n) => n.label === existujici.narodnost.trim())
+            ?.code ?? "";
+        setNarodnostKod(kod);
+        const xf =
+          existujici.xFactory?.length
+            ? obnovIkonyXeFactoryZKatalogu(existujici.xFactory) ?? []
+            : [];
+        setXFactory([
+          xf[0] ?? { id: "", label: "" },
+          xf[1] ?? { id: "", label: "" },
+          xf[2] ?? { id: "", label: "" },
+        ]);
+        setUpozorneniKartovaNapoveda(true);
+        toast.message("Karta už je v inventáři — údaje doplněny z ní (nemusíš znovu vyplňovat).");
+        return;
+      }
+
       if (h.source === "ea") {
         setUpozorneniKartovaNapoveda(false);
         if (h.hutPreferovanaRuka) setPreferovanaRuka(h.hutPreferovanaRuka);
@@ -220,7 +254,7 @@ export function MujInventar() {
 
       setUpozorneniKartovaNapoveda(true);
     },
-    [narodnostiVolby],
+    [narodnostiVolby, karty],
   );
 
   useEffect(() => {
@@ -797,6 +831,8 @@ export function MujInventar() {
                 disabled={formZakazany}
                 userId={user?.id ?? null}
                 inventarPocet={karty.length}
+                inventarKarty={karty}
+                vyloucitKartuSlug={editujiSlug}
                 inputClassName={inputClass}
                 required
               />

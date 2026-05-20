@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Liga, Ruka } from "@/types";
+import type { HutCard, Liga, Ruka } from "@/types";
 import { LIGY_V_PORADI } from "@/lib/tymyPodleLigy";
 import type { EaNhl26Hrac } from "@/lib/eaNhl26Ratings";
 import { xFactoryZAtributyJsonbSloupec } from "@/lib/cardsDb";
@@ -38,7 +38,7 @@ function rukaZRadekRpc(s: string | null | undefined): Ruka | undefined {
   return undefined;
 }
 
-function normKlicJmenoTym(jmeno: string, tym: string): string {
+export function normKlicJmenoTym(jmeno: string, tym: string): string {
   return `${jmeno.trim().toLowerCase()}|${tym.trim().toLowerCase()}`;
 }
 
@@ -57,6 +57,38 @@ function rowNaEaHrace(r: EaNapovedaRow): EaNhl26Hrac {
     positionShort: r.position_short ?? "",
     rank: r.ea_rank,
     ...(eaXFactory?.length ? { eaXFactory } : {}),
+  };
+}
+
+/** Řádek nápovědy z konkrétní karty v inventáři přihlášeného uživatele. */
+export function kartaNaNapoveduZInventare(
+  k: HutCard,
+  rank: number,
+): EaNhl26Hrac | null {
+  if (!LIGA_SET.has(k.liga)) return null;
+
+  const napovedaXFactory =
+    k.xFactory?.length && k.xFactory.some((x) => x.label.trim())
+      ? obnovIkonyXeFactoryZKatalogu(k.xFactory)
+      : undefined;
+
+  return {
+    key: `mine-${k.id}`,
+    source: "mine",
+    inventarKartaId: k.id,
+    id: 0,
+    jmeno: k.jmeno.trim(),
+    tym: k.tym.trim(),
+    positionShort: "",
+    rank,
+    hutPozice: k.pozice,
+    hutLiga: k.liga,
+    hutPreferovanaRuka: k.preferovanaRuka,
+    napovedaOvr: k.ovr,
+    napovedaPlat: k.plat,
+    napovedaNarodnost: k.narodnost.trim() || undefined,
+    napovedaTypKarty: k.typKarty.trim() || undefined,
+    ...(napovedaXFactory?.length ? { napovedaXFactory } : {}),
   };
 }
 

@@ -2,33 +2,75 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { nactiNapoveduHracu } from "@/lib/eaRatingsDb";
+import {
+  kartaNaNapoveduZInventare,
+  nactiNapoveduHracu,
+  normKlicJmenoTym,
+} from "@/lib/eaRatingsDb";
 import type { EaNhl26Hrac } from "@/lib/eaNhl26Ratings";
+import { HUT_POZICE_ZKRATKA } from "@/lib/hutPozice";
+import type { HutCard } from "@/types";
 
 type Props = {
   id?: string;
   value: string;
   onChange: (jmeno: string) => void;
-  /** Po výběru z nápovědy (EA nebo karta z DB) — stejné chování jako dřív „Hledat hráče“. */
+  /** Po výběru z nápovědy (EA, komunita nebo vlastní karta z inventáře). */
   onVybratHrace: (h: EaNhl26Hrac) => void;
   disabled?: boolean;
   userId: string | null;
   /** Po uložení karty znovu načte seznam z EA + RPC. */
   inventarPocet: number;
+  /** Karty přihlášeného uživatele — zobrazí se v nápovědě zvýrazněné. */
+  inventarKarty?: readonly HutCard[];
+  /** Při úpravě karty ji v nápovědě „moje“ neukazovat. */
+  vyloucitKartuSlug?: string | null;
   inputClassName?: string;
   required?: boolean;
   placeholder?: string;
 };
 
-function shoda(h: EaNhl26Hrac, dotaz: string): boolean {
+function shodaHrace(h: EaNhl26Hrac, dotaz: string): boolean {
   const q = dotaz.trim().toLowerCase();
   if (!q) return false;
-  const hay = `${h.jmeno} ${h.tym}`.toLowerCase();
+  const hay = [
+    h.jmeno,
+    h.tym,
+    h.positionShort,
+    h.napovedaTypKarty ?? "",
+    h.napovedaOvr != null ? String(h.napovedaOvr) : "",
+    h.hutPozice ? HUT_POZICE_ZKRATKA[h.hutPozice] : "",
+  ]
+    .join(" ")
+    .toLowerCase();
   const tokens = q.split(/\s+/).filter(Boolean);
   return tokens.every((t) => hay.includes(t));
 }
 
-const MAX_VYSLEDKU = 14;
+function shodaKartaInventar(k: HutCard, dotaz: string): boolean {
+  const q = dotaz.trim().toLowerCase();
+  if (!q) return false;
+  const hay = `${k.jmeno} ${k.tym} ${k.typKarty} ${k.ovr} ${HUT_POZICE_ZKRATKA[k.pozice]}`.toLowerCase();
+  const tokens = q.split(/\s+/).filter(Boolean);
+  return tokens.every((t) => hay.includes(t));
+}
+
+const MAX_VYSLEDKU = 18;
+const MAX_MINE = 10;
+
+function popisekZdroje(h: EaNhl26Hrac): string {
+  if (h.source === "mine") return "V inventáři";
+  if (h.source === "ea") return "EA";
+  return "Komunita";
+}
+
+function podtitulRadku(h: EaNhl26Hrac): string {
+  const casti = [h.tym];
+  if (h.napovedaOvr != null) casti.push(`${h.napovedaOvr} OVR`);
+  if (h.hutPozice) casti.push(HUT_POZICE_ZKRATKA[h.hutPozice]);
+  if (h.napovedaTypKarty) casti.push(h.napovedaTypKarty);
+  return casti.join(" · ");
+}
 
 export function JmenoKartyNapoveda({
   id: idProp,
@@ -38,6 +80,8 @@ export function JmenoKartyNapoveda({
   disabled,
   userId,
   inventarPocet,
+  inventarKarty = [],
+  vyloucitKartuSlug = null,
   inputClassName,
   required,
   placeholder = "např. McDavid, Oilers…",
@@ -85,16 +129,35 @@ export function JmenoKartyNapoveda({
   }, [userId, nactiSeznam]);
 
   const vysledky = useMemo(() => {
-    if (!userId || hraci.length === 0 || !value.trim()) return [];
-    const out: EaNhl26Hrac[] = [];
-    for (const h of hraci) {
-      if (shoda(h, value)) {
-        out.push(h);
-        if (out.length >= MAX_VYSLEDKU) break;
-      }
+    if (!userId || !value.trim()) return [];
+
+    const mine: EaNhl26Hrac[] = [];
+    for (const k of inventarKarty) {
+      if (vyloucitKartuSlug && k.id === vyloucitKartuSlug) continue;
+      if (!shodaKartaInventar(k, value)) continue;
+      const h = kartaNaNapoveduZInventare(k, mine.length);
+      if (h) mine.push(h);
+      if (mine.length >= MAX_MINE) break;
     }
-    return out;
-  }, [value, userId, hraci]);
+
+    const mineKliceJmenoTym = new Set(
+      mine.map((h) => normKlicJmenoTym(h.jmeno, h.tym)),
+    );
+
+    const ostatni: EaNhl26Hrac[] = [];
+    for (const h of hraci) {
+      if (!shodaHrace(h, value)) continue;
+      if (
+        h.source === "card" &&
+        mineKliceJmenoTym.has(normKlicJmenoTym(h.jmeno, h.tym))
+      ) {
+        continue;
+      }
+      ostatni.push(h);
+    }
+
+    return [...mine, ...ostatni].slice(0, MAX_VYSLEDKU);
+  }, [value, userId, hraci, inventarKarty, vyloucitKartuSlug]);
 
   useEffect(() => {
     setVybranyIdx(0);
@@ -175,34 +238,53 @@ export function JmenoKartyNapoveda({
       {otevreno && vysledky.length > 0 ? (
         <ul
           role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-auto rounded-lg border border-[var(--hut-border)] bg-[var(--hut-surface)] py-1 shadow-xl"
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-auto rounded-lg border border-[var(--hut-border)] bg-[var(--hut-surface)] py-1 shadow-xl"
         >
-          {vysledky.map((h, idx) => (
-            <li key={h.key} role="option" aria-selected={idx === vybranyIdx}>
-              <button
-                type="button"
-                className={[
-                  "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors",
-                  idx === vybranyIdx
-                    ? "bg-[var(--hut-surface-raised)] text-white"
-                    : "text-zinc-200 hover:bg-[var(--hut-surface-raised)]/70",
-                ].join(" ")}
-                onMouseEnter={() => setVybranyIdx(idx)}
-                onClick={() => aplikuj(h)}
-              >
-                <span className="flex w-full items-baseline justify-between gap-2">
-                  <span className="font-medium">{h.jmeno}</span>
-                  <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--hut-muted)]">
-                    {h.source === "ea" ? "EA" : "DB"}
+          {vysledky.map((h, idx) => {
+            const jeMoje = h.source === "mine";
+            return (
+              <li key={h.key} role="option" aria-selected={idx === vybranyIdx}>
+                <button
+                  type="button"
+                  className={[
+                    "flex w-full flex-col items-start gap-0.5 border-l-2 px-3 py-2 text-left text-sm transition-colors",
+                    jeMoje
+                      ? idx === vybranyIdx
+                        ? "border-[var(--hut-lime)] bg-[var(--hut-lime)]/15 text-white"
+                        : "border-[var(--hut-lime)]/70 bg-[var(--hut-lime)]/[0.07] text-zinc-100 hover:bg-[var(--hut-lime)]/12"
+                      : idx === vybranyIdx
+                        ? "border-transparent bg-[var(--hut-surface-raised)] text-white"
+                        : "border-transparent text-zinc-200 hover:bg-[var(--hut-surface-raised)]/70",
+                  ].join(" ")}
+                  onMouseEnter={() => setVybranyIdx(idx)}
+                  onClick={() => aplikuj(h)}
+                >
+                  <span className="flex w-full items-baseline justify-between gap-2">
+                    <span className="font-medium">{h.jmeno}</span>
+                    <span
+                      className={[
+                        "shrink-0 text-[10px] font-semibold uppercase tracking-wide",
+                        jeMoje ? "text-[var(--hut-lime)]" : "text-[var(--hut-muted)]",
+                      ].join(" ")}
+                    >
+                      {popisekZdroje(h)}
+                    </span>
                   </span>
-                </span>
-                <span className="text-xs text-[var(--hut-muted)]">{h.tym}</span>
-              </button>
-            </li>
-          ))}
+                  <span
+                    className={[
+                      "text-xs",
+                      jeMoje ? "text-[var(--hut-lime)]/85" : "text-[var(--hut-muted)]",
+                    ].join(" ")}
+                  >
+                    {podtitulRadku(h)}
+                    {jeMoje ? " · už v inventáři" : ""}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </div>
   );
 }
-
