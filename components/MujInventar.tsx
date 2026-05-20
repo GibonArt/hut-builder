@@ -75,14 +75,14 @@ const RUKA_LABEL: Record<Ruka, string> = {
 };
 
 const inputClass =
-  "w-full max-w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2.5 text-base text-white placeholder:text-[var(--hut-muted)]/50 outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:py-2 sm:text-sm";
+  "box-border h-12 min-h-12 w-full max-w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-0 text-base leading-normal text-white placeholder:text-[var(--hut-muted)]/50 outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:h-11 sm:min-h-11 sm:text-sm";
 
 const selectClass =
-  "w-full max-w-full cursor-pointer rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-2.5 text-base text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:py-2 sm:text-sm";
+  "box-border h-12 min-h-12 w-full max-w-full cursor-pointer rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 py-0 text-base leading-normal text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:h-11 sm:min-h-11 sm:text-sm";
 
-/** Stejná výška řádku jako `TymVyber` / `TypKartyVyber` (h-14). */
+/** Stejná výška řádku jako výběry s `triggerHeight="formular"`. */
 const selectClassDropdown =
-  "box-border h-14 min-h-14 w-full max-w-full cursor-pointer rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 text-base leading-normal text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:text-sm";
+  "box-border h-12 min-h-12 w-full max-w-full cursor-pointer rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 text-base leading-normal text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:h-11 sm:min-h-11 sm:text-sm";
 
 function triPrazdneXFactory(): XFactorZaznam[] {
   return [
@@ -92,7 +92,7 @@ function triPrazdneXFactory(): XFactorZaznam[] {
   ];
 }
 
-const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
+const labelClass = "mb-1 block text-xs font-medium text-[var(--hut-muted)]";
 
 function OznaPovinne() {
   return (
@@ -776,12 +776,12 @@ export function MujInventar() {
         id="form-inventar-karta"
         onSubmit={handleSubmit}
         onChange={() => setFormDirty(true)}
-        className="rounded-2xl border border-[var(--hut-border)] bg-[var(--hut-surface)]/52 p-4 shadow-[0_24px_48px_rgba(0,0,0,0.45)] sm:p-6 md:p-8"
+        className="rounded-2xl border border-[var(--hut-border)] bg-[var(--hut-surface)]/52 p-3 shadow-[0_24px_48px_rgba(0,0,0,0.45)] sm:p-5 md:p-6"
       >
-        <h3 className="text-lg font-medium text-white">
+        <h3 className="text-base font-medium text-white sm:text-lg">
           {editujiSlug ? "Upravit kartu" : "Přidat kartu"}
         </h3>
-        <p className="mt-1 text-xs text-[var(--hut-muted)]">
+        <p className="mt-0.5 text-xs text-[var(--hut-muted)]">
           Kromě X-Faktorů jsou všechna pole povinná (<OznaPovinne />).{" "}
           <span className="hidden sm:inline">
             Zkratka: Ctrl+Enter (Mac ⌘+Enter) = uložit.
@@ -798,7 +798,7 @@ export function MujInventar() {
 
         {formError ? (
           <p
-            className="mt-4 rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-200"
+            className="mt-3 rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-1.5 text-sm text-red-200"
             role="alert"
           >
             {formError}
@@ -807,9 +807,9 @@ export function MujInventar() {
 
         <fieldset
           disabled={formZakazany}
-          className="mt-6 min-w-0 border-0 p-0 disabled:opacity-55 [&:disabled]:pointer-events-none"
+          className="mt-4 min-w-0 border-0 p-0 disabled:opacity-55 sm:mt-5 [&:disabled]:pointer-events-none"
         >
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <KatalogHromadnyImport
               userId={user?.id ?? null}
@@ -818,7 +818,7 @@ export function MujInventar() {
               onKartyPridany={priHromadnePridaneZKatalogu}
             />
           </div>
-          <div className="sm:col-span-2 grid grid-cols-1 gap-5 md:grid-cols-6 md:items-end">
+          <div className="sm:col-span-2 grid grid-cols-1 gap-4 md:grid-cols-6 md:items-end">
             <div className="min-w-0 md:col-span-2">
               <label htmlFor="inv-jmeno" className={labelClass}>
                 Jméno <OznaPovinne />
@@ -848,7 +848,7 @@ export function MujInventar() {
                 min={0}
                 max={99}
                 required
-                className={`${inputClass} min-h-11 text-center text-base tabular-nums md:min-h-0 md:px-2 md:text-sm`}
+                className={`${inputClass} text-center tabular-nums md:px-2`}
                 value={ovr}
                 onChange={(e) => setOvr(e.target.value)}
                 placeholder="95"
@@ -913,7 +913,7 @@ export function MujInventar() {
 
           {upozorneniKartovaNapoveda ? (
             <p
-              className="sm:col-span-2 rounded-lg border border-sky-500/35 bg-sky-950/35 px-3 py-2.5 text-sm leading-snug text-sky-100/95"
+              className="sm:col-span-2 rounded-lg border border-sky-500/35 bg-sky-950/35 px-3 py-2 text-sm leading-snug text-sky-100/95"
               role="status"
             >
               Údaje byly doplněny z <strong className="font-semibold text-white">poslední uložené karty</strong> se
@@ -923,11 +923,11 @@ export function MujInventar() {
             </p>
           ) : null}
 
-          <fieldset className="sm:col-span-2 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-4">
+          <fieldset className="sm:col-span-2 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-3 sm:p-3.5">
             <legend className="px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]">
               Liga a tým
             </legend>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="mt-0.5 grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="inv-liga" className={labelClass}>
                   Liga <OznaPovinne />
@@ -964,6 +964,7 @@ export function MujInventar() {
                   tymy={tymyProAktualniLigu}
                   value={tym}
                   onChange={setTym}
+                  triggerHeight="formular"
                 />
               </div>
 
@@ -971,12 +972,13 @@ export function MujInventar() {
                 <label htmlFor="inv-tym-hledat" className={labelClass}>
                   Najít tým napříč ligami
                 </label>
-                <p className="mb-1.5 text-[11px] leading-snug text-[var(--hut-muted)]/85">
+                <p className="mb-1 text-[11px] leading-snug text-[var(--hut-muted)]/85">
                   Nevíš, ve které lize tým je? Zadej část názvu — po výběru se nastaví liga i tým.
                 </p>
                 <TymHledacNapricLigami
                   id="inv-tym-hledat"
                   disabled={formZakazany}
+                  variant="formular"
                   onVybrat={(novaLiga, novyTym) => {
                     setLiga(novaLiga);
                     setTym(novyTym);
@@ -986,51 +988,49 @@ export function MujInventar() {
             </div>
           </fieldset>
 
-          <div className="sm:col-span-2 grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div className="sm:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="min-w-0">
               <label htmlFor="inv-narodnost" className={labelClass}>
                 Národnost <OznaPovinne />
               </label>
-              <div className="mt-1">
-                <NarodnostVyber
-                  id="inv-narodnost"
-                  volby={narodnostiVolby}
-                  value={narodnostKod}
-                  onChange={setNarodnostKod}
-                  disabled={narodnostiVolby.length === 0}
-                />
-              </div>
+              <NarodnostVyber
+                id="inv-narodnost"
+                volby={narodnostiVolby}
+                value={narodnostKod}
+                onChange={setNarodnostKod}
+                disabled={narodnostiVolby.length === 0}
+                triggerHeight="formular"
+              />
             </div>
 
             <div className="min-w-0">
               <label htmlFor="inv-typ" className={labelClass}>
                 Typ karty <OznaPovinne />
               </label>
-              <div className="mt-1">
-                <TypKartyVyber
-                  id="inv-typ"
-                  typy={hutdbTypyKaret}
-                  value={typKarty}
-                  onChange={setTypKarty}
-                />
-              </div>
+              <TypKartyVyber
+                id="inv-typ"
+                typy={hutdbTypyKaret}
+                value={typKarty}
+                onChange={setTypKarty}
+                triggerHeight="formular"
+              />
             </div>
           </div>
 
-          <fieldset className="sm:col-span-2 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-4">
+          <fieldset className="sm:col-span-2 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-3 sm:p-3.5">
             <legend className="px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]">
               X-Faktory
             </legend>
-            <p className="mb-3 text-xs text-[var(--hut-muted)]">
+            <p className="mb-2 text-xs text-[var(--hut-muted)]">
               Tři sloty (jako ve hře). Názvy anglicky jako u EA; ikony jsou v rozbalovací nabídce.
             </p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {[0, 1, 2].map((i) => {
                 const xf = xFactory[i] ?? { id: "", label: "" };
                 const sel = klicProSelect(xf);
                 const vlastni = sel === OPTION_VLASTNI;
                 return (
-                  <div key={`xf-slot-${i}`} className="min-w-0 flex flex-col gap-1.5">
+                  <div key={`xf-slot-${i}`} className="min-w-0 flex flex-col gap-1">
                     <span className={labelClass}>X-Factor {i + 1}</span>
                     <XFactorVyber
                       id={`inv-xf-${i}`}
@@ -1074,7 +1074,7 @@ export function MujInventar() {
           </fieldset>
 
           {editujiSlug ? (
-            <div className="sm:col-span-2 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/35 px-4 py-3">
+            <div className="sm:col-span-2 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/35 px-3 py-2.5 sm:px-3.5">
               <label className="flex cursor-pointer items-start gap-3">
                 <input
                   type="checkbox"
@@ -1094,11 +1094,11 @@ export function MujInventar() {
           ) : null}
         </div>
 
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-3">
           <button
             type="submit"
             disabled={narodnostiVolby.length === 0 || formZakazany}
-            className="min-h-12 w-full touch-manipulation rounded-full border border-zinc-600 bg-[var(--hut-btn)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:border-zinc-500 hover:bg-[var(--hut-btn-hover)] disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-0 sm:w-auto sm:py-2.5"
+            className="min-h-11 w-full touch-manipulation rounded-full border border-zinc-600 bg-[var(--hut-btn)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-zinc-500 hover:bg-[var(--hut-btn-hover)] disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-0 sm:w-auto sm:px-6 sm:py-2"
           >
             {ukladamKartu ? "Ukládám…" : editujiSlug ? "Uložit změny" : "Přidat kartu"}
           </button>
@@ -1109,7 +1109,7 @@ export function MujInventar() {
               resetForm();
             }}
             disabled={formZakazany}
-            className="min-h-12 w-full touch-manipulation rounded-full border border-[var(--hut-border-strong)] bg-transparent px-5 py-3 text-sm font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-45 sm:min-h-0 sm:w-auto sm:py-2.5"
+            className="min-h-11 w-full touch-manipulation rounded-full border border-[var(--hut-border-strong)] bg-transparent px-5 py-2.5 text-sm font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-45 sm:min-h-0 sm:w-auto sm:py-2"
           >
             {editujiSlug ? "Zrušit úpravu" : "Vymazat formulář"}
           </button>

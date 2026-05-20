@@ -14,13 +14,14 @@ const inputClassZaklad =
 
 const inputVyskaDefault = "h-14 min-h-14";
 const inputVyskaKompaktLg = "h-14 min-h-14 lg:h-11 lg:min-h-11";
+const inputVyskaFormular = "h-12 min-h-12 sm:h-11 sm:min-h-11";
 
 type Props = {
   id: string;
   disabled?: boolean;
   onVybrat: (liga: Liga, tym: string) => void;
   /** Nižší pole na velkém desktopu (stejné jako kompaktní výběry). */
-  variant?: "default" | "kompaktniLg";
+  variant?: "default" | "kompaktniLg" | "formular";
 };
 
 export function TymHledacNapricLigami({
@@ -68,7 +69,11 @@ export function TymHledacNapricLigami({
         aria-controls={zobrazPanel ? listId : undefined}
         className={[
           inputClassZaklad,
-          variant === "kompaktniLg" ? inputVyskaKompaktLg : inputVyskaDefault,
+          variant === "formular"
+            ? inputVyskaFormular
+            : variant === "kompaktniLg"
+              ? inputVyskaKompaktLg
+              : inputVyskaDefault,
         ].join(" ")}
       />
 

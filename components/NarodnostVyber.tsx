@@ -12,7 +12,7 @@ type Props = {
   disabled?: boolean;
   describedBy?: string;
   /** Nižší trigger na velkém desktopu (např. formulář kombinací v jednom řádku). */
-  triggerHeight?: "default" | "kompaktniLg";
+  triggerHeight?: "default" | "kompaktniLg" | "formular";
 };
 
 const triggerClassBase =
@@ -81,9 +81,11 @@ export function NarodnostVyber({
         }}
         className={[
           triggerClassBase,
-          triggerHeight === "kompaktniLg"
-            ? "h-14 min-h-14 lg:h-11 lg:min-h-11"
-            : "h-14 min-h-14",
+          triggerHeight === "formular"
+            ? "h-12 min-h-12 sm:h-11 sm:min-h-11"
+            : triggerHeight === "kompaktniLg"
+              ? "h-14 min-h-14 lg:h-11 lg:min-h-11"
+              : "h-14 min-h-14",
         ].join(" ")}
       >
         <span
