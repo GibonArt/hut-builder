@@ -167,6 +167,22 @@ docker compose up -d
 
 ---
 
+## 6b. Import bonusů bez prohlížeče (SSH + Docker)
+
+Typy karet a kombinace z Hut Builderu lze na NAS spustit skriptem (Mac může spát). Do `.env` doplň **`SUPABASE_SERVICE_ROLE_KEY`** (viz `.env.example`).
+
+```bash
+cd /volume1/docker/hut-builder
+chmod +x scripts/nas/*.sh
+./scripts/nas/01-sync-typy-karet.sh      # krok 1
+./scripts/nas/02-import-kombinace.sh       # krok 2 (dlouhé)
+# nebo: ./scripts/nas/spust-import.sh
+```
+
+Podrobný návod: **`docs/NAS-IMPORT-POSTUP.md`**.
+
+---
+
 ## 7. Container Manager (GUI) místo SSH
 
 Můžeš **Import** z existujícího `docker-compose.yml** přes Container Manager → **Projekt** → vytvořit projekt ze složky s `docker-compose.yml`.  

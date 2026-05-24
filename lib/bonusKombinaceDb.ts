@@ -415,7 +415,7 @@ export async function nactiBonusKombinaceSdilene(
  */
 export async function ulozBonusKombinaciSdilenou(
   supabase: SupabaseClient,
-  editorUserId: string,
+  editorUserId: string | null,
   typ: TypKombinaceBonusu,
   radky: readonly RadekBonusKombinaceUi[],
 ): Promise<{ error: Error | null }> {
