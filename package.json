@@ -11,6 +11,7 @@
     "loga-nhlaa": "node scripts/stahni-nhlaa-loga.mjs",
     "loga:typy-karet": "node scripts/stahni-typy-karet.mjs",
     "loga:typy-karet:force": "node scripts/stahni-typy-karet.mjs --force",
+    "typy-karet:kontrola": "node scripts/kontrola-typy-karet.mjs",
     "ea-ratings": "tsx scripts/stahni-ea-ratings.ts",
     "xfactor-icons-ea": "tsx scripts/stahni-xfactor-ikony-ea.ts",
     "xfactor-ikony-urovne": "node scripts/stahni-xfactor-ikony-urovne.mjs",

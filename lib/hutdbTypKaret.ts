@@ -207,6 +207,12 @@ const RADKY: HutDbTypKarty[] = [
     comboSoubor: "CUP302895086.png",
   },
   {
+    hodnotaFiltru: "PLAYOFF CHEM",
+    jmenoCs: "Playoff Chem",
+    popisCs: "Playoff chemistry — sada z NHL HUT Builder Combo Finder.",
+    comboSoubor: "PC212829711.png",
+  },
+  {
     hodnotaFiltru: "SUPERSTAR ORIGINS",
     jmenoCs: "Superstar Origins",
     popisCs: "Původ a rozjezd dnešních superhvězd.",
@@ -216,7 +222,7 @@ const RADKY: HutDbTypKarty[] = [
     hodnotaFiltru: "TEAM OF THE SEASON",
     jmenoCs: "Tým sezóny (TOTS)",
     popisCs: "Nejlepší výkony napříč sezónou — obdoba TOTS.",
-    comboSoubor: "TOTS1189620133.png",
+    comboSoubor: "TOTS11896201331.png",
   },
   {
     hodnotaFiltru: "TEAM OF THE WEEK",
@@ -291,6 +297,7 @@ const PORADI_MRIZKY_CHEMISTRY: string[] = [
   "STARS OF THE MONTH",
   "SPOTLIGHT",
   "STANLEY CUP PLAYOFFS",
+  "PLAYOFF CHEM",
   "TRADE QUEST",
   "TEAM OF THE SEASON",
   "TEAM OF THE WEEK",
@@ -360,6 +367,8 @@ const ALIAS_NA_FILTR: Record<string, string> = {
   /** EA / HUT text „Stanley Cup Playoffs“ → kanonický filtr. */
   SCP: "STANLEY CUP PLAYOFFS",
   SCPP: "STANLEY CUP PLAYOFFS",
+  PC: "PLAYOFF CHEM",
+  PLAYOFF: "PLAYOFF CHEM",
   TQ: "TRADE QUEST",
   TRAN: "TRANSACTIONS",
   XP: "XP",
