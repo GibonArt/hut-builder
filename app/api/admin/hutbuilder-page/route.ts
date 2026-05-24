@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   fetchHutbuilderLinesPage,
+  HUTBUILDER_PROXY_SAFE_TIMEOUT_MS,
   type HutbuilderLineType,
 } from "@/lib/hutbuilderGetLines";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
@@ -25,8 +26,8 @@ export async function GET(req: Request) {
   const lineTypeRaw = url.searchParams.get("lineType");
   const page = Math.max(1, Math.floor(Number(url.searchParams.get("page")) || 1));
   const timeoutMs = Math.min(
-    180_000,
-    Math.max(8000, Math.floor(Number(url.searchParams.get("timeoutMs")) || 55_000)),
+    HUTBUILDER_PROXY_SAFE_TIMEOUT_MS,
+    Math.max(8000, Math.floor(Number(url.searchParams.get("timeoutMs")) || 50_000)),
   );
 
   const optimizeRaw = url.searchParams.get("optimizeFor")?.trim() ?? "";

@@ -72,6 +72,48 @@ type Payload = {
   obranna: RadekBonusKombinaceUi[];
 };
 
+function jeOpakovatelnaChybaFetch(e: unknown): boolean {
+  if (e instanceof DOMException && e.name === "AbortError") return false;
+  if (e instanceof TypeError) return true;
+  const msg = String(e instanceof Error ? e.message : e);
+  return /failed to fetch|network|timeout|502|503|504|hut builder neodpověděl/i.test(
+    msg,
+  );
+}
+
+async function fetchJsonHutbuilderAdminPage(
+  url: string,
+  sig: AbortSignal,
+  onRetry?: (pokus: number, max: number) => void,
+): Promise<Record<string, unknown>> {
+  const maxPokusu = 4;
+  let posledni: unknown;
+  for (let pokus = 1; pokus <= maxPokusu; pokus++) {
+    try {
+      const res = await fetch(url, { signal: sig, cache: "no-store" });
+      const rawText = await res.text();
+      let chunk: Record<string, unknown>;
+      try {
+        chunk = JSON.parse(rawText) as Record<string, unknown>;
+      } catch {
+        throw new Error(rawText.slice(0, 280));
+      }
+      if (!res.ok) {
+        throw new Error(String(chunk.error ?? rawText.slice(0, 280)));
+      }
+      return chunk;
+    } catch (e) {
+      posledni = e;
+      if (sig.aborted) throw e;
+      const znovu = pokus < maxPokusu && jeOpakovatelnaChybaFetch(e);
+      if (!znovu) throw e;
+      onRetry?.(pokus + 1, maxPokusu);
+      await new Promise((r) => setTimeout(r, 1800 * pokus));
+    }
+  }
+  throw posledni instanceof Error ? posledni : new Error(String(posledni));
+}
+
 function prazdnyFiltrNahled(): BonusKombinaceParametr {
   return novyParametrPrazdny("narodnost");
 }
@@ -653,6 +695,7 @@ export function NastaveniBonusu() {
         "• Hut Builder SAL → PLAT, AP → BS, OVR → CLK.\n" +
         "• Duplicity se sloučí s už uloženými řádky.\n" +
         "• Může to trvat několik minut (sekvenční stahování stránek z Hut Builderu).\n" +
+        "• Při timeoutu se stránka automaticky zkusí znovu (až 4×).\n" +
         "• Dva průchody Hut Builderu: výchozí žebříček (PLAT/BS) + režim „overall“ kvůli OVR → CLK.\n" +
         "• Jakmile v průchodu začne API opakovat jen duplicitní line_id, daný průchod u typu řady končí.",
     );
@@ -671,14 +714,14 @@ export function NastaveniBonusu() {
     const noveUt: RadekBonusKombinaceUi[] = [];
     const noveOb: RadekBonusKombinaceUi[] = [];
 
-    /** Bez druhého průchodu Hut Builder v „total_score“ často nevrací v synergii boost `OVR` → u nás žádné CLK. */
+    /** Každá stránka jde zvlášť — limit ~52 s kvůli reverse proxy (Synology/nginx ~60 s). */
     const PRUCHODY_IMPORTU: {
       optimizeFor: string | null;
       timeoutMs: number;
       popisek: string;
     }[] = [
-      { optimizeFor: null, timeoutMs: 55_000, popisek: "žebříček" },
-      { optimizeFor: "overall", timeoutMs: 130_000, popisek: "overall (CLK)" },
+      { optimizeFor: null, timeoutMs: 50_000, popisek: "žebříček" },
+      { optimizeFor: "overall", timeoutMs: 50_000, popisek: "overall (CLK)" },
     ];
 
     try {
@@ -696,20 +739,15 @@ export function NastaveniBonusu() {
                 ? ""
                 : `&optimizeFor=${encodeURIComponent(pr.optimizeFor)}`;
             setImportHbLog(`${lt} — ${pr.popisek} — stránka ${page} (stahuji…)`);
-            const res = await fetch(
+            const chunk = await fetchJsonHutbuilderAdminPage(
               `/api/admin/hutbuilder-page?lineType=${encodeURIComponent(lt)}&page=${page}&timeoutMs=${pr.timeoutMs}${paramOptimize}`,
-              { signal: sig },
+              sig,
+              (pokus, max) => {
+                setImportHbLog(
+                  `${lt} — ${pr.popisek} — stránka ${page} — opakuji ${pokus}/${max}…`,
+                );
+              },
             );
-            const rawText = await res.text();
-            let chunk: Record<string, unknown>;
-            try {
-              chunk = JSON.parse(rawText) as Record<string, unknown>;
-            } catch {
-              throw new Error(rawText.slice(0, 280));
-            }
-            if (!res.ok) {
-              throw new Error(String(chunk.error ?? rawText.slice(0, 280)));
-            }
 
             const lines = Array.isArray(chunk.lines) ? chunk.lines : [];
             if (lines.length === 0) break;
