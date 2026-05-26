@@ -1,6 +1,6 @@
 -- Kontrola duplicitního obsahu karty pouze uvnitř inventáře daného uživatele.
 -- Porovnává všechna pole kromě X-Faktorů (`atributy`) a `card_slug`.
--- Spusť v Supabase SQL Editor po cards_setup.sql.
+-- Spusť v Supabase SQL Editor po cards_setup.sql a cards_typ_karty_kanonicky.sql.
 -- Aplikace volá přes supabase.rpc('cards_ma_duplicitni_obsah', …).
 --
 -- Migrace: staré signatury funkce (včetně parametru p_atributy).
@@ -87,7 +87,7 @@ as $$
       and trim(c.narodnost) = trim(p_narodnost)
       and trim(c.tym) = trim(p_tym)
       and c.liga = p_liga
-      and c.typ_karty = p_typ_karty
+      and public.typ_karty_kanonicky(c.typ_karty) = public.typ_karty_kanonicky(p_typ_karty)
       and c.plat = p_plat
       and (
         (c.ap is null and p_ap is null)

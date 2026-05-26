@@ -25,6 +25,8 @@ type Props = {
   inventarKarty?: readonly HutCard[];
   /** Při úpravě karty ji v nápovědě „moje“ neukazovat. */
   vyloucitKartuSlug?: string | null;
+  /** Při přidávání nové karty neumožní výběr položek z vlastního inventáře. */
+  blokovatVlastniKarty?: boolean;
   inputClassName?: string;
   required?: boolean;
   placeholder?: string;
@@ -58,7 +60,8 @@ function shodaKartaInventar(k: HutCard, dotaz: string): boolean {
 const MAX_VYSLEDKU = 18;
 const MAX_MINE = 10;
 
-function popisekZdroje(h: EaNhl26Hrac): string {
+function popisekZdroje(h: EaNhl26Hrac, duplicitni: boolean): string {
+  if (duplicitni) return "Duplicitní";
   if (h.source === "mine") return "V inventáři";
   if (h.source === "ea") return "EA";
   return "Komunita";
@@ -82,6 +85,7 @@ export function JmenoKartyNapoveda({
   inventarPocet,
   inventarKarty = [],
   vyloucitKartuSlug = null,
+  blokovatVlastniKarty = false,
   inputClassName,
   required,
   placeholder = "např. McDavid, Oilers…",
@@ -159,9 +163,20 @@ export function JmenoKartyNapoveda({
     return [...mine, ...ostatni].slice(0, MAX_VYSLEDKU);
   }, [value, userId, hraci, inventarKarty, vyloucitKartuSlug]);
 
+  const jeDuplicitni = useCallback(
+    (h: EaNhl26Hrac) => blokovatVlastniKarty && h.source === "mine",
+    [blokovatVlastniKarty],
+  );
+
+  const lzeVybrat = useCallback(
+    (h: EaNhl26Hrac) => !jeDuplicitni(h),
+    [jeDuplicitni],
+  );
+
   useEffect(() => {
-    setVybranyIdx(0);
-  }, [value, vysledky.length]);
+    const first = vysledky.findIndex(lzeVybrat);
+    setVybranyIdx(first >= 0 ? first : 0);
+  }, [value, vysledky, lzeVybrat]);
 
   useEffect(() => {
     if (!otevreno) return;
@@ -183,17 +198,33 @@ export function JmenoKartyNapoveda({
     [onVybratHrace, onChange],
   );
 
+  const dalsiVybratelnyIdx = useCallback(
+    (from: number, dir: 1 | -1) => {
+      if (vysledky.length === 0) return 0;
+      let i = from;
+      for (let n = 0; n < vysledky.length; n++) {
+        i = (i + dir + vysledky.length) % vysledky.length;
+        if (lzeVybrat(vysledky[i]!)) return i;
+      }
+      return from;
+    },
+    [vysledky, lzeVybrat],
+  );
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!otevreno || vysledky.length === 0) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setVybranyIdx((i) => (i + 1) % vysledky.length);
+      setVybranyIdx((i) => dalsiVybratelnyIdx(i, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setVybranyIdx((i) => (i - 1 + vysledky.length) % vysledky.length);
-    } else if (e.key === "Enter" && vysledky[vybranyIdx]) {
-      e.preventDefault();
-      aplikuj(vysledky[vybranyIdx]!);
+      setVybranyIdx((i) => dalsiVybratelnyIdx(i, -1));
+    } else if (e.key === "Enter") {
+      const h = vysledky[vybranyIdx];
+      if (h && lzeVybrat(h)) {
+        e.preventDefault();
+        aplikuj(h);
+      }
     } else if (e.key === "Escape") {
       setOtevreno(false);
     }
@@ -241,43 +272,56 @@ export function JmenoKartyNapoveda({
           className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-auto rounded-lg border border-[var(--hut-border)] bg-[var(--hut-surface)] py-1 shadow-xl"
         >
           {vysledky.map((h, idx) => {
-            const jeMoje = h.source === "mine";
+            const duplicitni = jeDuplicitni(h);
             return (
-              <li key={h.key} role="option" aria-selected={idx === vybranyIdx}>
+              <li
+                key={h.key}
+                role="option"
+                aria-selected={idx === vybranyIdx}
+                aria-disabled={duplicitni}
+              >
                 <button
                   type="button"
+                  disabled={duplicitni}
+                  title={
+                    duplicitni
+                      ? "Tato karta už je v inventáři — nelze přidat duplicitu"
+                      : undefined
+                  }
                   className={[
                     "flex w-full flex-col items-start gap-0.5 border-l-2 px-3 py-2 text-left text-sm transition-colors",
-                    jeMoje
-                      ? idx === vybranyIdx
-                        ? "border-[var(--hut-lime)] bg-[var(--hut-lime)]/15 text-white"
-                        : "border-[var(--hut-lime)]/70 bg-[var(--hut-lime)]/[0.07] text-zinc-100 hover:bg-[var(--hut-lime)]/12"
+                    duplicitni
+                      ? "cursor-not-allowed border-red-500/80 bg-red-950/30 text-red-200/90"
                       : idx === vybranyIdx
                         ? "border-transparent bg-[var(--hut-surface-raised)] text-white"
                         : "border-transparent text-zinc-200 hover:bg-[var(--hut-surface-raised)]/70",
                   ].join(" ")}
-                  onMouseEnter={() => setVybranyIdx(idx)}
-                  onClick={() => aplikuj(h)}
+                  onMouseEnter={() => {
+                    if (!duplicitni) setVybranyIdx(idx);
+                  }}
+                  onClick={() => {
+                    if (!duplicitni) aplikuj(h);
+                  }}
                 >
                   <span className="flex w-full items-baseline justify-between gap-2">
                     <span className="font-medium">{h.jmeno}</span>
                     <span
                       className={[
                         "shrink-0 text-[10px] font-semibold uppercase tracking-wide",
-                        jeMoje ? "text-[var(--hut-lime)]" : "text-[var(--hut-muted)]",
+                        duplicitni ? "text-red-400" : "text-[var(--hut-muted)]",
                       ].join(" ")}
                     >
-                      {popisekZdroje(h)}
+                      {popisekZdroje(h, duplicitni)}
                     </span>
                   </span>
                   <span
                     className={[
                       "text-xs",
-                      jeMoje ? "text-[var(--hut-lime)]/85" : "text-[var(--hut-muted)]",
+                      duplicitni ? "text-red-400/85" : "text-[var(--hut-muted)]",
                     ].join(" ")}
                   >
                     {podtitulRadku(h)}
-                    {jeMoje ? " · už v inventáři" : ""}
+                    {duplicitni ? " · už v inventáři" : ""}
                   </span>
                 </button>
               </li>

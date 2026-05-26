@@ -104,7 +104,8 @@ export function KatalogHromadnyImport({
     });
   }, [radky, filtr]);
 
-  const muzuPridat = (p: Polozka) => !shodnaKartaJizVInventari(p.karta, stavajiciKarty);
+  const muzuPridat = (p: Polozka) =>
+    !shodnaKartaJizVInventari(p.karta, stavajiciKarty, typKartyMetaOpts ?? undefined);
 
   const prekliknout = (dbId: string) => {
     if (disabled) return;
@@ -129,7 +130,8 @@ export function KatalogHromadnyImport({
     let n = 0;
     for (const id of vybrano) {
       const p = radky.find((x) => x.dbId === id);
-      if (p && !shodnaKartaJizVInventari(p.karta, stavajiciKarty)) n += 1;
+      if (p && !shodnaKartaJizVInventari(p.karta, stavajiciKarty, typKartyMetaOpts ?? undefined))
+        n += 1;
     }
     return n;
   }, [vybrano, radky, stavajiciKarty]);
@@ -152,7 +154,7 @@ export function KatalogHromadnyImport({
     const preskoceno: string[] = [];
 
     for (const p of kPridani) {
-      if (shodnaKartaJizVInventari(p.karta, pracovni)) {
+      if (shodnaKartaJizVInventari(p.karta, pracovni, typKartyMetaOpts ?? undefined)) {
         preskoceno.push(p.karta.jmeno);
         continue;
       }

@@ -4,6 +4,10 @@ import { LIGY_V_PORADI } from "@/lib/tymyPodleLigy";
 import { normalizujEaXFactoryZDb } from "@/lib/eaXFactors";
 import { obnovIkonyXeFactoryZKatalogu } from "@/lib/xFactoryKatalog";
 import { normalizujPozici } from "@/lib/hutPozice";
+import {
+  kanonickyFiltrTypuKarty,
+  type NajdiMetaTypuKartyOpts,
+} from "@/lib/hutdbTypKaret";
 const RUKY: Ruka[] = ["LR", "PR"];
 const LIGA_SET = new Set<Liga>(LIGY_V_PORADI);
 
@@ -118,13 +122,80 @@ export function hutCardToInsertRow(userId: string, card: HutCard) {
 export const CHYBA_DUPLICITNI_OBSAH_KARTY =
   "Karta se stejnými údaji (kromě X-Faktorů) už ve tvém inventáři existuje. Duplikát nelze uložit.";
 
+type DuplicitaOpts = {
+  vyloucit?: { userId: string; cardSlug: string };
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null;
+  /** Lokální inventář — fallback, když RPC v Supabase chybí nebo selže. */
+  inventarFallback?: readonly HutCard[];
+};
+
+function radkaProDuplicituZHutCard(
+  card: HutCard,
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
+) {
+  const r = dataRadkuZHutCard(card);
+  return {
+    jmeno: r.jmeno.trim(),
+    ovr: r.ovr,
+    pozice: r.pozice,
+    preferovana_ruka: r.preferovana_ruka,
+    narodnost: r.narodnost.trim(),
+    tym: r.tym.trim(),
+    liga: r.liga,
+    typ_karty: kanonickyFiltrTypuKarty(r.typ_karty, typKartyMeta),
+    plat: Number(r.plat),
+    ap: r.ap ?? null,
+    prodano: r.prodano === true,
+  };
+}
+
+function radkyProDuplicituStejne(
+  a: ReturnType<typeof radkaProDuplicituZHutCard>,
+  b: ReturnType<typeof radkaProDuplicituZHutCard>,
+  ignorovatProdano = false,
+): boolean {
+  return (
+    a.jmeno === b.jmeno &&
+    a.ovr === b.ovr &&
+    a.pozice === b.pozice &&
+    a.preferovana_ruka === b.preferovana_ruka &&
+    a.narodnost === b.narodnost &&
+    a.tym === b.tym &&
+    a.liga === b.liga &&
+    a.typ_karty === b.typ_karty &&
+    a.plat === b.plat &&
+    a.ap === b.ap &&
+    (ignorovatProdano || a.prodano === b.prodano)
+  );
+}
+
+function duplicitaVInventariLokalne(
+  card: HutCard,
+  inventar: readonly HutCard[],
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
+  vyloucit?: { userId: string; cardSlug: string },
+  /** true = stejná sestava bez ohledu na prodáno (import z katalogu). */
+  ignorovatProdano = false,
+): boolean {
+  const kandidat = radkaProDuplicituZHutCard(card, typKartyMeta);
+  return inventar.some((k) => {
+    if (vyloucit && k.id === vyloucit.cardSlug) return false;
+    return radkyProDuplicituStejne(
+      kandidat,
+      radkaProDuplicituZHutCard(k, typKartyMeta),
+      ignorovatProdano,
+    );
+  });
+}
+
 async function maDuplicitniObsah(
   supabase: SupabaseClient,
   card: HutCard,
   proUzivateleId: string,
-  vyloucit?: { userId: string; cardSlug: string },
+  opts?: DuplicitaOpts,
 ): Promise<{ error: Error | null; duplikat: boolean }> {
   const row = dataRadkuZHutCard(card);
+  const typKanon = kanonickyFiltrTypuKarty(row.typ_karty, opts?.typKartyMeta);
   const { data, error } = await supabase.rpc("cards_ma_duplicitni_obsah", {
     p_jmeno: row.jmeno,
     p_ovr: row.ovr,
@@ -133,18 +204,43 @@ async function maDuplicitniObsah(
     p_narodnost: row.narodnost,
     p_tym: row.tym,
     p_liga: row.liga,
-    p_typ_karty: row.typ_karty,
+    p_typ_karty: typKanon,
     p_plat: row.plat,
     p_ap: row.ap ?? null,
     p_pouze_pro_user_id: proUzivateleId,
     p_prodano: row.prodano === true,
-    p_vyloucit_user_id: vyloucit?.userId ?? null,
-    p_vyloucit_card_slug: vyloucit?.cardSlug ?? null,
+    p_vyloucit_user_id: opts?.vyloucit?.userId ?? null,
+    p_vyloucit_card_slug: opts?.vyloucit?.cardSlug ?? null,
   });
   if (error) {
+    if (opts?.inventarFallback?.length) {
+      return {
+        error: null,
+        duplikat: duplicitaVInventariLokalne(
+          card,
+          opts.inventarFallback,
+          opts.typKartyMeta,
+          opts.vyloucit,
+          false,
+        ),
+      };
+    }
     return { error: new Error(error.message), duplikat: false };
   }
-  return { error: null, duplikat: data === true };
+  if (data === true) {
+    return { error: null, duplikat: true };
+  }
+  if (opts?.inventarFallback?.length) {
+    const lokalne = duplicitaVInventariLokalne(
+      card,
+      opts.inventarFallback,
+      opts.typKartyMeta,
+      opts.vyloucit,
+      false,
+    );
+    if (lokalne) return { error: null, duplikat: true };
+  }
+  return { error: null, duplikat: false };
 }
 
 export async function nactiKartyUzivatele(
@@ -173,8 +269,9 @@ export async function vlozKartu(
   supabase: SupabaseClient,
   userId: string,
   card: HutCard,
+  opts?: Pick<DuplicitaOpts, "typKartyMeta" | "inventarFallback">,
 ): Promise<{ error: Error | null }> {
-  const dup = await maDuplicitniObsah(supabase, card, userId);
+  const dup = await maDuplicitniObsah(supabase, card, userId, opts);
   if (dup.error) return { error: dup.error };
   if (dup.duplikat) return { error: new Error(CHYBA_DUPLICITNI_OBSAH_KARTY) };
 
@@ -188,87 +285,79 @@ export async function vlozKartu(
 /**
  * Pole pro kontrolu duplicity — vše kromě X-Faktorů (`atributy`) a `card_slug`.
  */
-function radkaZHutCardProDuplicitu(card: HutCard) {
-  const r = dataRadkuZHutCard(card);
-  return {
-    jmeno: r.jmeno,
-    ovr: r.ovr,
-    pozice: r.pozice,
-    preferovana_ruka: r.preferovana_ruka,
-    narodnost: r.narodnost,
-    tym: r.tym,
-    liga: r.liga,
-    typ_karty: r.typ_karty,
-    plat: r.plat,
-    ap: r.ap ?? null,
-    prodano: r.prodano,
-  };
+function radkaZHutCardProDuplicitu(
+  card: HutCard,
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
+) {
+  return radkaProDuplicituZHutCard(card, typKartyMeta);
 }
 
-function radkaZHutCardProDuplicituBezProdano(card: HutCard) {
-  const { prodano: _p, ...rest } = radkaZHutCardProDuplicitu(card);
+function radkaZHutCardProDuplicituBezProdano(
+  card: HutCard,
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
+) {
+  const { prodano: _p, ...rest } = radkaProDuplicituZHutCard(card, typKartyMeta);
   return rest;
 }
 
 function jsouRadkyProDuplicituStejne(
-  a: ReturnType<typeof radkaZHutCardProDuplicitu>,
-  b: ReturnType<typeof radkaZHutCardProDuplicitu>,
+  a: ReturnType<typeof radkaProDuplicituZHutCard>,
+  b: ReturnType<typeof radkaProDuplicituZHutCard>,
 ): boolean {
-  return (
-    a.jmeno === b.jmeno &&
-    a.ovr === b.ovr &&
-    a.pozice === b.pozice &&
-    a.preferovana_ruka === b.preferovana_ruka &&
-    a.narodnost === b.narodnost &&
-    a.tym === b.tym &&
-    a.liga === b.liga &&
-    a.typ_karty === b.typ_karty &&
-    a.plat === b.plat &&
-    a.ap === b.ap &&
-    a.prodano === b.prodano
-  );
+  return radkyProDuplicituStejne(a, b, false);
 }
 
 /** Stejné údaje jako při duplicitní kontrole v DB, ale ignoruje „Prodáno“. */
-export function jsouKartyStejneKromeProdano(a: HutCard, b: HutCard): boolean {
-  const ra = radkaZHutCardProDuplicituBezProdano(a);
-  const rb = radkaZHutCardProDuplicituBezProdano(b);
-  return (
-    ra.jmeno === rb.jmeno &&
-    ra.ovr === rb.ovr &&
-    ra.pozice === rb.pozice &&
-    ra.preferovana_ruka === rb.preferovana_ruka &&
-    ra.narodnost === rb.narodnost &&
-    ra.tym === rb.tym &&
-    ra.liga === rb.liga &&
-    ra.typ_karty === rb.typ_karty &&
-    ra.plat === rb.plat &&
-    ra.ap === rb.ap
+export function jsouKartyStejneKromeProdano(
+  a: HutCard,
+  b: HutCard,
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
+): boolean {
+  return radkyProDuplicituStejne(
+    radkaProDuplicituZHutCard(a, typKartyMeta),
+    radkaProDuplicituZHutCard(b, typKartyMeta),
+    true,
   );
 }
 
 /** Uložená karta se liší jen příznakem prodáno (typicky označit jednu z dvou kopií). */
-export function jeZmenaJenProdano(puvodni: HutCard, nova: HutCard): boolean {
+export function jeZmenaJenProdano(
+  puvodni: HutCard,
+  nova: HutCard,
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
+): boolean {
   const p = puvodni.prodano === true;
   const n = nova.prodano === true;
   if (p === n) return false;
-  return jsouKartyStejneKromeProdano(puvodni, nova);
+  return jsouKartyStejneKromeProdano(puvodni, nova, typKartyMeta);
 }
 
 /** Porovnání obsahu karty (bez `id` / slug a bez X-Faktorů) — shoda s řádkem v DB / katalogem. */
-export function jsouKartyObsahoveStejne(a: HutCard, b: HutCard): boolean {
-  return jsouRadkyProDuplicituStejne(
-    radkaZHutCardProDuplicitu(a),
-    radkaZHutCardProDuplicitu(b),
+export function jsouKartyObsahoveStejne(
+  a: HutCard,
+  b: HutCard,
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
+): boolean {
+  return radkyProDuplicituStejne(
+    radkaProDuplicituZHutCard(a, typKartyMeta),
+    radkaProDuplicituZHutCard(b, typKartyMeta),
+    false,
   );
 }
 
-/** Zda `kandidát` odpovídá už některé uložené kartě (stejné srovnání obsahu jako při ukládání do DB). */
+/** Zda `kandidát` odpovídá už některé uložené kartě (katalog / inventář — bez ohledu na prodáno). */
 export function shodnaKartaJizVInventari(
   kandidat: HutCard,
   inventar: readonly HutCard[],
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
 ): boolean {
-  return inventar.some((k) => jsouKartyObsahoveStejne(k, kandidat));
+  return duplicitaVInventariLokalne(
+    kandidat,
+    inventar,
+    typKartyMeta,
+    undefined,
+    true,
+  );
 }
 
 export type GlobalniKatalogRadkaDb = {
@@ -399,14 +488,16 @@ export async function aktualizujKartu(
   card: HutCard,
   /** Snapshot řádku před úpravou (z UI) — při změně jen „Prodáno“ neblokovat duplicitu druhé kopie. */
   puvodniKarta?: HutCard | null,
+  opts?: Pick<DuplicitaOpts, "typKartyMeta" | "inventarFallback">,
 ): Promise<{ error: Error | null }> {
   const preskocitKontroluDuplicit =
-    puvodniKarta != null && jeZmenaJenProdano(puvodniKarta, card);
+    puvodniKarta != null &&
+    jeZmenaJenProdano(puvodniKarta, card, opts?.typKartyMeta);
 
   if (!preskocitKontroluDuplicit) {
     const dup = await maDuplicitniObsah(supabase, card, userId, {
-      userId,
-      cardSlug: puvodniSlug,
+      vyloucit: { userId, cardSlug: puvodniSlug },
+      ...opts,
     });
     if (dup.error) return { error: dup.error };
     if (dup.duplikat) return { error: new Error(CHYBA_DUPLICITNI_OBSAH_KARTY) };

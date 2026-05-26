@@ -477,6 +477,20 @@ export function najdiMetaTypuKarty(
   return najdiMetaTypuKartyJenStatic(ulozeno);
 }
 
+/**
+ * Kanonická hodnota `hodnotaFiltru` pro porovnání duplicit (TOTW → TEAM OF THE WEEK, …).
+ */
+export function kanonickyFiltrTypuKarty(
+  ulozeno: string,
+  opts?: NajdiMetaTypuKartyOpts | null,
+): string {
+  const t = ulozeno.trim();
+  if (!t) return "";
+  const meta = najdiMetaTypuKarty(t, opts);
+  if (meta) return meta.hodnotaFiltru.toUpperCase();
+  return rozvezStatickeAliasy(t.toUpperCase());
+}
+
 /** Krátký text do řádku karty: český název, jinak původní řetězec. */
 export function zobrazitelnyNazevTypuKarty(
   ulozeno: string,

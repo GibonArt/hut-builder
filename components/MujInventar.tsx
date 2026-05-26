@@ -25,6 +25,7 @@ import {
   aktualizujKartu,
   CHYBA_DUPLICITNI_OBSAH_KARTY,
   nactiKartyUzivatele,
+  shodnaKartaJizVInventari,
   smazKartuPodleSlug,
   vlozKartu,
 } from "@/lib/cardsDb";
@@ -163,6 +164,13 @@ export function MujInventar() {
       setFormError(null);
 
       if (h.source === "mine" && h.inventarKartaId) {
+        if (!editujiSlug) {
+          toast.error(
+            "Tato karta už je v inventáři — nelze přidat duplicitu.",
+          );
+          return;
+        }
+
         const existujici = karty.find((k) => k.id === h.inventarKartaId);
         if (!existujici) return;
 
@@ -192,7 +200,6 @@ export function MujInventar() {
           xf[2] ?? { id: "", label: "" },
         ]);
         setUpozorneniKartovaNapoveda(true);
-        toast.message("Karta už je v inventáři — údaje doplněny z ní (nemusíš znovu vyplňovat).");
         return;
       }
 
@@ -254,7 +261,7 @@ export function MujInventar() {
 
       setUpozorneniKartovaNapoveda(true);
     },
-    [narodnostiVolby, karty],
+    [narodnostiVolby, karty, editujiSlug],
   );
 
   useEffect(() => {
@@ -612,6 +619,14 @@ export function MujInventar() {
       nova.prodano = prodano;
       const zdrojova = karty.find((c) => c.id === editujiSlug);
       if (zdrojova?.ap != null) nova.ap = zdrojova.ap;
+    } else if (
+      shodnaKartaJizVInventari(nova, karty, typKartyMetaOpts ?? undefined)
+    ) {
+      return {
+        ok: false,
+        chyba:
+          "Kartu se shodnými údaji už v inventáři máš — uprav stávající záznam, nebo změň třeba OVR, tým nebo typ karty.",
+      };
     }
 
     return { ok: true, nova, finalId };
@@ -660,7 +675,14 @@ export function MujInventar() {
     if (editujiSlug) {
       const puvodni = karty.find((c) => c.id === editujiSlug);
       const errUloz = (
-        await aktualizujKartu(supabase, user.id, editujiSlug, nova, puvodni ?? null)
+        await aktualizujKartu(
+          supabase,
+          user.id,
+          editujiSlug,
+          nova,
+          puvodni ?? null,
+          { typKartyMeta: typKartyMetaOpts, inventarFallback: karty },
+        )
       ).error;
       setUkladamKartu(false);
       if (errUloz) {
@@ -689,7 +711,12 @@ export function MujInventar() {
       return;
     }
 
-    const errUloz = (await vlozKartu(supabase, user.id, nova)).error;
+    const errUloz = (
+      await vlozKartu(supabase, user.id, nova, {
+        typKartyMeta: typKartyMetaOpts,
+        inventarFallback: karty,
+      })
+    ).error;
     setUkladamKartu(false);
 
     if (errUloz) {
@@ -833,6 +860,7 @@ export function MujInventar() {
                 inventarPocet={karty.length}
                 inventarKarty={karty}
                 vyloucitKartuSlug={editujiSlug}
+                blokovatVlastniKarty={!editujiSlug}
                 inputClassName={inputClass}
                 required
               />
