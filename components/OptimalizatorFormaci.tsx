@@ -26,7 +26,11 @@ import {
   type TypBonusuKombinace,
 } from "@/lib/bonusKombinaceDb";
 import {
+  filtrujDvojicePodleTymuKapitanskaSouhra,
   filtrujKartyPodleOvr,
+  filtrujUtokPodleTymuKapitanskaSouhra,
+  klicTymFiltruKapitanskaSouhra,
+  MAX_KAPITANSKYCH_TYMU_FILTR,
   parseOvrVolitelne,
   prirazeniSymboluDvojice,
   prirazeniSymboluUtok,
@@ -34,20 +38,23 @@ import {
   spoctiObranneDvojice,
   spoctiUtocneFormace,
   type DvojiceVysledek,
+  type TymFiltrKapitanskaSouhra,
   type UtocnaFormaceVysledek,
 } from "@/lib/optimalizatorFormaci";
 import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
 import { urlLogaTymu } from "@/lib/tymLoga";
+import { LIGA_ZOBRAZENI } from "@/lib/tymyPodleLigy";
 import { HUT_POZICE_ZKRATKA } from "@/lib/hutPozice";
 import { formatovatPlatVMil, parsePlatVstupVMilionech } from "@/lib/platMiliony";
-import type { HutCard, Pozice } from "@/types";
+import type { HutCard, Liga, Pozice } from "@/types";
 import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import { TypKartyMiniLogo } from "@/components/TypKartyIkona";
 import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { InventarKartaHledac } from "@/components/InventarKartaHledac";
-import { TymLogo } from "@/components/TymLogo";
+import { TymHledacNapricLigami } from "@/components/TymHledacNapricLigami";
+import { TymLogo, TymLogoOblast } from "@/components/TymLogo";
 import {
   SOUPISKA_POZADOVANE,
   jeKompletniSoupiska,
@@ -99,7 +106,19 @@ type SnapshotFiltryOptimalizatoru = {
   /** Prázdné = všichni; jinak `HutCard.id` — jen formace obsahující tuto kartu z inventáře. */
   hracKartaId: string;
   typBonusuFiltr: TypBonusuKombinace | "vse";
+  /** Týmy z požadavku kapitánské souhry — ve formaci musí být každý zastoupen. */
+  kapitanskaTymy: TymFiltrKapitanskaSouhra[];
 };
+
+function stejneTymyFiltryKapitanskaSouhra(
+  a: readonly TymFiltrKapitanskaSouhra[],
+  b: readonly TymFiltrKapitanskaSouhra[],
+): boolean {
+  if (a.length !== b.length) return false;
+  const ka = [...a].map(klicTymFiltruKapitanskaSouhra).sort().join("\0");
+  const kb = [...b].map(klicTymFiltruKapitanskaSouhra).sort().join("\0");
+  return ka === kb;
+}
 
 const btnHledatClass =
   "min-h-12 touch-manipulation rounded-full border border-[var(--hut-lime)]/55 bg-[var(--hut-lime)]/15 px-6 py-3 text-sm font-semibold text-[var(--hut-lime)] shadow-sm transition-colors hover:bg-[var(--hut-lime)]/25 disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-0 sm:py-2.5";
@@ -758,6 +777,7 @@ export function OptimalizatorFormaci() {
   const [maxOvrStr, setMaxOvrStr] = useState("");
   const [maxRozpocetMilStr, setMaxRozpocetMilStr] = useState("");
   const [hracKartaId, setHracKartaId] = useState("");
+  const [kapitanskaTymy, setKapitanskaTymy] = useState<TymFiltrKapitanskaSouhra[]>([]);
   const [typBonusuFiltr, setTypBonusuFiltr] = useState<TypBonusuKombinace | "vse">("vse");
   /** Hodnoty filtrů použité u posledního výpočtu (klik „Hledat“). Dokud je null, náročné výpočty neběží. */
   const [filtryPoHledani, setFiltryPoHledani] = useState<SnapshotFiltryOptimalizatoru | null>(
@@ -820,9 +840,10 @@ export function OptimalizatorFormaci() {
       filtryPoHledani.maxOvrStr !== maxOvrStr ||
       filtryPoHledani.maxRozpocetMilStr !== maxRozpocetMilStr ||
       filtryPoHledani.hracKartaId !== hracKartaId ||
-      filtryPoHledani.typBonusuFiltr !== typBonusuFiltr
+      filtryPoHledani.typBonusuFiltr !== typBonusuFiltr ||
+      !stejneTymyFiltryKapitanskaSouhra(filtryPoHledani.kapitanskaTymy, kapitanskaTymy)
     );
-  }, [filtryPoHledani, minOvrStr, maxOvrStr, maxRozpocetMilStr, hracKartaId, typBonusuFiltr]);
+  }, [filtryPoHledani, minOvrStr, maxOvrStr, maxRozpocetMilStr, hracKartaId, typBonusuFiltr, kapitanskaTymy]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -833,6 +854,7 @@ export function OptimalizatorFormaci() {
       setKridlaVzajemna(false);
       setLoPoVzajemne(false);
       setHracKartaId("");
+      setKapitanskaTymy([]);
       setUlozenaSoupiskaMeta(null);
       return;
     }
@@ -940,6 +962,34 @@ export function OptimalizatorFormaci() {
     return karty.find((k) => k.id === hracKartaIdAplikovany) ?? null;
   }, [hracKartaIdAplikovany, karty]);
 
+  const kapitanskaTymyAplikovane = useMemo(
+    () => filtryPoHledani?.kapitanskaTymy ?? [],
+    [filtryPoHledani],
+  );
+
+  const pridejKapitanskyTym = useCallback((liga: Liga, tym: string) => {
+    setKapitanskaTymy((prev) => {
+      if (prev.length >= MAX_KAPITANSKYCH_TYMU_FILTR) {
+        toast.error(
+          `Nejvýše ${MAX_KAPITANSKYCH_TYMU_FILTR} týmy pro kapitánskou souhru.`,
+        );
+        return prev;
+      }
+      const klic = klicTymFiltruKapitanskaSouhra({ liga, tym });
+      if (prev.some((t) => klicTymFiltruKapitanskaSouhra(t) === klic)) {
+        toast.message("Tento tým už je vybraný.");
+        return prev;
+      }
+      return [...prev, { liga, tym }];
+    });
+  }, []);
+
+  const odeberKapitanskyTym = useCallback((klic: string) => {
+    setKapitanskaTymy((prev) =>
+      prev.filter((t) => klicTymFiltruKapitanskaSouhra(t) !== klic),
+    );
+  }, []);
+
   const vysledkyUtok = useMemo(
     () =>
       spoctiUtocneFormace(kartyVeFiltru, utocneRadky, narodnostiVolby, {
@@ -1000,6 +1050,27 @@ export function OptimalizatorFormaci() {
     [golmaniZobrazenoPoRozpoctu, hracKartaIdAplikovany],
   );
 
+  const utokZobrazenoPoKapitanske = useMemo(
+    () => filtrujUtokPodleTymuKapitanskaSouhra(utokZobrazenoPoHracovi, kapitanskaTymyAplikovane),
+    [utokZobrazenoPoHracovi, kapitanskaTymyAplikovane],
+  );
+  const obranaZobrazenoPoKapitanske = useMemo(
+    () =>
+      filtrujDvojicePodleTymuKapitanskaSouhra(
+        obranaZobrazenoPoHracovi,
+        kapitanskaTymyAplikovane,
+      ),
+    [obranaZobrazenoPoHracovi, kapitanskaTymyAplikovane],
+  );
+  const golmaniZobrazenoPoKapitanske = useMemo(
+    () =>
+      filtrujDvojicePodleTymuKapitanskaSouhra(
+        golmaniZobrazenoPoHracovi,
+        kapitanskaTymyAplikovane,
+      ),
+    [golmaniZobrazenoPoHracovi, kapitanskaTymyAplikovane],
+  );
+
   const mapaBonusuUtok = useMemo(
     () => mapaTypuBonusuNaSestavuUtok(vysledkyUtok),
     [vysledkyUtok],
@@ -1024,32 +1095,32 @@ export function OptimalizatorFormaci() {
   const utokZobrazenoPoPrekryvu = useMemo(
     () =>
       filtrujPodlePrekryvuTypuBonusu(
-        utokZobrazenoPoHracovi,
+        utokZobrazenoPoKapitanske,
         mapaBonusuUtok,
         klicHracuUtokTrojice,
         filtrPrekryvBonusu,
       ),
-    [utokZobrazenoPoHracovi, mapaBonusuUtok, filtrPrekryvBonusu],
+    [utokZobrazenoPoKapitanske, mapaBonusuUtok, filtrPrekryvBonusu],
   );
   const obranaZobrazenoPoPrekryvu = useMemo(
     () =>
       filtrujPodlePrekryvuTypuBonusu(
-        obranaZobrazenoPoHracovi,
+        obranaZobrazenoPoKapitanske,
         mapaBonusuObrana,
         klicHracuDvojiceIde,
         filtrPrekryvBonusu,
       ),
-    [obranaZobrazenoPoHracovi, mapaBonusuObrana, filtrPrekryvBonusu],
+    [obranaZobrazenoPoKapitanske, mapaBonusuObrana, filtrPrekryvBonusu],
   );
   const golmaniZobrazenoPoPrekryvu = useMemo(
     () =>
       filtrujPodlePrekryvuTypuBonusu(
-        golmaniZobrazenoPoHracovi,
+        golmaniZobrazenoPoKapitanske,
         mapaBonusuGolmani,
         klicHracuDvojiceIde,
         filtrPrekryvBonusu,
       ),
-    [golmaniZobrazenoPoHracovi, mapaBonusuGolmani, filtrPrekryvBonusu],
+    [golmaniZobrazenoPoKapitanske, mapaBonusuGolmani, filtrPrekryvBonusu],
   );
 
   const mapaUtok = useMemo(() => {
@@ -1422,6 +1493,7 @@ export function OptimalizatorFormaci() {
         maxRozpocetMilStr,
         hracKartaId,
         typBonusuFiltr,
+        kapitanskaTymy: [...kapitanskaTymy],
       });
     });
   };
@@ -1436,6 +1508,7 @@ export function OptimalizatorFormaci() {
     maxOvrStr.trim() !== "" ||
     maxRozpocetMilStr.trim() !== "" ||
     hracKartaId !== "" ||
+    kapitanskaTymy.length > 0 ||
     typBonusuFiltr !== "vse" ||
     kridlaVzajemna ||
     loPoVzajemne;
@@ -1445,6 +1518,7 @@ export function OptimalizatorFormaci() {
     setMaxOvrStr("");
     setMaxRozpocetMilStr("");
     setHracKartaId("");
+    setKapitanskaTymy([]);
     setTypBonusuFiltr("vse");
     setKridlaVzajemna(false);
     setLoPoVzajemne(false);
@@ -1521,7 +1595,9 @@ export function OptimalizatorFormaci() {
             <p className="mt-1 text-xs text-[var(--hut-muted)]/90">
               OVR a rozpočet: prázdné pole = bez limitu. Rozpočet = součet platů všech hráčů v dané sestavě (útok 3
               karty, obrana / brankáři 2 karty), ve stejných milionech jako u karet v inventáři. Výběr hráče z tvého
-              inventáře zobrazí jen formace, kde daná karta figuruje. Typ bonusu zužuje
+              inventáře zobrazí jen formace, kde daná karta figuruje. U kapitánské souhry vyber až{" "}
+              {MAX_KAPITANSKYCH_TYMU_FILTR} týmy z požadavku na tvé kapitánské kartě — ve formaci musí být každý z nich
+              zastoupen alespoň jedním hráčem (jako u aktivace kapitánské chemie v HUT Builderu). Typ bonusu zužuje
               výsledky podle hodnoty z Nastavení bonusů. Kombinace se dopočítají až po kliknutí na{" "}
               <span className="text-zinc-300">Hledat</span> — úvodní načtení stránky tak zůstane rychlé.
             </p>
@@ -1626,6 +1702,72 @@ export function OptimalizatorFormaci() {
                 {chybaOvrRozsah}
               </p>
             ) : null}
+            <div className="mt-5 rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-4">
+              <p className={labelClass}>Kapitánská souhra — týmy (max. {MAX_KAPITANSKYCH_TYMU_FILTR})</p>
+              <p className="text-xs leading-relaxed text-[var(--hut-muted)]/95">
+                Na kapitánské kartě v HUT (stejně jako v{" "}
+                <a
+                  href="https://nhlhutbuilder.com/NHL26/builder.php"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[var(--hut-lime)] underline-offset-2 hover:underline"
+                >
+                  HUT Builderu
+                </a>
+                ) jsou uvedené týmy, ze kterých potřebuješ hráče v celé soupisce. Zde vyber tyto týmy — zobrazí se jen
+                formace, kde je v každé sestavě alespoň jeden hráč z každého zvoleného týmu.
+              </p>
+              {kapitanskaTymy.length > 0 ? (
+                <ul className="mt-3 flex flex-wrap gap-2">
+                  {kapitanskaTymy.map((t) => {
+                    const klic = klicTymFiltruKapitanskaSouhra(t);
+                    return (
+                      <li key={klic}>
+                        <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--hut-border)] bg-[var(--hut-surface)] py-1 pl-1.5 pr-2 text-sm text-zinc-100">
+                          <TymLogoOblast
+                            size={28}
+                            url={urlLogaTymu(t.tym, t.liga)}
+                            nazevTymu={t.tym}
+                          />
+                          <span className="min-w-0 truncate">{t.tym}</span>
+                          <span
+                            className="shrink-0 rounded-md border border-[var(--hut-border)] bg-[var(--hut-bg)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]"
+                            title={LIGA_ZOBRAZENI[t.liga]}
+                          >
+                            {t.liga}
+                          </span>
+                          <button
+                            type="button"
+                            className="ml-0.5 shrink-0 rounded-full px-1.5 text-[var(--hut-muted)] transition-colors hover:bg-red-950/40 hover:text-red-300"
+                            aria-label={`Odebrat ${t.tym}`}
+                            onClick={() => odeberKapitanskyTym(klic)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-[var(--hut-muted)]/80">
+                  Zatím žádný tým — vyhledání níže (např. Penguins, Maple Leafs…).
+                </p>
+              )}
+              {kapitanskaTymy.length < MAX_KAPITANSKYCH_TYMU_FILTR ? (
+                <div className="mt-3 max-w-xl">
+                  <label htmlFor="opt-kapitanska-tym" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                    Přidat tým
+                  </label>
+                  <TymHledacNapricLigami
+                    id="opt-kapitanska-tym"
+                    variant="formular"
+                    disabled={nacitani}
+                    onVybrat={pridejKapitanskyTym}
+                  />
+                </div>
+              ) : null}
+            </div>
             <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
               <label
                 htmlFor="opt-kridla-vzajemna"
@@ -1736,7 +1878,9 @@ export function OptimalizatorFormaci() {
                 {obranneRadky.length ? ` · ${obranneRadky.length} obranných kombinací` : ""}
                 {hracKartaIdAplikovany && vybranaKartaAplikovana
                   ? ` · hráč ${vybranaKartaAplikovana.jmeno}: útok ${utokZobrazenoPoHracovi.length}, obrana ${obranaZobrazenoPoHracovi.length}, brankáři ${golmaniZobrazenoPoHracovi.length}`
-                  : maxRozpocetAplikovany !== null
+                  : kapitanskaTymyAplikovane.length > 0
+                    ? ` · kapitánská souhra (${kapitanskaTymyAplikovane.map((t) => t.tym).join(", ")}): útok ${utokZobrazenoPoKapitanske.length}, obrana ${obranaZobrazenoPoKapitanske.length}, brankáři ${golmaniZobrazenoPoKapitanske.length}`
+                    : maxRozpocetAplikovany !== null
                     ? ` · max. plat ≤ ${formatovatPlatVMil(maxRozpocetAplikovany)}: útok ${utokZobrazenoPoRozpoctu.length}, obrana ${obranaZobrazenoPoRozpoctu.length}, brankáři ${golmaniZobrazenoPoRozpoctu.length}`
                     : filtryPoHledani.typBonusuFiltr !== "vse"
                       ? ` · zobrazeno jen ${filtryPoHledani.typBonusuFiltr}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
@@ -2289,9 +2433,18 @@ export function OptimalizatorFormaci() {
               </p>
             ) : null}
             {utokZobrazenoPoRozpoctu.length > 0 &&
+            utokZobrazenoPoKapitanske.length === 0 &&
+            kapitanskaTymyAplikovane.length > 0 ? (
+              <p className="mt-2 text-sm text-[var(--hut-muted)]">
+                Žádná útočná formace neobsahuje všechny zvolené týmy kapitánské souhry — zkus méně týmů, uvolnit OVR
+                nebo přidat karty z požadovaných týmů do inventáře.
+              </p>
+            ) : null}
+            {utokZobrazenoPoRozpoctu.length > 0 &&
             utokZobrazenoPoHracovi.length === 0 &&
             hracKartaIdAplikovany &&
-            vybranaKartaAplikovana ? (
+            vybranaKartaAplikovana &&
+            kapitanskaTymyAplikovane.length === 0 ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
                 {vybranaKartaAplikovana.jmeno} není v žádné útočné formaci při zvolených filtrech — zkus jinou pozici
                 (útok vyžaduje LK/C/PK), uvolnit OVR nebo zrušit výběr hráče.

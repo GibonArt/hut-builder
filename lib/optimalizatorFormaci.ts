@@ -1,4 +1,4 @@
-import type { HutCard } from "@/types";
+import type { HutCard, Liga } from "@/types";
 import {
   klicLogickeKombinace,
   type BonusKombinaceParametr,
@@ -66,6 +66,57 @@ export type DvojiceVysledek = {
   a: HutCard;
   b: HutCard;
 };
+
+/** Tým z požadavku kapitánské souhry (liga + přesný název týmu). */
+export type TymFiltrKapitanskaSouhra = {
+  liga: Liga;
+  tym: string;
+};
+
+export const MAX_KAPITANSKYCH_TYMU_FILTR = 3;
+
+export function klicTymFiltruKapitanskaSouhra(t: TymFiltrKapitanskaSouhra): string {
+  return `${t.liga}|${t.tym.trim().toLowerCase()}`;
+}
+
+export function kartaJeZTymFiltruKapitanskaSouhra(
+  k: HutCard,
+  t: TymFiltrKapitanskaSouhra,
+): boolean {
+  return k.liga === t.liga && k.tym.trim() === t.tym.trim();
+}
+
+/**
+ * Každý zvolený tým musí být ve formaci zastoupen alespoň jednou kartou
+ * (stejná logika jako u kapitánské souhry — hráči z požadovaných týmů v sestavě).
+ */
+export function formaceObsahujeVsechnyTymyKapitanskaSouhra(
+  hraci: readonly HutCard[],
+  tymy: readonly TymFiltrKapitanskaSouhra[],
+): boolean {
+  if (tymy.length === 0) return true;
+  return tymy.every((t) => hraci.some((k) => kartaJeZTymFiltruKapitanskaSouhra(k, t)));
+}
+
+export function filtrujUtokPodleTymuKapitanskaSouhra(
+  radky: readonly UtocnaFormaceVysledek[],
+  tymy: readonly TymFiltrKapitanskaSouhra[],
+): UtocnaFormaceVysledek[] {
+  if (tymy.length === 0) return [...radky];
+  return radky.filter((v) =>
+    formaceObsahujeVsechnyTymyKapitanskaSouhra([v.lk, v.c, v.pk], tymy),
+  );
+}
+
+export function filtrujDvojicePodleTymuKapitanskaSouhra(
+  radky: readonly DvojiceVysledek[],
+  tymy: readonly TymFiltrKapitanskaSouhra[],
+): DvojiceVysledek[] {
+  if (tymy.length === 0) return [...radky];
+  return radky.filter((v) =>
+    formaceObsahujeVsechnyTymyKapitanskaSouhra([v.a, v.b], tymy),
+  );
+}
 
 /** Permutace indexů parametrů: slot i dostane `params[perm[i]]` (LK/C/PK nebo LO/PO). */
 const PERMUTACE3: readonly (readonly [number, number, number])[] = [
