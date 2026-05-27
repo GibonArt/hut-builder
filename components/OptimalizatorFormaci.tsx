@@ -105,7 +105,7 @@ type SnapshotFiltryOptimalizatoru = {
   /** Prázdné = všichni; jinak `HutCard.id` — jen formace obsahující tuto kartu z inventáře. */
   hracKartaId: string;
   typBonusuFiltr: TypBonusuKombinace | "vse";
-  /** Týmy z požadavku kapitánské souhry — ve formaci musí být každý zastoupen. */
+  /** Týmy z požadavku kapitánské souhry — útok/obrana musí mít hráče z některého z nich. */
   kapitanskaTymy: TymFiltrKapitanskaSouhra[];
 };
 
@@ -1055,14 +1055,7 @@ export function OptimalizatorFormaci() {
       ),
     [obranaZobrazenoPoHracovi, kapitanskaTymyAplikovane],
   );
-  const golmaniZobrazenoPoKapitanske = useMemo(
-    () =>
-      filtrujDvojicePodleTymuKapitanskaSouhra(
-        golmaniZobrazenoPoHracovi,
-        kapitanskaTymyAplikovane,
-      ),
-    [golmaniZobrazenoPoHracovi, kapitanskaTymyAplikovane],
-  );
+  const golmaniZobrazenoPoKapitanske = golmaniZobrazenoPoHracovi;
 
   const mapaBonusuUtok = useMemo(
     () => mapaTypuBonusuNaSestavuUtok(vysledkyUtok),
@@ -1589,8 +1582,8 @@ export function OptimalizatorFormaci() {
               OVR a rozpočet: prázdné pole = bez limitu. Rozpočet = součet platů všech hráčů v dané sestavě (útok 3
               karty, obrana / brankáři 2 karty), ve stejných milionech jako u karet v inventáři. Výběr hráče z tvého
               inventáře zobrazí jen formace, kde daná karta figuruje. U kapitánské souhry vyber týmy z požadavku na tvé
-              kapitánské kartě — ve formaci musí být každý z nich zastoupen alespoň jedním hráčem (jako u aktivace
-              kapitánské chemie v HUT Builderu; útok max. 3 týmy v jedné trojici, obrana / brankáři max. 2). Typ bonusu zužuje
+              kapitánské kartě — v útoku a obraně se zobrazí jen formace s alespoň jedním hráčem z některého zvoleného
+              týmu (brankáře filtr neomezí). Typ bonusu zužuje
               výsledky podle hodnoty z Nastavení bonusů. Kombinace se dopočítají až po kliknutí na{" "}
               <span className="text-zinc-300">Hledat</span> — úvodní načtení stránky tak zůstane rychlé.
             </p>
@@ -1707,8 +1700,8 @@ export function OptimalizatorFormaci() {
                 >
                   HUT Builderu
                 </a>
-                ) jsou uvedené týmy, ze kterých potřebuješ hráče v celé soupisce. Zde vyber tyto týmy — zobrazí se jen
-                formace, kde je v každé sestavě alespoň jeden hráč z každého zvoleného týmu.
+                ) jsou uvedené týmy, ze kterých potřebuješ hráče v celé soupisce. Zde vyber tyto týmy — v útoku a
+                obraně uvidíš jen formace, kde je alespoň jeden hráč z některého zvoleného týmu.
               </p>
               {kapitanskaTymy.length > 0 ? (
                 <ul className="mt-3 flex flex-wrap gap-2">
@@ -2427,8 +2420,8 @@ export function OptimalizatorFormaci() {
             utokZobrazenoPoKapitanske.length === 0 &&
             kapitanskaTymyAplikovane.length > 0 ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
-                Žádná útočná formace neobsahuje všechny zvolené týmy kapitánské souhry — zkus méně týmů, uvolnit OVR
-                nebo přidat karty z požadovaných týmů do inventáře.
+                Žádná útočná formace nemá hráče ze zvolených týmů kapitánské souhry — přidej karty z těchto týmů do
+                inventáře nebo uvolni OVR.
               </p>
             ) : null}
             {utokZobrazenoPoRozpoctu.length > 0 &&
@@ -2502,6 +2495,14 @@ export function OptimalizatorFormaci() {
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
                 Žádná obranná dvojice se nevejde do rozpočtu do{" "}
                 {formatovatPlatVMil(maxRozpocetAplikovany)}.
+              </p>
+            ) : null}
+            {obranaZobrazenoPoRozpoctu.length > 0 &&
+            obranaZobrazenoPoKapitanske.length === 0 &&
+            kapitanskaTymyAplikovane.length > 0 ? (
+              <p className="mt-2 text-sm text-[var(--hut-muted)]">
+                Žádná obranná dvojice nemá hráče ze zvolených týmů kapitánské souhry — přidej karty z těchto týmů do
+                inventáře nebo uvolni OVR.
               </p>
             ) : null}
             {obranaZobrazenoPoRozpoctu.length > 0 &&
