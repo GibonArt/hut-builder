@@ -17,11 +17,14 @@ export function TypKartyIkonaVCtverci({
   nazev,
   velikost = "rada",
   zlatyOkraj = false,
+  bezOkraje = false,
 }: {
   comboSoubor: string | null;
   nazev: string;
   velikost?: "rada" | "mrizka" | "seznam" | "kombinace";
   zlatyOkraj?: boolean;
+  /** Bez border/background — např. kompaktní řádek ve formaci. */
+  bezOkraje?: boolean;
 }) {
   const [broken, setBroken] = useState(false);
   const url = urlLogaTypuKarty(comboSoubor);
@@ -37,23 +40,25 @@ export function TypKartyIkonaVCtverci({
         : velikost === "seznam"
           ? "h-7 w-7"
           : "h-9 w-9 sm:h-10 sm:w-10";
-  const okraj = zlatyOkraj
-    ? "border-[color-mix(in_srgb,var(--hut-gold)_55%,transparent)] ring-2 ring-[color-mix(in_srgb,var(--hut-gold)_35%,transparent)] shadow-[0_0_14px_rgba(212,175,55,0.12)]"
-    : "border-[var(--hut-border)]";
+  const okraj = bezOkraje
+    ? ""
+    : zlatyOkraj
+      ? "border-[color-mix(in_srgb,var(--hut-gold)_55%,transparent)] ring-2 ring-[color-mix(in_srgb,var(--hut-gold)_35%,transparent)] shadow-[0_0_14px_rgba(212,175,55,0.12)]"
+      : "border-[var(--hut-border)]";
+  const boxClass = bezOkraje
+    ? "inline-flex shrink-0 h-5 w-5 items-center justify-center overflow-hidden"
+    : `group inline-flex shrink-0 ${box} items-center justify-center overflow-hidden rounded-lg border bg-gradient-to-b from-zinc-900/95 to-black ${okraj}`;
 
   return (
-    <span
-      className={`group inline-flex shrink-0 ${box} items-center justify-center overflow-hidden rounded-lg border bg-gradient-to-b from-zinc-900/95 to-black ${okraj}`}
-      title={nazev}
-    >
+    <span className={boxClass} title={nazev}>
       {url && !broken ? (
         <img
           src={url}
           alt=""
           className={`block h-full w-full min-h-0 min-w-0 object-contain transition-opacity ${
-            velikost === "seznam" ? "p-1" : "p-1.5"
+            bezOkraje ? "p-0" : velikost === "seznam" ? "p-1" : "p-1.5"
           } ${
-            zlatyOkraj
+            bezOkraje || zlatyOkraj
               ? "opacity-100"
               : "opacity-90 hover:opacity-100 group-hover:opacity-100"
           }`}
@@ -81,12 +86,14 @@ export function TypKartyMiniLogo({
   ulozeno,
   velikost = "rada",
   metaOpts: metaOptsProp,
+  bezOkraje = false,
 }: {
   ulozeno: string;
   /** `seznam` = menší čtverec (např. řádek karty vedle vlajky a loga týmu). `kombinace` = stejný čtverec jako náhled bonusů (11×11). */
   velikost?: "rada" | "seznam" | "mrizka" | "kombinace";
   /** Bez kontextu stačí předat z `useMergedTypyKaret` + `useMemo` stejně jako u Provideru. */
   metaOpts?: NajdiMetaTypuKartyOpts | null;
+  bezOkraje?: boolean;
 }) {
   const zKontextu = useTypKartyMetaOpts();
   const metaOpts = metaOptsProp ?? zKontextu;
@@ -96,6 +103,7 @@ export function TypKartyMiniLogo({
       comboSoubor={meta?.comboSoubor ?? null}
       nazev={zobrazitelnyNazevTypuKarty(ulozeno, metaOpts ?? undefined)}
       velikost={velikost}
+      bezOkraje={bezOkraje}
     />
   );
 }

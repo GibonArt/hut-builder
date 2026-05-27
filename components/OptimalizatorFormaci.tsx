@@ -560,31 +560,20 @@ function IkonyHraceVeFormaci({
 }) {
   const kodNar = kodNarodnostiPodleLabelu(k.narodnost, narodnostiVolby);
   return (
-    <div
-      className="grid grid-cols-3 items-center gap-0.5"
+    <span
+      className="inline-flex shrink-0 items-center gap-1"
       aria-label={`${k.narodnost}, ${k.tym}, typ karty ${k.typKarty}`}
     >
-      <div className="flex justify-center">
-        <span className={PARAM_SYMBOL_BOX} title={k.narodnost}>
-          <span className="text-2xl leading-none" aria-hidden>
-            {kodNar ? vlajkaZeme(kodNar) : "—"}
-          </span>
-        </span>
-      </div>
-      <div className="flex justify-center">
-        <span className={PARAM_SYMBOL_BOX_TYM} title={k.tym}>
-          <TymLogo
-            url={urlLogaTymu(k.tym, k.liga)}
-            nazevTymu={k.tym}
-            fill
-            className="max-h-full max-w-full min-h-0 min-w-0 object-contain"
-          />
-        </span>
-      </div>
-      <div className="flex justify-center">
-        <TypKartyMiniLogo ulozeno={k.typKarty} velikost="kombinace" />
-      </div>
-    </div>
+      <span className="text-base leading-none" title={k.narodnost} aria-hidden>
+        {kodNar ? vlajkaZeme(kodNar) : "—"}
+      </span>
+      <TymLogoOblast
+        size={18}
+        url={urlLogaTymu(k.tym, k.liga)}
+        nazevTymu={k.tym}
+      />
+      <TypKartyMiniLogo ulozeno={k.typKarty} velikost="seznam" bezOkraje />
+    </span>
   );
 }
 
@@ -599,16 +588,16 @@ function BunkaHrace({
 }) {
   const z = HUT_POZICE_ZKRATKA[k.pozice];
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col justify-center gap-2 rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-2 py-2">
-      <IkonyHraceVeFormaci k={k} narodnostiVolby={narodnostiVolby} />
-      <div className="min-w-0">
-        <div className="flex items-center justify-between gap-2 text-[10px] text-[var(--hut-muted)]">
-          <span className="font-mono font-semibold text-[var(--hut-lime)]">
-            {role === "G1" || role === "G2" ? role : z}
-          </span>
-          <span className="tabular-nums text-zinc-300">OVR {k.ovr}</span>
-        </div>
-        <p className="truncate text-xs font-medium text-white">{k.jmeno}</p>
+    <div className="flex h-full min-h-0 min-w-0 flex-col justify-center rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-2 py-2">
+      <div className="flex items-center justify-between gap-2 text-[10px] text-[var(--hut-muted)]">
+        <span className="font-mono font-semibold text-[var(--hut-lime)]">
+          {role === "G1" || role === "G2" ? role : z}
+        </span>
+        <span className="tabular-nums text-zinc-300">OVR {k.ovr}</span>
+      </div>
+      <div className="mt-1 flex min-w-0 items-center gap-1.5">
+        <IkonyHraceVeFormaci k={k} narodnostiVolby={narodnostiVolby} />
+        <p className="min-w-0 flex-1 truncate text-xs font-medium text-white">{k.jmeno}</p>
       </div>
     </div>
   );
