@@ -30,7 +30,6 @@ import {
   filtrujKartyPodleOvr,
   filtrujUtokPodleTymuKapitanskaSouhra,
   klicTymFiltruKapitanskaSouhra,
-  MAX_KAPITANSKYCH_TYMU_FILTR,
   parseOvrVolitelne,
   prirazeniSymboluDvojice,
   prirazeniSymboluUtok,
@@ -969,12 +968,6 @@ export function OptimalizatorFormaci() {
 
   const pridejKapitanskyTym = useCallback((liga: Liga, tym: string) => {
     setKapitanskaTymy((prev) => {
-      if (prev.length >= MAX_KAPITANSKYCH_TYMU_FILTR) {
-        toast.error(
-          `Nejvýše ${MAX_KAPITANSKYCH_TYMU_FILTR} týmy pro kapitánskou souhru.`,
-        );
-        return prev;
-      }
       const klic = klicTymFiltruKapitanskaSouhra({ liga, tym });
       if (prev.some((t) => klicTymFiltruKapitanskaSouhra(t) === klic)) {
         toast.message("Tento tým už je vybraný.");
@@ -1595,9 +1588,9 @@ export function OptimalizatorFormaci() {
             <p className="mt-1 text-xs text-[var(--hut-muted)]/90">
               OVR a rozpočet: prázdné pole = bez limitu. Rozpočet = součet platů všech hráčů v dané sestavě (útok 3
               karty, obrana / brankáři 2 karty), ve stejných milionech jako u karet v inventáři. Výběr hráče z tvého
-              inventáře zobrazí jen formace, kde daná karta figuruje. U kapitánské souhry vyber až{" "}
-              {MAX_KAPITANSKYCH_TYMU_FILTR} týmy z požadavku na tvé kapitánské kartě — ve formaci musí být každý z nich
-              zastoupen alespoň jedním hráčem (jako u aktivace kapitánské chemie v HUT Builderu). Typ bonusu zužuje
+              inventáře zobrazí jen formace, kde daná karta figuruje. U kapitánské souhry vyber týmy z požadavku na tvé
+              kapitánské kartě — ve formaci musí být každý z nich zastoupen alespoň jedním hráčem (jako u aktivace
+              kapitánské chemie v HUT Builderu; útok max. 3 týmy v jedné trojici, obrana / brankáři max. 2). Typ bonusu zužuje
               výsledky podle hodnoty z Nastavení bonusů. Kombinace se dopočítají až po kliknutí na{" "}
               <span className="text-zinc-300">Hledat</span> — úvodní načtení stránky tak zůstane rychlé.
             </p>
@@ -1703,7 +1696,7 @@ export function OptimalizatorFormaci() {
               </p>
             ) : null}
             <div className="mt-5 rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-4">
-              <p className={labelClass}>Kapitánská souhra — týmy (max. {MAX_KAPITANSKYCH_TYMU_FILTR})</p>
+              <p className={labelClass}>Kapitánská souhra — týmy</p>
               <p className="text-xs leading-relaxed text-[var(--hut-muted)]/95">
                 Na kapitánské kartě v HUT (stejně jako v{" "}
                 <a
@@ -1754,19 +1747,17 @@ export function OptimalizatorFormaci() {
                   Zatím žádný tým — vyhledání níže (např. Penguins, Maple Leafs…).
                 </p>
               )}
-              {kapitanskaTymy.length < MAX_KAPITANSKYCH_TYMU_FILTR ? (
-                <div className="mt-3 max-w-xl">
-                  <label htmlFor="opt-kapitanska-tym" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
-                    Přidat tým
-                  </label>
-                  <TymHledacNapricLigami
-                    id="opt-kapitanska-tym"
-                    variant="formular"
-                    disabled={nacitani}
-                    onVybrat={pridejKapitanskyTym}
-                  />
-                </div>
-              ) : null}
+              <div className="mt-3 max-w-xl">
+                <label htmlFor="opt-kapitanska-tym" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                  Přidat tým
+                </label>
+                <TymHledacNapricLigami
+                  id="opt-kapitanska-tym"
+                  variant="formular"
+                  disabled={nacitani}
+                  onVybrat={pridejKapitanskyTym}
+                />
+              </div>
             </div>
             <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
               <label

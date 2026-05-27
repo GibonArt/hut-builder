@@ -73,8 +73,6 @@ export type TymFiltrKapitanskaSouhra = {
   tym: string;
 };
 
-export const MAX_KAPITANSKYCH_TYMU_FILTR = 3;
-
 export function klicTymFiltruKapitanskaSouhra(t: TymFiltrKapitanskaSouhra): string {
   return `${t.liga}|${t.tym.trim().toLowerCase()}`;
 }
