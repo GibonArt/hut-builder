@@ -103,7 +103,7 @@ type SnapshotFiltryOptimalizatoru = {
   /** Prázdné = všichni; jinak `HutCard.id` — jen formace obsahující tuto kartu z inventáře. */
   hracKartaId: string;
   typBonusuFiltr: TypBonusuKombinace | "vse";
-  /** Týmy z požadavku kapitánské souhry — útok/obrana musí mít hráče z některého z nich. */
+  /** Týmy z požadavku kapitánské souhry — ve formaci smí být jen hráči z těchto týmů. */
   kapitanskaTymy: TymFiltrKapitanskaSouhra[];
 };
 
@@ -1581,8 +1581,8 @@ export function OptimalizatorFormaci() {
               OVR a rozpočet: prázdné pole = bez limitu. Rozpočet = součet platů všech hráčů v dané sestavě (útok 3
               karty, obrana / brankáři 2 karty), ve stejných milionech jako u karet v inventáři. Výběr hráče z tvého
               inventáře zobrazí jen formace, kde daná karta figuruje. U kapitánské souhry vyber týmy z požadavku na tvé
-              kapitánské kartě — v útoku a obraně se zobrazí jen formace s alespoň jedním hráčem z některého zvoleného
-              týmu (brankáře filtr neomezí). Typ bonusu zužuje
+              kapitánské kartě — v útoku a obraně uvidíš jen formace, kde jsou všichni hráči právě z těchto týmů
+              (brankáře filtr neomezí). Typ bonusu zužuje
               výsledky podle hodnoty z Nastavení bonusů. Kombinace se dopočítají až po kliknutí na{" "}
               <span className="text-zinc-300">Hledat</span> — úvodní načtení stránky tak zůstane rychlé.
             </p>
@@ -1700,7 +1700,8 @@ export function OptimalizatorFormaci() {
                   HUT Builderu
                 </a>
                 ) jsou uvedené týmy, ze kterých potřebuješ hráče v celé soupisce. Zde vyber tyto týmy — v útoku a
-                obraně uvidíš jen formace, kde je alespoň jeden hráč z některého zvoleného týmu.
+                obraně uvidíš jen formace složené výhradně z hráčů z vybraných týmů (formace s jiným týmem nebo bez
+                nich se neukážou).
               </p>
               {kapitanskaTymy.length > 0 ? (
                 <ul className="mt-3 flex flex-wrap gap-2">
@@ -2419,7 +2420,7 @@ export function OptimalizatorFormaci() {
             utokZobrazenoPoKapitanske.length === 0 &&
             kapitanskaTymyAplikovane.length > 0 ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
-                Žádná útočná formace nemá hráče ze zvolených týmů kapitánské souhry — přidej karty z těchto týmů do
+                Žádná útočná formace nemá jen hráče ze zvolených týmů kapitánské souhry — přidej karty z těchto týmů do
                 inventáře nebo uvolni OVR.
               </p>
             ) : null}
@@ -2500,7 +2501,7 @@ export function OptimalizatorFormaci() {
             obranaZobrazenoPoKapitanske.length === 0 &&
             kapitanskaTymyAplikovane.length > 0 ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
-                Žádná obranná dvojice nemá hráče ze zvolených týmů kapitánské souhry — přidej karty z těchto týmů do
+                Žádná obranná dvojice nemá jen hráče ze zvolených týmů kapitánské souhry — přidej karty z těchto týmů do
                 inventáře nebo uvolni OVR.
               </p>
             ) : null}

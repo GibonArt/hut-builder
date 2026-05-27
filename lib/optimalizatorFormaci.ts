@@ -85,15 +85,15 @@ export function kartaJeZTymFiltruKapitanskaSouhra(
 }
 
 /**
- * Ve formaci je alespoň jeden hráč z některého zvoleného týmu
- * (kapitánská souhra — hráči z požadovaných týmů v útoku nebo obraně).
+ * Všichni hráči ve formaci jsou z některého zvoleného týmu
+ * (formace bez těchto týmů se neukáže; cizí tým ve formaci také ne).
  */
-export function formaceObsahujeNekteryVybranyTymKapitanskaSouhra(
+export function formaceJsouPouzeZVybranychTymuKapitanskaSouhra(
   hraci: readonly HutCard[],
   tymy: readonly TymFiltrKapitanskaSouhra[],
 ): boolean {
   if (tymy.length === 0) return true;
-  return hraci.some((k) =>
+  return hraci.every((k) =>
     tymy.some((t) => kartaJeZTymFiltruKapitanskaSouhra(k, t)),
   );
 }
@@ -104,7 +104,7 @@ export function filtrujUtokPodleTymuKapitanskaSouhra(
 ): UtocnaFormaceVysledek[] {
   if (tymy.length === 0) return [...radky];
   return radky.filter((v) =>
-    formaceObsahujeNekteryVybranyTymKapitanskaSouhra([v.lk, v.c, v.pk], tymy),
+    formaceJsouPouzeZVybranychTymuKapitanskaSouhra([v.lk, v.c, v.pk], tymy),
   );
 }
 
@@ -114,7 +114,7 @@ export function filtrujDvojicePodleTymuKapitanskaSouhra(
 ): DvojiceVysledek[] {
   if (tymy.length === 0) return [...radky];
   return radky.filter((v) =>
-    formaceObsahujeNekteryVybranyTymKapitanskaSouhra([v.a, v.b], tymy),
+    formaceJsouPouzeZVybranychTymuKapitanskaSouhra([v.a, v.b], tymy),
   );
 }
 
