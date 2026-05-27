@@ -31,8 +31,6 @@ import {
   filtrujUtokPodleTymuKapitanskaSouhra,
   klicTymFiltruKapitanskaSouhra,
   parseOvrVolitelne,
-  prirazeniSymboluDvojice,
-  prirazeniSymboluUtok,
   spoctiGolmanskeDvojice,
   spoctiObranneDvojice,
   spoctiUtocneFormace,
@@ -40,7 +38,7 @@ import {
   type TymFiltrKapitanskaSouhra,
   type UtocnaFormaceVysledek,
 } from "@/lib/optimalizatorFormaci";
-import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
+import { vsechnyNarodnostiCS, kodNarodnostiPodleLabelu, vlajkaZeme } from "@/lib/narodnosti";
 import { urlLogaTymu } from "@/lib/tymLoga";
 import { LIGA_ZOBRAZENI } from "@/lib/tymyPodleLigy";
 import { HUT_POZICE_ZKRATKA } from "@/lib/hutPozice";
@@ -553,36 +551,64 @@ function HlavickaVysledkuKombinace({
   );
 }
 
+function IkonyHraceVeFormaci({
+  k,
+  narodnostiVolby,
+}: {
+  k: HutCard;
+  narodnostiVolby: ReturnType<typeof vsechnyNarodnostiCS>;
+}) {
+  const kodNar = kodNarodnostiPodleLabelu(k.narodnost, narodnostiVolby);
+  return (
+    <div
+      className="grid grid-cols-3 items-center gap-0.5"
+      aria-label={`${k.narodnost}, ${k.tym}, typ karty ${k.typKarty}`}
+    >
+      <div className="flex justify-center">
+        <span className={PARAM_SYMBOL_BOX} title={k.narodnost}>
+          <span className="text-2xl leading-none" aria-hidden>
+            {kodNar ? vlajkaZeme(kodNar) : "—"}
+          </span>
+        </span>
+      </div>
+      <div className="flex justify-center">
+        <span className={PARAM_SYMBOL_BOX_TYM} title={k.tym}>
+          <TymLogo
+            url={urlLogaTymu(k.tym, k.liga)}
+            nazevTymu={k.tym}
+            fill
+            className="max-h-full max-w-full min-h-0 min-w-0 object-contain"
+          />
+        </span>
+      </div>
+      <div className="flex justify-center">
+        <TypKartyMiniLogo ulozeno={k.typKarty} velikost="kombinace" />
+      </div>
+    </div>
+  );
+}
+
 function BunkaHrace({
   k,
   role,
   narodnostiVolby,
-  symbolParam,
 }: {
   k: HutCard;
   role: Pozice | "G1" | "G2";
   narodnostiVolby: ReturnType<typeof vsechnyNarodnostiCS>;
-  /** Který symbol z kombinace tato karta pokrývá (podle zvoleného pořadí přiřazení). */
-  symbolParam?: BonusKombinaceParametr;
 }) {
   const z = HUT_POZICE_ZKRATKA[k.pozice];
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col justify-center rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-2 py-2">
-      <div className="flex items-center gap-2">
-        {symbolParam ? (
-          <div className="shrink-0" title="Splněný symbol z kombinace">
-            <ParamIkona p={symbolParam} narodnostiVolby={narodnostiVolby} />
-          </div>
-        ) : null}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2 text-[10px] text-[var(--hut-muted)]">
-            <span className="font-mono font-semibold text-[var(--hut-lime)]">
-              {role === "G1" || role === "G2" ? role : z}
-            </span>
-            <span className="tabular-nums text-zinc-300">OVR {k.ovr}</span>
-          </div>
-          <p className="truncate text-xs font-medium text-white">{k.jmeno}</p>
+    <div className="flex h-full min-h-0 min-w-0 flex-col justify-center gap-2 rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-2 py-2">
+      <IkonyHraceVeFormaci k={k} narodnostiVolby={narodnostiVolby} />
+      <div className="min-w-0">
+        <div className="flex items-center justify-between gap-2 text-[10px] text-[var(--hut-muted)]">
+          <span className="font-mono font-semibold text-[var(--hut-lime)]">
+            {role === "G1" || role === "G2" ? role : z}
+          </span>
+          <span className="tabular-nums text-zinc-300">OVR {k.ovr}</span>
         </div>
+        <p className="truncate text-xs font-medium text-white">{k.jmeno}</p>
       </div>
     </div>
   );
@@ -608,7 +634,6 @@ function UtocnaFormaceObsah({
   /** Jiné bonusy (PLAT/CLK/BS + hodnota z DB), které u téže trojice hráčů sedí na jiném řádku kombinace. */
   dalsiBonusyPrekryvu?: DalsiBonusPrekryv[];
 }) {
-  const sym = prirazeniSymboluUtok(v.lk, v.c, v.pk, v.kombinace, narodnostiVolby);
   const celkovyPlat = soucetPlatuKaret([v.lk, v.c, v.pk]);
   return (
     <>
@@ -649,24 +674,9 @@ function UtocnaFormaceObsah({
         </div>
       ) : null}
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:items-stretch">
-        <BunkaHrace
-          k={v.lk}
-          role="LK"
-          narodnostiVolby={narodnostiVolby}
-          symbolParam={sym?.[0]}
-        />
-        <BunkaHrace
-          k={v.c}
-          role="C"
-          narodnostiVolby={narodnostiVolby}
-          symbolParam={sym?.[1]}
-        />
-        <BunkaHrace
-          k={v.pk}
-          role="PK"
-          narodnostiVolby={narodnostiVolby}
-          symbolParam={sym?.[2]}
-        />
+        <BunkaHrace k={v.lk} role="LK" narodnostiVolby={narodnostiVolby} />
+        <BunkaHrace k={v.c} role="C" narodnostiVolby={narodnostiVolby} />
+        <BunkaHrace k={v.pk} role="PK" narodnostiVolby={narodnostiVolby} />
       </div>
     </>
   );
@@ -691,7 +701,6 @@ function DvojiceFormaceObsah({
   filtrHint: string;
   dalsiBonusyPrekryvu?: DalsiBonusPrekryv[];
 }) {
-  const sym = prirazeniSymboluDvojice(v.a, v.b, v.kombinace, narodnostiVolby);
   const celkovyPlat = soucetPlatuKaret([v.a, v.b]);
   const parametryPocet = 2 as const;
   return (
@@ -733,18 +742,8 @@ function DvojiceFormaceObsah({
         </div>
       ) : null}
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-stretch">
-        <BunkaHrace
-          k={v.a}
-          role={roleA}
-          narodnostiVolby={narodnostiVolby}
-          symbolParam={sym?.[0]}
-        />
-        <BunkaHrace
-          k={v.b}
-          role={roleB}
-          narodnostiVolby={narodnostiVolby}
-          symbolParam={sym?.[1]}
-        />
+        <BunkaHrace k={v.a} role={roleA} narodnostiVolby={narodnostiVolby} />
+        <BunkaHrace k={v.b} role={roleB} narodnostiVolby={narodnostiVolby} />
       </div>
     </>
   );
