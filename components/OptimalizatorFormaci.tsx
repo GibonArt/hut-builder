@@ -598,7 +598,7 @@ function BunkaHrace({
         {roleLabel}
       </span>
       <IkonyHraceVeFormaci k={k} narodnostiVolby={narodnostiVolby} />
-      <p className="min-w-0 flex-1 truncate text-xs font-medium leading-snug text-white">
+      <p className="min-w-0 flex-1 truncate text-sm font-semibold leading-snug text-white sm:text-base">
         {k.jmeno}
       </p>
       <span className="shrink-0 text-[10px] tabular-nums leading-none text-zinc-300">
