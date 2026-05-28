@@ -220,8 +220,8 @@ export function prirazeniSymboluDvojice(
 
 export type SpoctiUtocneFormaceOpts = {
   /**
-   * Když true, na slot „levé křídlo“ lze dát hráče s pozicí LK nebo PK a na „pravé křídlo“ také LK nebo PK
-   * (stejná sada křídel, tři různí hráči). Centr zůstává jen C.
+   * Když true, na slot „levé křídlo“ lze dát hráče s pozicí LK, PK nebo C a na „pravé křídlo“ také
+   * (stejná sada, tři různí hráči). Centr zůstává jen C.
    */
   kridlaVzajemna?: boolean;
 };
@@ -244,7 +244,9 @@ export function spoctiUtocneFormace(
   opts?: SpoctiUtocneFormaceOpts | null,
 ): UtocnaFormaceVysledek[] {
   const kridlaVzajemna = Boolean(opts?.kridlaVzajemna);
-  const kridla: HutCard[] = karty.filter((k) => k.pozice === "LK" || k.pozice === "PK");
+  const kridla: HutCard[] = karty.filter(
+    (k) => k.pozice === "LK" || k.pozice === "PK" || k.pozice === "C",
+  );
   const lk = kridlaVzajemna ? kridla : karty.filter((k) => k.pozice === "LK");
   const c = karty.filter((k) => k.pozice === "C");
   const pk = kridlaVzajemna ? kridla : karty.filter((k) => k.pozice === "PK");

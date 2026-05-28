@@ -1758,8 +1758,8 @@ export function OptimalizatorFormaci() {
                   className="mt-0.5 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
                 />
                 <span className="min-w-0">
-                  <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> LK a PK vzájemně (tři různí
-                  hráči, C jen pozice C).
+                  <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> na LK i PK lze dát LK, PK
+                  nebo C (tři různí hráči). Centr zůstává jen pozice C.
                 </span>
               </label>
               <label
