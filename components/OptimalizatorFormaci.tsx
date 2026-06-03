@@ -26,15 +26,22 @@ import {
   type TypBonusuKombinace,
 } from "@/lib/bonusKombinaceDb";
 import {
+  filtrujDvojicePodleMaxVyskytuOvr,
   filtrujDvojicePodleTymuKapitanskaSouhra,
   filtrujKartyPodleOvr,
+  filtrujUtokPodleMaxVyskytuOvr,
   filtrujUtokPodleTymuKapitanskaSouhra,
   klicTymFiltruKapitanskaSouhra,
   parseOvrVolitelne,
+  parsePocetVolitelne,
+  pocetHracuNaNeboNadOvr,
   spoctiGolmanskeDvojice,
   spoctiObranneDvojice,
   spoctiUtocneFormace,
+  spocetVyskytuOvrDvojiceSoupiska,
+  spocetVyskytuOvrUtokSoupiska,
   type DvojiceVysledek,
+  type LimityVyskytuOvrTurnaj,
   type TymFiltrKapitanskaSouhra,
   type UtocnaFormaceVysledek,
 } from "@/lib/optimalizatorFormaci";
@@ -105,6 +112,52 @@ type SnapshotFiltryOptimalizatoru = {
   typBonusuFiltr: TypBonusuKombinace | "vse";
   /** Týmy z požadavku kapitánské souhry — v každé formaci alespoň jeden hráč z těchto týmů. */
   kapitanskaTymy: TymFiltrKapitanskaSouhra[];
+  /** Turnajové limity počtu hráčů s OVR ≥ práh (prázdné pole = bez daného limitu). */
+  turnajPragOvrStr: string;
+  turnajMaxUtokVeFormaciStr: string;
+  turnajMaxUtokCelkemStr: string;
+  turnajMaxObranaVeFormaciStr: string;
+  turnajMaxObranaCelkemStr: string;
+};
+
+function limityVyskytuOvrZFiltru(
+  f: SnapshotFiltryOptimalizatoru | null,
+): LimityVyskytuOvrTurnaj | null {
+  if (!f) return null;
+  const pragOvr = parseOvrVolitelne(f.turnajPragOvrStr);
+  if (pragOvr === null) return null;
+  return {
+    pragOvr,
+    maxVeFormaciUtok: parsePocetVolitelne(f.turnajMaxUtokVeFormaciStr),
+    maxVeFormaciObrana: parsePocetVolitelne(f.turnajMaxObranaVeFormaciStr),
+    maxCelkemUtok: parsePocetVolitelne(f.turnajMaxUtokCelkemStr),
+    maxCelkemObrana: parsePocetVolitelne(f.turnajMaxObranaCelkemStr),
+  };
+}
+
+function stejneTurnajoveFiltry(a: SnapshotFiltryOptimalizatoru, b: SnapshotFiltryOptimalizatoru): boolean {
+  return (
+    a.turnajPragOvrStr === b.turnajPragOvrStr &&
+    a.turnajMaxUtokVeFormaciStr === b.turnajMaxUtokVeFormaciStr &&
+    a.turnajMaxUtokCelkemStr === b.turnajMaxUtokCelkemStr &&
+    a.turnajMaxObranaVeFormaciStr === b.turnajMaxObranaVeFormaciStr &&
+    a.turnajMaxObranaCelkemStr === b.turnajMaxObranaCelkemStr
+  );
+}
+
+const TURNAJ_PRESET_95: Pick<
+  SnapshotFiltryOptimalizatoru,
+  | "turnajPragOvrStr"
+  | "turnajMaxUtokVeFormaciStr"
+  | "turnajMaxUtokCelkemStr"
+  | "turnajMaxObranaVeFormaciStr"
+  | "turnajMaxObranaCelkemStr"
+> = {
+  turnajPragOvrStr: "95",
+  turnajMaxUtokVeFormaciStr: "1",
+  turnajMaxUtokCelkemStr: "4",
+  turnajMaxObranaVeFormaciStr: "2",
+  turnajMaxObranaCelkemStr: "3",
 };
 
 function stejneTymyFiltryKapitanskaSouhra(
@@ -767,6 +820,11 @@ export function OptimalizatorFormaci() {
 
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
+  const [turnajPragOvrStr, setTurnajPragOvrStr] = useState("");
+  const [turnajMaxUtokVeFormaciStr, setTurnajMaxUtokVeFormaciStr] = useState("");
+  const [turnajMaxUtokCelkemStr, setTurnajMaxUtokCelkemStr] = useState("");
+  const [turnajMaxObranaVeFormaciStr, setTurnajMaxObranaVeFormaciStr] = useState("");
+  const [turnajMaxObranaCelkemStr, setTurnajMaxObranaCelkemStr] = useState("");
   const [maxRozpocetMilStr, setMaxRozpocetMilStr] = useState("");
   const [hracKartaId, setHracKartaId] = useState("");
   const [kapitanskaTymy, setKapitanskaTymy] = useState<TymFiltrKapitanskaSouhra[]>([]);
@@ -815,6 +873,28 @@ export function OptimalizatorFormaci() {
     () => parseMaxRozpocetVolitelne(maxRozpocetMilStr),
     [maxRozpocetMilStr],
   );
+  const turnajPragOvr = useMemo(() => parseOvrVolitelne(turnajPragOvrStr), [turnajPragOvrStr]);
+  const turnajMaxUtokVeFormaci = useMemo(
+    () => parsePocetVolitelne(turnajMaxUtokVeFormaciStr),
+    [turnajMaxUtokVeFormaciStr],
+  );
+  const turnajMaxUtokCelkem = useMemo(
+    () => parsePocetVolitelne(turnajMaxUtokCelkemStr),
+    [turnajMaxUtokCelkemStr],
+  );
+  const turnajMaxObranaVeFormaci = useMemo(
+    () => parsePocetVolitelne(turnajMaxObranaVeFormaciStr),
+    [turnajMaxObranaVeFormaciStr],
+  );
+  const turnajMaxObranaCelkem = useMemo(
+    () => parsePocetVolitelne(turnajMaxObranaCelkemStr),
+    [turnajMaxObranaCelkemStr],
+  );
+  const maTurnajovyLimitPole =
+    turnajMaxUtokVeFormaciStr.trim() !== "" ||
+    turnajMaxUtokCelkemStr.trim() !== "" ||
+    turnajMaxObranaVeFormaciStr.trim() !== "" ||
+    turnajMaxObranaCelkemStr.trim() !== "";
   const chybaOvrRozsah =
     minOvr !== null && maxOvr !== null && minOvr > maxOvr
       ? "Minimální OVR nesmí být vyšší než maximální."
@@ -823,7 +903,13 @@ export function OptimalizatorFormaci() {
   const neplatnyVstup =
     (minOvrStr.trim() !== "" && minOvr === null) ||
     (maxOvrStr.trim() !== "" && maxOvr === null) ||
-    (maxRozpocetMilStr.trim() !== "" && maxRozpocetMil === null);
+    (maxRozpocetMilStr.trim() !== "" && maxRozpocetMil === null) ||
+    (turnajPragOvrStr.trim() !== "" && turnajPragOvr === null) ||
+    (maTurnajovyLimitPole && turnajPragOvrStr.trim() === "") ||
+    (turnajMaxUtokVeFormaciStr.trim() !== "" && turnajMaxUtokVeFormaci === null) ||
+    (turnajMaxUtokCelkemStr.trim() !== "" && turnajMaxUtokCelkem === null) ||
+    (turnajMaxObranaVeFormaciStr.trim() !== "" && turnajMaxObranaVeFormaci === null) ||
+    (turnajMaxObranaCelkemStr.trim() !== "" && turnajMaxObranaCelkem === null);
 
   const filtryOdlisneOdHledani = useMemo(() => {
     if (!filtryPoHledani) return false;
@@ -833,9 +919,35 @@ export function OptimalizatorFormaci() {
       filtryPoHledani.maxRozpocetMilStr !== maxRozpocetMilStr ||
       filtryPoHledani.hracKartaId !== hracKartaId ||
       filtryPoHledani.typBonusuFiltr !== typBonusuFiltr ||
-      !stejneTymyFiltryKapitanskaSouhra(filtryPoHledani.kapitanskaTymy, kapitanskaTymy)
+      !stejneTymyFiltryKapitanskaSouhra(filtryPoHledani.kapitanskaTymy, kapitanskaTymy) ||
+      !stejneTurnajoveFiltry(filtryPoHledani, {
+        minOvrStr,
+        maxOvrStr,
+        maxRozpocetMilStr,
+        hracKartaId,
+        typBonusuFiltr,
+        kapitanskaTymy,
+        turnajPragOvrStr,
+        turnajMaxUtokVeFormaciStr,
+        turnajMaxUtokCelkemStr,
+        turnajMaxObranaVeFormaciStr,
+        turnajMaxObranaCelkemStr,
+      })
     );
-  }, [filtryPoHledani, minOvrStr, maxOvrStr, maxRozpocetMilStr, hracKartaId, typBonusuFiltr, kapitanskaTymy]);
+  }, [
+    filtryPoHledani,
+    minOvrStr,
+    maxOvrStr,
+    maxRozpocetMilStr,
+    hracKartaId,
+    typBonusuFiltr,
+    kapitanskaTymy,
+    turnajPragOvrStr,
+    turnajMaxUtokVeFormaciStr,
+    turnajMaxUtokCelkemStr,
+    turnajMaxObranaVeFormaciStr,
+    turnajMaxObranaCelkemStr,
+  ]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -959,6 +1071,11 @@ export function OptimalizatorFormaci() {
     [filtryPoHledani],
   );
 
+  const limityTurnajAplikovane = useMemo(
+    () => limityVyskytuOvrZFiltru(filtryPoHledani),
+    [filtryPoHledani],
+  );
+
   const pridejKapitanskyTym = useCallback((liga: Liga, tym: string) => {
     setKapitanskaTymy((prev) => {
       const klic = klicTymFiltruKapitanskaSouhra({ liga, tym });
@@ -1050,6 +1167,26 @@ export function OptimalizatorFormaci() {
   );
   const golmaniZobrazenoPoKapitanske = golmaniZobrazenoPoHracovi;
 
+  const utokZobrazenoPoTurnaji = useMemo(
+    () =>
+      filtrujUtokPodleMaxVyskytuOvr(
+        utokZobrazenoPoKapitanske,
+        limityTurnajAplikovane?.pragOvr ?? null,
+        limityTurnajAplikovane?.maxVeFormaciUtok ?? null,
+      ),
+    [utokZobrazenoPoKapitanske, limityTurnajAplikovane],
+  );
+  const obranaZobrazenoPoTurnaji = useMemo(
+    () =>
+      filtrujDvojicePodleMaxVyskytuOvr(
+        obranaZobrazenoPoKapitanske,
+        limityTurnajAplikovane?.pragOvr ?? null,
+        limityTurnajAplikovane?.maxVeFormaciObrana ?? null,
+      ),
+    [obranaZobrazenoPoKapitanske, limityTurnajAplikovane],
+  );
+  const golmaniZobrazenoPoTurnaji = golmaniZobrazenoPoKapitanske;
+
   const mapaBonusuUtok = useMemo(
     () => mapaTypuBonusuNaSestavuUtok(vysledkyUtok),
     [vysledkyUtok],
@@ -1074,32 +1211,32 @@ export function OptimalizatorFormaci() {
   const utokZobrazenoPoPrekryvu = useMemo(
     () =>
       filtrujPodlePrekryvuTypuBonusu(
-        utokZobrazenoPoKapitanske,
+        utokZobrazenoPoTurnaji,
         mapaBonusuUtok,
         klicHracuUtokTrojice,
         filtrPrekryvBonusu,
       ),
-    [utokZobrazenoPoKapitanske, mapaBonusuUtok, filtrPrekryvBonusu],
+    [utokZobrazenoPoTurnaji, mapaBonusuUtok, filtrPrekryvBonusu],
   );
   const obranaZobrazenoPoPrekryvu = useMemo(
     () =>
       filtrujPodlePrekryvuTypuBonusu(
-        obranaZobrazenoPoKapitanske,
+        obranaZobrazenoPoTurnaji,
         mapaBonusuObrana,
         klicHracuDvojiceIde,
         filtrPrekryvBonusu,
       ),
-    [obranaZobrazenoPoKapitanske, mapaBonusuObrana, filtrPrekryvBonusu],
+    [obranaZobrazenoPoTurnaji, mapaBonusuObrana, filtrPrekryvBonusu],
   );
   const golmaniZobrazenoPoPrekryvu = useMemo(
     () =>
       filtrujPodlePrekryvuTypuBonusu(
-        golmaniZobrazenoPoKapitanske,
+        golmaniZobrazenoPoTurnaji,
         mapaBonusuGolmani,
         klicHracuDvojiceIde,
         filtrPrekryvBonusu,
       ),
-    [golmaniZobrazenoPoKapitanske, mapaBonusuGolmani, filtrPrekryvBonusu],
+    [golmaniZobrazenoPoTurnaji, mapaBonusuGolmani, filtrPrekryvBonusu],
   );
 
   const mapaUtok = useMemo(() => {
@@ -1181,11 +1318,14 @@ export function OptimalizatorFormaci() {
     let platObrana = 0;
     let platGolmani = 0;
     const hracIds = new Set<string>();
+    const utokRadky: UtocnaFormaceVysledek[] = [];
+    const obranaRadky: DvojiceVysledek[] = [];
 
     for (const typ of TYPY_BONUSU_KOMBINACE) {
       for (const klic of vyberyUtok[typ]) {
         const v = mapaUtok.get(klic);
         if (!v) continue;
+        utokRadky.push(v);
         platUtok += soucetPlatuKaret([v.lk, v.c, v.pk]);
         hracIds.add(v.lk.id);
         hracIds.add(v.c.id);
@@ -1194,6 +1334,7 @@ export function OptimalizatorFormaci() {
       for (const klic of vyberyObrana[typ]) {
         const v = mapaObrana.get(klic);
         if (!v) continue;
+        obranaRadky.push(v);
         platObrana += soucetPlatuKaret([v.a, v.b]);
         hracIds.add(v.a.id);
         hracIds.add(v.b.id);
@@ -1215,6 +1356,12 @@ export function OptimalizatorFormaci() {
       pocetRadku += vyberyUtok[typ].length + vyberyObrana[typ].length + vyberyGolmani[typ].length;
     }
 
+    const prag = limityTurnajAplikovane?.pragOvr ?? null;
+    const vyskytUtok =
+      prag !== null ? spocetVyskytuOvrUtokSoupiska(utokRadky, prag) : null;
+    const vyskytObrana =
+      prag !== null ? spocetVyskytuOvrDvojiceSoupiska(obranaRadky, prag) : null;
+
     return {
       pocetUtok,
       pocetObrana,
@@ -1225,8 +1372,18 @@ export function OptimalizatorFormaci() {
       platCelkem: platUtok + platObrana + platGolmani,
       unikatniHracu: hracIds.size,
       pocetRadku,
+      vyskytUtok,
+      vyskytObrana,
     };
-  }, [vyberyUtok, vyberyObrana, vyberyGolmani, mapaUtok, mapaObrana, mapaGolmani]);
+  }, [
+    vyberyUtok,
+    vyberyObrana,
+    vyberyGolmani,
+    mapaUtok,
+    mapaObrana,
+    mapaGolmani,
+    limityTurnajAplikovane,
+  ]);
 
   const kompletniSoupiska = jeKompletniSoupiska({
     utok: soupiska.pocetUtok,
@@ -1394,11 +1551,39 @@ export function OptimalizatorFormaci() {
   const pridatUtok = (v: UtocnaFormaceVysledek) => {
     const klic = klicUtocnaFormace(v);
     const typ = v.kombinace.bonusTyp;
+    const lim = limityTurnajAplikovane;
+    if (lim?.maxVeFormaciUtok !== null) {
+      const veFormaci = pocetHracuNaNeboNadOvr([v.lk, v.c, v.pk], lim.pragOvr);
+      if (veFormaci > lim.maxVeFormaciUtok) {
+        toast.error(
+          `Útok: ve formaci max. ${lim.maxVeFormaciUtok}× hráč s OVR ≥ ${lim.pragOvr} (tato má ${veFormaci}).`,
+        );
+        return;
+      }
+    }
     setVyberyUtok((prev) => {
       if (prev[typ].includes(klic)) return prev;
       if (pocetPripnutych(prev) >= MAX_VYBER_UTOK) {
         toast.error(`Soupiska — útok: nejvýše ${MAX_VYBER_UTOK} připnuté sestavy celkem.`);
         return prev;
+      }
+      if (lim?.maxCelkemUtok !== null) {
+        const radky: UtocnaFormaceVysledek[] = [];
+        for (const t of TYPY_BONUSU_KOMBINACE) {
+          for (const k of prev[t]) {
+            const w = mapaUtok.get(k);
+            if (w) radky.push(w);
+          }
+        }
+        const celkem =
+          spocetVyskytuOvrUtokSoupiska(radky, lim.pragOvr) +
+          pocetHracuNaNeboNadOvr([v.lk, v.c, v.pk], lim.pragOvr);
+        if (celkem > lim.maxCelkemUtok) {
+          toast.error(
+            `Útok v soupisce: max. ${lim.maxCelkemUtok}× hráč s OVR ≥ ${lim.pragOvr} (po přidání ${celkem}).`,
+          );
+          return prev;
+        }
       }
       return { ...prev, [typ]: [...prev[typ], klic] };
     });
@@ -1407,6 +1592,16 @@ export function OptimalizatorFormaci() {
   const pridatObrana = (v: DvojiceVysledek) => {
     const klic = klicRadkuDvojice(v);
     const typ = v.kombinace.bonusTyp;
+    const lim = limityTurnajAplikovane;
+    if (lim?.maxVeFormaciObrana !== null) {
+      const veFormaci = pocetHracuNaNeboNadOvr([v.a, v.b], lim.pragOvr);
+      if (veFormaci > lim.maxVeFormaciObrana) {
+        toast.error(
+          `Obrana: ve formaci max. ${lim.maxVeFormaciObrana}× hráč s OVR ≥ ${lim.pragOvr} (tato má ${veFormaci}).`,
+        );
+        return;
+      }
+    }
     setVyberyObrana((prev) => {
       if (prev[typ].includes(klic)) return prev;
       if (
@@ -1420,6 +1615,24 @@ export function OptimalizatorFormaci() {
       if (pocetPripnutych(prev) >= MAX_VYBER_OBRANA) {
         toast.error(`Soupiska — obrana: nejvýše ${MAX_VYBER_OBRANA} připnuté dvojice celkem.`);
         return prev;
+      }
+      if (lim?.maxCelkemObrana !== null) {
+        const radky: DvojiceVysledek[] = [];
+        for (const t of TYPY_BONUSU_KOMBINACE) {
+          for (const k of prev[t]) {
+            const w = mapaObrana.get(k);
+            if (w) radky.push(w);
+          }
+        }
+        const celkem =
+          spocetVyskytuOvrDvojiceSoupiska(radky, lim.pragOvr) +
+          pocetHracuNaNeboNadOvr([v.a, v.b], lim.pragOvr);
+        if (celkem > lim.maxCelkemObrana) {
+          toast.error(
+            `Obrana v soupisce: max. ${lim.maxCelkemObrana}× hráč s OVR ≥ ${lim.pragOvr} (po přidání ${celkem}).`,
+          );
+          return prev;
+        }
       }
       return { ...prev, [typ]: [...prev[typ], klic] };
     });
@@ -1441,7 +1654,7 @@ export function OptimalizatorFormaci() {
   const handleHledat = () => {
     if (chybaOvrRozsah || neplatnyVstup) {
       toast.error(
-        "Zkontroluj OVR (0–99), maximální rozpočet (mil., např. 12 nebo 12,5) nebo nech pole prázdná.",
+        "Zkontroluj OVR (0–99), limity turnaje, rozpočet (mil.) nebo nech pole prázdná.",
       );
       return;
     }
@@ -1473,6 +1686,11 @@ export function OptimalizatorFormaci() {
         hracKartaId,
         typBonusuFiltr,
         kapitanskaTymy: [...kapitanskaTymy],
+        turnajPragOvrStr,
+        turnajMaxUtokVeFormaciStr,
+        turnajMaxUtokCelkemStr,
+        turnajMaxObranaVeFormaciStr,
+        turnajMaxObranaCelkemStr,
       });
     });
   };
@@ -1485,6 +1703,11 @@ export function OptimalizatorFormaci() {
   const maNastaveneFiltryFormulare =
     minOvrStr.trim() !== "" ||
     maxOvrStr.trim() !== "" ||
+    turnajPragOvrStr.trim() !== "" ||
+    turnajMaxUtokVeFormaciStr.trim() !== "" ||
+    turnajMaxUtokCelkemStr.trim() !== "" ||
+    turnajMaxObranaVeFormaciStr.trim() !== "" ||
+    turnajMaxObranaCelkemStr.trim() !== "" ||
     maxRozpocetMilStr.trim() !== "" ||
     hracKartaId !== "" ||
     kapitanskaTymy.length > 0 ||
@@ -1495,12 +1718,25 @@ export function OptimalizatorFormaci() {
   const vymazatFiltryFormulare = useCallback(() => {
     setMinOvrStr("");
     setMaxOvrStr("");
+    setTurnajPragOvrStr("");
+    setTurnajMaxUtokVeFormaciStr("");
+    setTurnajMaxUtokCelkemStr("");
+    setTurnajMaxObranaVeFormaciStr("");
+    setTurnajMaxObranaCelkemStr("");
     setMaxRozpocetMilStr("");
     setHracKartaId("");
     setKapitanskaTymy([]);
     setTypBonusuFiltr("vse");
     setKridlaVzajemna(false);
     setLoPoVzajemne(false);
+  }, []);
+
+  const nastavitTurnajPreset95 = useCallback(() => {
+    setTurnajPragOvrStr(TURNAJ_PRESET_95.turnajPragOvrStr);
+    setTurnajMaxUtokVeFormaciStr(TURNAJ_PRESET_95.turnajMaxUtokVeFormaciStr);
+    setTurnajMaxUtokCelkemStr(TURNAJ_PRESET_95.turnajMaxUtokCelkemStr);
+    setTurnajMaxObranaVeFormaciStr(TURNAJ_PRESET_95.turnajMaxObranaVeFormaciStr);
+    setTurnajMaxObranaCelkemStr(TURNAJ_PRESET_95.turnajMaxObranaCelkemStr);
   }, []);
 
   const zobrazitSekciUtok = sekceQuickFiltr === "vse" || sekceQuickFiltr === "utok";
@@ -1670,10 +1906,111 @@ export function OptimalizatorFormaci() {
                 />
               </div>
             </div>
+            <div className="mt-5 rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className={labelClass}>Limity turnaje (počet hráčů s OVR ≥ práh)</p>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--hut-muted)]/95">
+                    Např. strop 95 OVR: max. 1× na útočnou formaci a 4× celkem v útoku, max. 3× v obraně. Počítá se
+                    každý hráč ve formaci s OVR ≥ práh (ne jen přesně rovno).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="touch-manipulation shrink-0 rounded-lg border border-[var(--hut-border)] px-3 py-1.5 text-xs font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-zinc-200"
+                  onClick={nastavitTurnajPreset95}
+                >
+                  Předvolba 95 OVR
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="min-w-0">
+                  <label htmlFor="opt-turnaj-prag" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                    Práh OVR
+                  </label>
+                  <input
+                    id="opt-turnaj-prag"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="např. 95"
+                    value={turnajPragOvrStr}
+                    onChange={(e) => setTurnajPragOvrStr(e.target.value)}
+                    className={`${inputClass} sm:max-w-none`}
+                    aria-invalid={turnajPragOvrStr.trim() !== "" && turnajPragOvr === null}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label htmlFor="opt-turnaj-utok-form" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                    Útok — max. ve formaci
+                  </label>
+                  <input
+                    id="opt-turnaj-utok-form"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="—"
+                    value={turnajMaxUtokVeFormaciStr}
+                    onChange={(e) => setTurnajMaxUtokVeFormaciStr(e.target.value)}
+                    className={`${inputClass} sm:max-w-none`}
+                    aria-invalid={
+                      turnajMaxUtokVeFormaciStr.trim() !== "" && turnajMaxUtokVeFormaci === null
+                    }
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label htmlFor="opt-turnaj-utok-celkem" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                    Útok — max. v soupisce
+                  </label>
+                  <input
+                    id="opt-turnaj-utok-celkem"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="—"
+                    value={turnajMaxUtokCelkemStr}
+                    onChange={(e) => setTurnajMaxUtokCelkemStr(e.target.value)}
+                    className={`${inputClass} sm:max-w-none`}
+                    aria-invalid={turnajMaxUtokCelkemStr.trim() !== "" && turnajMaxUtokCelkem === null}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label htmlFor="opt-turnaj-obrana-form" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                    Obrana — max. ve formaci
+                  </label>
+                  <input
+                    id="opt-turnaj-obrana-form"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="—"
+                    value={turnajMaxObranaVeFormaciStr}
+                    onChange={(e) => setTurnajMaxObranaVeFormaciStr(e.target.value)}
+                    className={`${inputClass} sm:max-w-none`}
+                    aria-invalid={
+                      turnajMaxObranaVeFormaciStr.trim() !== "" && turnajMaxObranaVeFormaci === null
+                    }
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label htmlFor="opt-turnaj-obrana-celkem" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                    Obrana — max. v soupisce
+                  </label>
+                  <input
+                    id="opt-turnaj-obrana-celkem"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="—"
+                    value={turnajMaxObranaCelkemStr}
+                    onChange={(e) => setTurnajMaxObranaCelkemStr(e.target.value)}
+                    className={`${inputClass} sm:max-w-none`}
+                    aria-invalid={
+                      turnajMaxObranaCelkemStr.trim() !== "" && turnajMaxObranaCelkem === null
+                    }
+                  />
+                </div>
+              </div>
+            </div>
             {neplatnyVstup ? (
               <p className="mt-3 text-sm text-amber-200/90" role="alert">
-                OVR: celé číslo 0–99. Rozpočet: kladné číslo v milionech (např. 12 nebo 12,5). Prázdná pole = bez
-                limitu.
+                OVR a práh turnaje: celé číslo 0–99. Počty výskytů: nezáporné celé číslo. U limitů turnaje vyplň práh
+                OVR. Rozpočet: kladné číslo v milionech (např. 12 nebo 12,5). Prázdná pole = bez limitu.
               </p>
             ) : null}
             {chybaOvrRozsah ? (
@@ -2362,6 +2699,43 @@ export function OptimalizatorFormaci() {
                         ) : (
                           <span className="text-[var(--hut-lime)]"> — vejde se</span>
                         )}
+                      </>
+                    ) : null}
+                    {limityTurnajAplikovane && soupiska.vyskytUtok !== null ? (
+                      <>
+                        {" "}
+                        · OVR ≥ {limityTurnajAplikovane.pragOvr} útok{" "}
+                        <span
+                          className={
+                            limityTurnajAplikovane.maxCelkemUtok !== null &&
+                            soupiska.vyskytUtok > limityTurnajAplikovane.maxCelkemUtok
+                              ? "text-amber-200/95"
+                              : "text-zinc-300"
+                          }
+                        >
+                          {soupiska.vyskytUtok}
+                          {limityTurnajAplikovane.maxCelkemUtok !== null
+                            ? `/${limityTurnajAplikovane.maxCelkemUtok}`
+                            : ""}
+                        </span>
+                        {soupiska.vyskytObrana !== null ? (
+                          <>
+                            , obrana{" "}
+                            <span
+                              className={
+                                limityTurnajAplikovane.maxCelkemObrana !== null &&
+                                soupiska.vyskytObrana > limityTurnajAplikovane.maxCelkemObrana
+                                  ? "text-amber-200/95"
+                                  : "text-zinc-300"
+                              }
+                            >
+                              {soupiska.vyskytObrana}
+                              {limityTurnajAplikovane.maxCelkemObrana !== null
+                                ? `/${limityTurnajAplikovane.maxCelkemObrana}`
+                                : ""}
+                            </span>
+                          </>
+                        ) : null}
                       </>
                     ) : null}
                   </p>

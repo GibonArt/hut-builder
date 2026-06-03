@@ -42,6 +42,87 @@ export function parseOvrVolitelne(raw: string): number | null {
   return n;
 }
 
+/** Prázdný řetězec = bez limitu; jinak nezáporné celé číslo (počet výskytů). */
+export function parsePocetVolitelne(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number.parseInt(t, 10);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
+/** Počet hráčů ve formaci s OVR ≥ práh (např. turnajový strop 95). */
+export function pocetHracuNaNeboNadOvr(
+  hraci: readonly HutCard[],
+  pragOvr: number,
+): number {
+  let n = 0;
+  for (const k of hraci) {
+    if (k.ovr >= pragOvr) n += 1;
+  }
+  return n;
+}
+
+export function formaceSplnujeMaxVyskytuOvr(
+  hraci: readonly HutCard[],
+  pragOvr: number,
+  maxVeFormaci: number,
+): boolean {
+  return pocetHracuNaNeboNadOvr(hraci, pragOvr) <= maxVeFormaci;
+}
+
+export function filtrujUtokPodleMaxVyskytuOvr(
+  radky: readonly UtocnaFormaceVysledek[],
+  pragOvr: number | null,
+  maxVeFormaci: number | null,
+): UtocnaFormaceVysledek[] {
+  if (pragOvr === null || maxVeFormaci === null) return [...radky];
+  return radky.filter((v) =>
+    formaceSplnujeMaxVyskytuOvr([v.lk, v.c, v.pk], pragOvr, maxVeFormaci),
+  );
+}
+
+export function filtrujDvojicePodleMaxVyskytuOvr(
+  radky: readonly DvojiceVysledek[],
+  pragOvr: number | null,
+  maxVeFormaci: number | null,
+): DvojiceVysledek[] {
+  if (pragOvr === null || maxVeFormaci === null) return [...radky];
+  return radky.filter((v) =>
+    formaceSplnujeMaxVyskytuOvr([v.a, v.b], pragOvr, maxVeFormaci),
+  );
+}
+
+export type LimityVyskytuOvrTurnaj = {
+  pragOvr: number;
+  maxVeFormaciUtok: number | null;
+  maxVeFormaciObrana: number | null;
+  maxCelkemUtok: number | null;
+  maxCelkemObrana: number | null;
+};
+
+export function spocetVyskytuOvrUtokSoupiska(
+  radky: readonly UtocnaFormaceVysledek[],
+  pragOvr: number,
+): number {
+  let n = 0;
+  for (const v of radky) {
+    n += pocetHracuNaNeboNadOvr([v.lk, v.c, v.pk], pragOvr);
+  }
+  return n;
+}
+
+export function spocetVyskytuOvrDvojiceSoupiska(
+  radky: readonly DvojiceVysledek[],
+  pragOvr: number,
+): number {
+  let n = 0;
+  for (const v of radky) {
+    n += pocetHracuNaNeboNadOvr([v.a, v.b], pragOvr);
+  }
+  return n;
+}
+
 export function filtrujKartyPodleOvr(
   karty: readonly HutCard[],
   minOvr: number | null,
