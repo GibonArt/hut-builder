@@ -1552,7 +1552,7 @@ export function OptimalizatorFormaci() {
     const klic = klicUtocnaFormace(v);
     const typ = v.kombinace.bonusTyp;
     const lim = limityTurnajAplikovane;
-    if (lim?.maxVeFormaciUtok !== null) {
+    if (lim && lim.maxVeFormaciUtok !== null) {
       const veFormaci = pocetHracuNaNeboNadOvr([v.lk, v.c, v.pk], lim.pragOvr);
       if (veFormaci > lim.maxVeFormaciUtok) {
         toast.error(
@@ -1567,7 +1567,7 @@ export function OptimalizatorFormaci() {
         toast.error(`Soupiska — útok: nejvýše ${MAX_VYBER_UTOK} připnuté sestavy celkem.`);
         return prev;
       }
-      if (lim?.maxCelkemUtok !== null) {
+      if (lim && lim.maxCelkemUtok !== null) {
         const radky: UtocnaFormaceVysledek[] = [];
         for (const t of TYPY_BONUSU_KOMBINACE) {
           for (const k of prev[t]) {
@@ -1593,7 +1593,7 @@ export function OptimalizatorFormaci() {
     const klic = klicRadkuDvojice(v);
     const typ = v.kombinace.bonusTyp;
     const lim = limityTurnajAplikovane;
-    if (lim?.maxVeFormaciObrana !== null) {
+    if (lim && lim.maxVeFormaciObrana !== null) {
       const veFormaci = pocetHracuNaNeboNadOvr([v.a, v.b], lim.pragOvr);
       if (veFormaci > lim.maxVeFormaciObrana) {
         toast.error(
@@ -1616,7 +1616,7 @@ export function OptimalizatorFormaci() {
         toast.error(`Soupiska — obrana: nejvýše ${MAX_VYBER_OBRANA} připnuté dvojice celkem.`);
         return prev;
       }
-      if (lim?.maxCelkemObrana !== null) {
+      if (lim && lim.maxCelkemObrana !== null) {
         const radky: DvojiceVysledek[] = [];
         for (const t of TYPY_BONUSU_KOMBINACE) {
           for (const k of prev[t]) {
