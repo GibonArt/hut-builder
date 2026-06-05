@@ -94,3 +94,17 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+@media print {
+  aside,
+  header,
+  button,
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    background: white !important;
+  }
+}
