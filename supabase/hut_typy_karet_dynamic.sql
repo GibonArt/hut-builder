@@ -2,7 +2,32 @@
 -- Doplňuje / přepisuje ikony a zobrazení oproti statickému `lib/hutdbTypKaret.ts`.
 -- Čtení: authenticated. Zápis: stejní editoři jako `bonus_kombinace_global` (`je_bonus_kombinace_editor`).
 --
--- Spusť v Supabase SQL Editoru po `bonus_kombinace_global.sql` (funkce editora už existuje).
+-- Spustitelné samostatně. Funkce editora musí sedět s `lib/bonusAdmin.ts` (a bonus_kombinace_global.sql).
+
+create or replace function public.je_bonus_kombinace_editor()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (
+      select lower(trim(u.email::text)) in (
+        'gibonart@gmail.com'
+      )
+      from auth.users u
+      where u.id = auth.uid()
+    ),
+    false
+  );
+$$;
+
+comment on function public.je_bonus_kombinace_editor() is
+  'true jen pro účty, které smí měnit sdílené bonus kombinace a sync typů karet; drž v souladu s lib/bonusAdmin.ts';
+
+grant execute on function public.je_bonus_kombinace_editor() to authenticated;
+grant execute on function public.je_bonus_kombinace_editor() to service_role;
 
 create table if not exists public.hut_typy_karet_dynamic (
   hodnota_filtru text not null,
