@@ -8,7 +8,34 @@ export type DynamicTypKartyDbRow = {
   aliases?: string[] | null;
 };
 
-/** Alias (uppercase) → kanonická hodnota_filtru (uppercase), ze sloupce `aliases` v Supabase. */
+function zkratkaZComboSouboru(comboSoubor: string): string | null {
+  const m = comboSoubor.trim().match(/^([A-Za-z]{2,8})\d/);
+  return m ? m[1].toUpperCase() : null;
+}
+
+/** Aliasy z DB, nebo odhad z jmeno_cs / combo_soubor (když PostgREST neumí sloupec aliases). */
+export function efektivniAliasesDynamickehoRadku(d: DynamicTypKartyDbRow): string[] {
+  if (d.aliases?.length) {
+    return d.aliases.map((a) => String(a ?? "").trim()).filter(Boolean);
+  }
+  const canonical = d.hodnota_filtru.trim().toUpperCase();
+  const out = new Set<string>();
+  const add = (s: string) => {
+    const u = s.trim().toUpperCase();
+    if (u && u !== canonical) out.add(u);
+  };
+  add(d.jmeno_cs);
+  const zkr = zkratkaZComboSouboru(d.combo_soubor);
+  if (zkr) add(zkr);
+  const bezHut = d.jmeno_cs.replace(/^HUT\s+/i, "").trim();
+  if (bezHut) {
+    add(bezHut);
+    add(`HUT ${bezHut}`);
+  }
+  return [...out];
+}
+
+/** Alias (uppercase) → kanonická hodnota_filtru (uppercase). */
 export function aliasMapZDynamickychRadku(
   dynamic: readonly DynamicTypKartyDbRow[] | null | undefined,
 ): Record<string, string> {
@@ -16,8 +43,8 @@ export function aliasMapZDynamickychRadku(
   for (const d of dynamic ?? []) {
     const canonical = d.hodnota_filtru.trim().toUpperCase();
     if (!canonical) continue;
-    for (const raw of d.aliases ?? []) {
-      const a = String(raw ?? "").trim().toUpperCase();
+    for (const raw of efektivniAliasesDynamickehoRadku(d)) {
+      const a = raw.trim().toUpperCase();
       if (a && a !== canonical) out[a] = canonical;
     }
   }

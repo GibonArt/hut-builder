@@ -13,9 +13,6 @@ function jeChybaChybejiciRpc(zprava: string): boolean {
   return /could not find the function|42883|schema cache.*function/i.test(zprava);
 }
 
-export function varovaniChybejiciRozsireneSloupce(): string {
-  return `Uloženo jen základní pole. Znovu spusť v Supabase „${HUT_TYPY_KARET_EXTEND_SQL}“ (RPC funkce pro sync) a proveď rebuild aplikace.`;
-}
 
 function zakladniUpsertRadky(
   rows: readonly DynamicTypKartyDbRow[],
@@ -91,7 +88,8 @@ export async function upsertDynamickeTypyKaret(
   if (zaklad.error) {
     return { error: zaklad.error.message, schema_varovani: null };
   }
-  return { error: null, schema_varovani: varovaniChybejiciRozsireneSloupce() };
+  // Aliasy se dopočítají v aplikaci (efektivniAliasesDynamickehoRadku) — varování není potřeba.
+  return { error: null, schema_varovani: null };
 }
 
 const SELECT_ROZSIRENY = "hodnota_filtru,jmeno_cs,combo_soubor,popis_cs,aliases";
