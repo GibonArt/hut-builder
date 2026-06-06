@@ -93,7 +93,7 @@ export async function POST() {
   if (error) {
     return NextResponse.json(
       {
-        error: `${error.message} — pokud tabulka neexistuje, spusť SQL „hut_typy_karet_dynamic.sql“ v Supabase.`,
+        error: `${error} — pokud tabulka neexistuje, spusť SQL „hut_typy_karet_dynamic.sql“ v Supabase.`,
       },
       { status: 500 },
     );
