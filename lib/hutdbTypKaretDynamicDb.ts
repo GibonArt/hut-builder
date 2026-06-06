@@ -9,8 +9,12 @@ export function jeChybaChybejicihoSloupceSchema(zprava: string): boolean {
   return /schema cache|could not find the '[^']+' column/i.test(zprava);
 }
 
+function jeChybaChybejiciRpc(zprava: string): boolean {
+  return /could not find the function|42883|schema cache.*function/i.test(zprava);
+}
+
 export function varovaniChybejiciRozsireneSloupce(): string {
-  return `Uloženo jen základní pole (bez popis_cs/aliases). V Supabase SQL Editoru spusť „${HUT_TYPY_KARET_EXTEND_SQL}“ a pak znovu synchronizuj — aliasy (např. „HUT CROWNED“) pak budou fungovat.`;
+  return `Uloženo jen základní pole. Znovu spusť v Supabase „${HUT_TYPY_KARET_EXTEND_SQL}“ (RPC funkce pro sync) a proveď rebuild aplikace.`;
 }
 
 function zakladniUpsertRadky(
@@ -39,14 +43,42 @@ function rozsireneUpsertRadky(
   }));
 }
 
-/** Upsert do Supabase; při starší tabulce bez popis_cs/aliases použije základní sloupce. */
+function payloadProRpc(
+  rows: readonly DynamicTypKartyDbRow[],
+  syncedAt: string,
+): Record<string, unknown>[] {
+  return rows.map((r) => ({
+    hodnota_filtru: r.hodnota_filtru,
+    jmeno_cs: r.jmeno_cs,
+    combo_soubor: r.combo_soubor,
+    popis_cs: r.popis_cs ?? null,
+    aliases: r.aliases ?? [],
+    synced_at: syncedAt,
+  }));
+}
+
+/** Upsert do Supabase; preferuje RPC (obejde schema cache PostgREST). */
 export async function upsertDynamickeTypyKaret(
   supabase: SupabaseClient,
   rows: readonly DynamicTypKartyDbRow[],
   syncedAt: string,
 ): Promise<{ error: string | null; schema_varovani: string | null }> {
-  const opts = { onConflict: "hodnota_filtru" as const };
+  const rpc = await supabase.rpc("sync_hut_typy_karet_dynamic", {
+    p_rows: payloadProRpc(rows, syncedAt),
+  });
+  if (!rpc.error) {
+    return { error: null, schema_varovani: null };
+  }
 
+  const rpcMsg = rpc.error.message;
+  if (/Pristup zamitnut/i.test(rpcMsg)) {
+    return { error: rpcMsg, schema_varovani: null };
+  }
+  if (!jeChybaChybejiciRpc(rpcMsg) && !jeChybaChybejicihoSloupceSchema(rpcMsg)) {
+    return { error: rpcMsg, schema_varovani: null };
+  }
+
+  const opts = { onConflict: "hodnota_filtru" as const };
   const plny = await supabase.from(TABULKA).upsert(rozsireneUpsertRadky(rows, syncedAt), opts);
   if (!plny.error) {
     return { error: null, schema_varovani: null };
@@ -88,10 +120,15 @@ function radkyZRawSelectu(data: unknown): DynamicTypKartyDbRow[] {
   return out;
 }
 
-/** Načte dynamické typy; přizpůsobí se starší tabulce bez volitelných sloupců. */
+/** Načte dynamické typy; preferuje RPC (plné sloupce i při schema cache). */
 export async function nactiDynamickeTypyKaret(
   supabase: SupabaseClient,
 ): Promise<{ data: DynamicTypKartyDbRow[]; error: string | null }> {
+  const rpc = await supabase.rpc("list_hut_typy_karet_dynamic");
+  if (!rpc.error) {
+    return { data: radkyZRawSelectu(rpc.data), error: null };
+  }
+
   for (const select of [SELECT_ROZSIRENY, SELECT_STREDNI, SELECT_ZAKLADNI]) {
     const { data, error } = await supabase.from(TABULKA).select(select);
     if (!error) {
