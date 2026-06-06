@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/components/AuthProvider";
+import { TypyKaretProvider } from "@/components/TypyKaretProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -51,8 +52,10 @@ export default function RootLayout({
           Přeskočit na obsah
         </a>
         <AuthProvider>
-          {children}
-          <Toaster theme="dark" position="top-center" richColors closeButton />
+          <TypyKaretProvider>
+            {children}
+            <Toaster theme="dark" position="top-center" richColors closeButton />
+          </TypyKaretProvider>
         </AuthProvider>
       </body>
     </html>

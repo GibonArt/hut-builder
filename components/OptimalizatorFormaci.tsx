@@ -54,7 +54,7 @@ import type { HutCard, Liga, Pozice } from "@/types";
 import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import { TypKartyMiniLogo } from "@/components/TypKartyIkona";
 import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
-import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
+import { useTypyKaret } from "@/components/TypyKaretProvider";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import {
   jeNeplatnyTurnajovyVstup,
@@ -796,7 +796,7 @@ export function OptimalizatorFormaci() {
   const { user, loading: authLoading } = useAuth();
   const supabase = useMemo(() => createClient(), []);
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
-  const { typyKaret, aliasMapZBaze } = useMergedTypyKaret();
+  const { typyKaret, aliasMapZBaze } = useTypyKaret();
   const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
     () => ({ radky: typyKaret, aliasMapZBaze }),
     [typyKaret, aliasMapZBaze],

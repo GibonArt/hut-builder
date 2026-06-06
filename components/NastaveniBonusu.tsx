@@ -53,7 +53,7 @@ import {
 import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import type { HutDbTypKarty, NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
-import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
+import { useTypyKaret } from "@/components/TypyKaretProvider";
 import { urlLogaTymu } from "@/lib/tymLoga";
 
 const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
@@ -508,7 +508,7 @@ export function NastaveniBonusu() {
   const { user, loading } = useAuth();
   const supabase = useMemo(() => createClient(), []);
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
-  const { typyKaret: hutdbTypyKaret, aliasMapZBaze, refreshDynamic } = useMergedTypyKaret();
+  const { typyKaret: hutdbTypyKaret, aliasMapZBaze, refreshDynamic } = useTypyKaret();
   const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
     () => ({ radky: hutdbTypyKaret, aliasMapZBaze }),
     [hutdbTypyKaret, aliasMapZBaze],

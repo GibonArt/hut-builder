@@ -39,7 +39,7 @@ import {
 } from "@/lib/tymyPodleLigy";
 import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import { najdiMetaTypuKarty, type NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
-import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
+import { useTypyKaret } from "@/components/TypyKaretProvider";
 import { NarodnostVyber } from "@/components/NarodnostVyber";
 import { TypKartyVyber } from "@/components/TypKartyVyber";
 import { TymHledacNapricLigami } from "@/components/TymHledacNapricLigami";
@@ -142,7 +142,7 @@ export function MujInventar() {
 
   const tymyProAktualniLigu = useMemo(() => tymyProLigu(liga), [liga]);
 
-  const { typyKaret: hutdbTypyKaret, aliasMapZBaze } = useMergedTypyKaret();
+  const { typyKaret: hutdbTypyKaret, aliasMapZBaze } = useTypyKaret();
   const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
     () => ({ radky: hutdbTypyKaret, aliasMapZBaze }),
     [hutdbTypyKaret, aliasMapZBaze],
