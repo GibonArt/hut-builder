@@ -26,6 +26,24 @@ export interface HutDbTypKarty {
 
 const RADKY: HutDbTypKarty[] = [
   {
+    hodnotaFiltru: "99X SERIES 01",
+    jmenoCs: "99X Series 01",
+    popisCs: "Řada 99X Series 01 (NHL HUT Builder Combo Finder).",
+    comboSoubor: "99X1197063304.png",
+  },
+  {
+    hodnotaFiltru: "99X SERIES 02",
+    jmenoCs: "99X Series 02",
+    popisCs: "Řada 99X Series 02 (NHL HUT Builder Combo Finder).",
+    comboSoubor: "99X2803689553.png",
+  },
+  {
+    hodnotaFiltru: "99X SERIES 13",
+    jmenoCs: "99X Series 13",
+    popisCs: "Řada 99X Series 13 (NHL HUT Builder Combo Finder).",
+    comboSoubor: "99X131544200916.png",
+  },
+  {
     hodnotaFiltru: "ALUMNI",
     jmenoCs: "Alumni",
     popisCs:
@@ -103,6 +121,13 @@ const RADKY: HutDbTypKarty[] = [
     jmenoCs: "HUT Champions",
     popisCs: "Obsah a odměny z konkurenčního módu HUT Champions.",
     comboSoubor: "HUTC1625812762.png",
+  },
+  {
+    hodnotaFiltru: "CROWNED",
+    jmenoCs: "HUT Crowned",
+    popisCs:
+      "Řada Crowned v HUT Builderu (data-card-type-name „Crowned“, filtr CROWNED).",
+    comboSoubor: "CRO1346245917.png",
   },
   {
     hodnotaFiltru: "HUT BEAST MODE",
@@ -329,6 +354,9 @@ const ALIAS_NA_FILTR: Record<string, string> = {
   FANT: "FANTASY HOCKEY",
   GOG: "GALLERY OF GREATS",
   HUTC: "HUT CHAMPIONS",
+  CRO: "CROWNED",
+  CROWNED: "CROWNED",
+  "HUT CROWNED": "CROWNED",
   HBM: "HUT BEAST MODE",
   BEAST: "HUT BEAST MODE",
   GB: "HUT GAME BREAKERS",
