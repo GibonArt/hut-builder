@@ -66,6 +66,28 @@ const SELECT_ROZSIRENY = "hodnota_filtru,jmeno_cs,combo_soubor,popis_cs,aliases"
 const SELECT_STREDNI = "hodnota_filtru,jmeno_cs,combo_soubor,popis_cs";
 const SELECT_ZAKLADNI = "hodnota_filtru,jmeno_cs,combo_soubor";
 
+function radkyZRawSelectu(data: unknown): DynamicTypKartyDbRow[] {
+  if (!Array.isArray(data)) return [];
+  const out: DynamicTypKartyDbRow[] = [];
+  for (const raw of data) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+    const hodnota_filtru = String(r.hodnota_filtru ?? "").trim();
+    const jmeno_cs = String(r.jmeno_cs ?? "").trim();
+    const combo_soubor = String(r.combo_soubor ?? "").trim();
+    if (!hodnota_filtru || !jmeno_cs || !combo_soubor) continue;
+    const row: DynamicTypKartyDbRow = { hodnota_filtru, jmeno_cs, combo_soubor };
+    if (r.popis_cs != null && String(r.popis_cs).trim()) {
+      row.popis_cs = String(r.popis_cs).trim();
+    }
+    if (Array.isArray(r.aliases)) {
+      row.aliases = r.aliases.map((a) => String(a ?? "").trim()).filter(Boolean);
+    }
+    out.push(row);
+  }
+  return out;
+}
+
 /** Načte dynamické typy; přizpůsobí se starší tabulce bez volitelných sloupců. */
 export async function nactiDynamickeTypyKaret(
   supabase: SupabaseClient,
@@ -73,7 +95,7 @@ export async function nactiDynamickeTypyKaret(
   for (const select of [SELECT_ROZSIRENY, SELECT_STREDNI, SELECT_ZAKLADNI]) {
     const { data, error } = await supabase.from(TABULKA).select(select);
     if (!error) {
-      return { data: (data ?? []) as DynamicTypKartyDbRow[], error: null };
+      return { data: radkyZRawSelectu(data), error: null };
     }
     if (!jeChybaChybejicihoSloupceSchema(error.message)) {
       return { data: [], error: error.message };
