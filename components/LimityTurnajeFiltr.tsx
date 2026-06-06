@@ -3,8 +3,8 @@
 import {
   forwardRef,
   useImperativeHandle,
+  useRef,
   useState,
-  startTransition,
   type ChangeEvent,
 } from "react";
 import { parseOvrVolitelne, parsePocetVolitelne } from "@/lib/optimalizatorFormaci";
@@ -79,36 +79,28 @@ export type LimityTurnajeFiltrHandle = {
 type Props = {
   inputClass: string;
   labelClass: string;
-  onDraftChange?: () => void;
+  /** Hodnoty z posledního Hledat — pro banner „filtry se liší“. */
+  aplikovaneFiltry?: TurnajFiltrySnapshot | null;
 };
 
 export const LimityTurnajeFiltr = forwardRef<LimityTurnajeFiltrHandle, Props>(
-  function LimityTurnajeFiltr({ inputClass, labelClass, onDraftChange }, ref) {
+  function LimityTurnajeFiltr({ inputClass, labelClass, aplikovaneFiltry = null }, ref) {
     const [draft, setDraft] = useState<TurnajFiltrySnapshot>(PRAZDNY_TURNAJ_FILTR);
-
-    const notifyParent = () => {
-      startTransition(() => onDraftChange?.());
-    };
+    const draftRef = useRef(draft);
+    draftRef.current = draft;
 
     const patch = (partial: Partial<TurnajFiltrySnapshot>) => {
       setDraft((prev) => ({ ...prev, ...partial }));
-      notifyParent();
     };
 
     useImperativeHandle(
       ref,
       () => ({
-        getSnapshot: () => draft,
-        setSnapshot: (s) => {
-          setDraft(s);
-          notifyParent();
-        },
-        clear: () => {
-          setDraft(PRAZDNY_TURNAJ_FILTR);
-          notifyParent();
-        },
+        getSnapshot: () => draftRef.current,
+        setSnapshot: (s) => setDraft(s),
+        clear: () => setDraft(PRAZDNY_TURNAJ_FILTR),
       }),
-      [draft, onDraftChange],
+      [],
     );
 
     const prag = parseOvrVolitelne(draft.turnajPragOvrStr);
@@ -116,6 +108,9 @@ export const LimityTurnajeFiltr = forwardRef<LimityTurnajeFiltrHandle, Props>(
     const maxUtokCelkem = parsePocetVolitelne(draft.turnajMaxUtokCelkemStr);
     const maxObranaForm = parsePocetVolitelne(draft.turnajMaxObranaVeFormaciStr);
     const maxObranaCelkem = parsePocetVolitelne(draft.turnajMaxObranaCelkemStr);
+    const neplatnyVstup = jeNeplatnyTurnajovyVstup(draft);
+    const odlisneOdHledani =
+      aplikovaneFiltry !== null && !stejneTurnajoveFiltry(draft, aplikovaneFiltry);
 
     const onPrag = (e: ChangeEvent<HTMLInputElement>) => patch({ turnajPragOvrStr: e.target.value });
 
@@ -132,7 +127,7 @@ export const LimityTurnajeFiltr = forwardRef<LimityTurnajeFiltrHandle, Props>(
           <button
             type="button"
             className="touch-manipulation shrink-0 rounded-lg border border-[var(--hut-border)] px-3 py-1.5 text-xs font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-zinc-200"
-            onClick={() => patch(TURNAJ_PRESET_95)}
+            onClick={() => setDraft(TURNAJ_PRESET_95)}
           >
             Předvolba 95 OVR
           </button>
@@ -214,6 +209,17 @@ export const LimityTurnajeFiltr = forwardRef<LimityTurnajeFiltrHandle, Props>(
             />
           </div>
         </div>
+        {neplatnyVstup ? (
+          <p className="mt-3 text-sm text-amber-200/90" role="alert">
+            Práh OVR: celé číslo 0–99. Počty výskytů: nezáporné celé číslo. Při vyplnění limitů je práh OVR povinný.
+            Prázdná pole = bez limitu.
+          </p>
+        ) : null}
+        {odlisneOdHledani ? (
+          <p className="mt-3 text-sm text-amber-200/90" role="status">
+            Limity turnaje se liší od posledního hledání — pro přepočet znovu klikni na <strong>Hledat</strong>.
+          </p>
+        ) : null}
       </div>
     );
   },

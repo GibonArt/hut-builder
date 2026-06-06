@@ -61,7 +61,6 @@ import {
   LimityTurnajeFiltr,
   maNastavenyTurnajovyFiltr,
   PRAZDNY_TURNAJ_FILTR,
-  stejneTurnajoveFiltry,
   type LimityTurnajeFiltrHandle,
   type TurnajFiltrySnapshot,
 } from "@/components/LimityTurnajeFiltr";
@@ -815,11 +814,6 @@ export function OptimalizatorFormaci() {
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
   const limityTurnajeRef = useRef<LimityTurnajeFiltrHandle>(null);
-  /** Inkrement po změně draftu limitů turnaje — validace a banner bez re-renderu výsledků. */
-  const [turnajDraftTick, setTurnajDraftTick] = useState(0);
-  const onTurnajDraftChange = useCallback(() => {
-    setTurnajDraftTick((t) => t + 1);
-  }, []);
   const [maxRozpocetMilStr, setMaxRozpocetMilStr] = useState("");
   const [hracKartaId, setHracKartaId] = useState("");
   const [kapitanskaTymy, setKapitanskaTymy] = useState<TymFiltrKapitanskaSouhra[]>([]);
@@ -868,9 +862,6 @@ export function OptimalizatorFormaci() {
     () => parseMaxRozpocetVolitelne(maxRozpocetMilStr),
     [maxRozpocetMilStr],
   );
-  const turnajDraftSnapshot = useMemo((): TurnajFiltrySnapshot => {
-    return limityTurnajeRef.current?.getSnapshot() ?? PRAZDNY_TURNAJ_FILTR;
-  }, [turnajDraftTick]);
   const chybaOvrRozsah =
     minOvr !== null && maxOvr !== null && minOvr > maxOvr
       ? "Minimální OVR nesmí být vyšší než maximální."
@@ -879,8 +870,7 @@ export function OptimalizatorFormaci() {
   const neplatnyVstup =
     (minOvrStr.trim() !== "" && minOvr === null) ||
     (maxOvrStr.trim() !== "" && maxOvr === null) ||
-    (maxRozpocetMilStr.trim() !== "" && maxRozpocetMil === null) ||
-    jeNeplatnyTurnajovyVstup(turnajDraftSnapshot);
+    (maxRozpocetMilStr.trim() !== "" && maxRozpocetMil === null);
 
   const filtryOdlisneOdHledani = useMemo(() => {
     if (!filtryPoHledani) return false;
@@ -890,8 +880,7 @@ export function OptimalizatorFormaci() {
       filtryPoHledani.maxRozpocetMilStr !== maxRozpocetMilStr ||
       filtryPoHledani.hracKartaId !== hracKartaId ||
       filtryPoHledani.typBonusuFiltr !== typBonusuFiltr ||
-      !stejneTymyFiltryKapitanskaSouhra(filtryPoHledani.kapitanskaTymy, kapitanskaTymy) ||
-      !stejneTurnajoveFiltry(turnajZOptFiltru(filtryPoHledani), turnajDraftSnapshot)
+      !stejneTymyFiltryKapitanskaSouhra(filtryPoHledani.kapitanskaTymy, kapitanskaTymy)
     );
   }, [
     filtryPoHledani,
@@ -901,7 +890,6 @@ export function OptimalizatorFormaci() {
     hracKartaId,
     typBonusuFiltr,
     kapitanskaTymy,
-    turnajDraftSnapshot,
   ]);
 
   useEffect(() => {
@@ -1607,7 +1595,8 @@ export function OptimalizatorFormaci() {
   };
 
   const handleHledat = () => {
-    if (chybaOvrRozsah || neplatnyVstup) {
+    const turnaj = limityTurnajeRef.current?.getSnapshot() ?? PRAZDNY_TURNAJ_FILTR;
+    if (chybaOvrRozsah || neplatnyVstup || jeNeplatnyTurnajovyVstup(turnaj)) {
       toast.error(
         "Zkontroluj OVR (0–99), limity turnaje, rozpočet (mil.) nebo nech pole prázdná.",
       );
@@ -1632,7 +1621,6 @@ export function OptimalizatorFormaci() {
         return;
       }
     }
-    const turnaj = limityTurnajeRef.current?.getSnapshot() ?? PRAZDNY_TURNAJ_FILTR;
     startTransition(() => {
       setFiltrPrekryvBonusu("vse");
       setFiltryPoHledani({
@@ -1655,7 +1643,7 @@ export function OptimalizatorFormaci() {
   const maNastaveneFiltryFormulare =
     minOvrStr.trim() !== "" ||
     maxOvrStr.trim() !== "" ||
-    maNastavenyTurnajovyFiltr(turnajDraftSnapshot) ||
+    maNastavenyTurnajovyFiltr(limityTurnajeRef.current?.getSnapshot() ?? PRAZDNY_TURNAJ_FILTR) ||
     maxRozpocetMilStr.trim() !== "" ||
     hracKartaId !== "" ||
     kapitanskaTymy.length > 0 ||
@@ -1846,12 +1834,12 @@ export function OptimalizatorFormaci() {
               ref={limityTurnajeRef}
               inputClass={inputClass}
               labelClass={labelClass}
-              onDraftChange={onTurnajDraftChange}
+              aplikovaneFiltry={filtryPoHledani ? turnajZOptFiltru(filtryPoHledani) : null}
             />
             {neplatnyVstup ? (
               <p className="mt-3 text-sm text-amber-200/90" role="alert">
-                OVR a práh turnaje: celé číslo 0–99. Počty výskytů: nezáporné celé číslo. U limitů turnaje vyplň práh
-                OVR. Rozpočet: kladné číslo v milionech (např. 12 nebo 12,5). Prázdná pole = bez limitu.
+                OVR: celé číslo 0–99. Rozpočet: kladné číslo v milionech (např. 12 nebo 12,5). Prázdná pole = bez
+                limitu.
               </p>
             ) : null}
             {chybaOvrRozsah ? (
