@@ -10,7 +10,7 @@ export function jeChybaChybejicihoSloupceSchema(zprava: string): boolean {
 }
 
 export function varovaniChybejiciRozsireneSloupce(): string {
-  return `Tabulka ${TABULKA} nemá sloupce popis_cs/aliases — spusť v Supabase SQL Editoru soubor „${HUT_TYPY_KARET_EXTEND_SQL}“ (aliasy pro vyhledávání typu „HUT CROWNED“ apod.).`;
+  return `Uloženo jen základní pole (bez popis_cs/aliases). V Supabase SQL Editoru spusť „${HUT_TYPY_KARET_EXTEND_SQL}“ a pak znovu synchronizuj — aliasy (např. „HUT CROWNED“) pak budou fungovat.`;
 }
 
 function zakladniUpsertRadky(

@@ -15,3 +15,6 @@ comment on column public.hut_typy_karet_dynamic.aliases is
 
 -- PostgREST / supabase-js — doplnění oprávnění (idempotentní).
 grant select, insert, update, delete on public.hut_typy_karet_dynamic to authenticated, service_role;
+
+-- Obnov cache API (jinak supabase-js hlásí „schema cache“ i když sloupce v DB jsou).
+notify pgrst, 'reload schema';
