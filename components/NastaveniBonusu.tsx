@@ -53,7 +53,7 @@ import {
 import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import type { HutDbTypKarty, NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
-import { useTypyKaret } from "@/components/TypyKaretProvider";
+import { signalizujSyncTypuKaret, useTypyKaret } from "@/components/TypyKaretProvider";
 import { urlLogaTymu } from "@/lib/tymLoga";
 
 const labelClass = "mb-1.5 block text-xs font-medium text-[var(--hut-muted)]";
@@ -662,6 +662,7 @@ export function NastaveniBonusu() {
         pocet?: number;
         novych_v_db?: number;
         aktualizovano?: number;
+        nove_v_katalogu?: { hodnota_filtru: string; jmeno_cs: string }[];
       };
       if (!res.ok) {
         setSyncTypyChyba(j.error ?? `HTTP ${res.status}`);
@@ -670,10 +671,16 @@ export function NastaveniBonusu() {
       const pocet = j.pocet ?? 0;
       const novych = j.novych_v_db ?? 0;
       const upd = j.aktualizovano ?? 0;
+      const noveUi = j.nove_v_katalogu ?? [];
+      const noveText =
+        noveUi.length > 0
+          ? ` Nové v dropdownu: ${noveUi.map((r) => r.jmeno_cs).join(", ")}.`
+          : "";
       setSyncTypyVysledek(
-        `Z Combo Finderu: ${pocet} typů. V databázi nových řádků: ${novych}, aktualizovaných (už byl stejný klíč hodnota_filtru): ${upd}.`,
+        `Z Combo Finderu: ${pocet} typů. V databázi nových řádků: ${novych}, aktualizovaných: ${upd}.${noveText}`,
       );
       await refreshDynamic();
+      signalizujSyncTypuKaret();
       setUlozenoOk(true);
       setTimeout(() => setUlozenoOk(false), 4000);
     } catch (e) {
@@ -1151,14 +1158,10 @@ export function NastaveniBonusu() {
                 <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
                   hutdbTypKaret.ts
                 </code>
-                . Ikony se berou z CDN / případně z{" "}
-                <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
-                  public/logos/hut-typy-karet/
-                </code>{" "}
-                — lokálně můžeš doplnit soubory přes{" "}
-                <code className="font-mono text-[11px] text-zinc-300">npm run loga:typy-karet</code>. Po syncu se
-                pod tlačítkem zobrazí, kolik řádků bylo nových vs. jen přepsaných (
-                <code className="font-mono text-[11px] text-zinc-300">hodnota_filtru</code>).
+                . Typy, které Hut Builder má navíc oproti statickému kódu, se uloží do Supabase a hned se objeví v
+                dropdownu Inventáře (bez rebuildu). Nové názvy se doplní automaticky (např. „Crowned“ → „HUT Crowned“).
+                Ikony: lokální soubory, jinak HUTDB CDN, případně přímo z nhlhutbuilder.com. Volitelně{" "}
+                <code className="font-mono text-[11px] text-zinc-300">npm run loga:typy-karet</code> pro mirror na NAS.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button

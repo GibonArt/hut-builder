@@ -418,11 +418,30 @@ export function hutdbTypyKaretProMrizku(): HutDbTypKarty[] {
   );
 }
 
+/** Stejná cesta jako `images/card_logos/` na nhlhutbuilder.com (Referer vyžaduje prohlížeč). */
+export const HUTBUILDER_CARD_LOGOS_BASE =
+  "https://nhlhutbuilder.com/images/card_logos";
+
+export function urlLogaTypuKartyHutbuilder(comboSoubor: string): string {
+  return `${HUTBUILDER_CARD_LOGOS_BASE}/${comboSoubor}`;
+}
+
+/** URL ikony: lokální manifest → HUTDB combos → Hut Builder card_logos (volá ikona při chybě). */
 export function urlLogaTypuKarty(comboSoubor: string | null): string | null {
   if (!comboSoubor) return null;
   const lokální = LOKALNI_TYPY_KARET[comboSoubor];
   if (lokální) return `/logos/hut-typy-karet/${lokální}`;
   return `${HUTDB_SUPABASE_PUBLIC_ASSETS}/combos/${comboSoubor}`;
+}
+
+export function urlLogaTypuKartyFallbacky(comboSoubor: string | null): string[] {
+  if (!comboSoubor) return [];
+  const primarni = urlLogaTypuKarty(comboSoubor);
+  const hb = urlLogaTypuKartyHutbuilder(comboSoubor);
+  const out: string[] = [];
+  if (primarni) out.push(primarni);
+  if (!out.includes(hb)) out.push(hb);
+  return out;
 }
 
 /** Volitelně: sloučený katalog (static + Supabase) a aliasy z DB (`aliases`). */

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { dynamicRadkyZComboFinderHtml } from "@/lib/hutbuilderBonusImport";
+import {
+  dynamicRadkyZComboFinderHtml,
+  noveTypyOprotiStatickemuKatalogu,
+} from "@/lib/hutdbTypKaretSync";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
 import { HUTBUILDER_COMBO_FINDER_REFERER } from "@/lib/hutbuilderGetLines";
 import { createClient } from "@/lib/supabase/server";
@@ -98,6 +101,8 @@ export async function POST() {
     );
   }
 
+  const noveVKatalogu = noveTypyOprotiStatickemuKatalogu(rows);
+
   return NextResponse.json({
     ok: true,
     /** Počet unikátních typů vyparsovaných z HTML (řádků k upsertu). */
@@ -106,6 +111,12 @@ export async function POST() {
     novych_v_db: novychVDb,
     /** Řádky, jejichž klíč už v DB byl → UPDATE `jmeno_cs`, `combo_soubor`, `synced_at`. */
     aktualizovano,
+    /** Nové oproti statickému katalogu v kódu — po syncu hned v dropdownu (Supabase + sloučení). */
+    nove_v_katalogu: noveVKatalogu.map((r) => ({
+      hodnota_filtru: r.hodnota_filtru,
+      jmeno_cs: r.jmeno_cs,
+      combo_soubor: r.combo_soubor,
+    })),
     synced_at: syncedAt,
   });
 }

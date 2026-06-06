@@ -5,7 +5,7 @@ import { useTypKartyMetaOpts } from "@/components/TypKartyMetaOptsContext";
 import {
   najdiMetaTypuKarty,
   type NajdiMetaTypuKartyOpts,
-  urlLogaTypuKarty,
+  urlLogaTypuKartyFallbacky,
   zobrazitelnyNazevTypuKarty,
 } from "@/lib/hutdbTypKaret";
 
@@ -26,11 +26,13 @@ export function TypKartyIkonaVCtverci({
   /** Bez border/background — např. kompaktní řádek ve formaci. */
   bezOkraje?: boolean;
 }) {
-  const [broken, setBroken] = useState(false);
-  const url = urlLogaTypuKarty(comboSoubor);
+  const [urlIndex, setUrlIndex] = useState(0);
+  const urls = urlLogaTypuKartyFallbacky(comboSoubor);
+  const url = urls[urlIndex] ?? null;
+  const broken = comboSoubor !== null && urls.length > 0 && urlIndex >= urls.length;
 
   useEffect(() => {
-    setBroken(false);
+    setUrlIndex(0);
   }, [comboSoubor]);
   const box =
     velikost === "kombinace"
@@ -64,7 +66,7 @@ export function TypKartyIkonaVCtverci({
           }`}
           loading="lazy"
           decoding="async"
-          onError={() => setBroken(true)}
+          onError={() => setUrlIndex((i) => i + 1)}
         />
       ) : comboSoubor === null ? (
         <span

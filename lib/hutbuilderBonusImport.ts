@@ -15,49 +15,10 @@ function noveIdRadku(): string {
     : `r-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-/** HTML z `combo-finder.php` — volby typů karet v builderu. */
-export function parseCardTypesFromHutbuilderComboFinderHtml(html: string): {
-  logo: string;
-  displayName: string;
-}[] {
-  const byLogo = new Map<string, string>();
-  const pairs: [RegExp, "logoFirst" | "nameFirst"][] = [
-    [/data-card-type-logo="([^"]+\.(?:png|webp))"[^>]*data-card-type-name="([^"]+)"/gi, "logoFirst"],
-    [/data-card-type-name="([^"]+)"[^>]*data-card-type-logo="([^"]+\.(?:png|webp))"/gi, "nameFirst"],
-  ];
-  for (const [re, order] of pairs) {
-    let m: RegExpExecArray | null;
-    const r = new RegExp(re.source, re.flags);
-    while ((m = r.exec(html)) !== null) {
-      const logo = order === "logoFirst" ? m[1] : m[2];
-      const name = order === "logoFirst" ? m[2] : m[1];
-      const nm = name.trim();
-      if (logo && nm) byLogo.set(logo, nm);
-    }
-  }
-  return [...byLogo.entries()].map(([logo, displayName]) => ({ logo, displayName }));
-}
-
-export function dynamicRadkyZComboFinderHtml(html: string): DynamicTypKartyDbRow[] {
-  const parsed = parseCardTypesFromHutbuilderComboFinderHtml(html);
-  const out: DynamicTypKartyDbRow[] = [];
-  const seen = new Set<string>();
-  for (const { logo, displayName } of parsed) {
-    const meta = najdiMetaTypuKarty(displayName);
-    const hodnota =
-      meta?.hodnotaFiltru ??
-      displayName.replace(/\s+/g, " ").trim().toUpperCase();
-    const k = hodnota.toUpperCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push({
-      hodnota_filtru: k,
-      jmeno_cs: meta?.jmenoCs ?? displayName.trim(),
-      combo_soubor: logo.trim(),
-    });
-  }
-  return out;
-}
+export {
+  dynamicRadkyZComboFinderHtml,
+  parseCardTypesFromHutbuilderComboFinderHtml,
+} from "@/lib/hutdbTypKaretSync";
 
 type HutbuilderBoost = { type?: string; amount?: unknown };
 type HutbuilderDetail = { type?: string; name?: string };

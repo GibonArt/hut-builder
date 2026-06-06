@@ -8,7 +8,8 @@
  */
 import {
   dynamicRadkyZComboFinderHtml,
-} from "@/lib/hutbuilderBonusImport";
+  noveTypyOprotiStatickemuKatalogu,
+} from "@/lib/hutdbTypKaretSync";
 import { HUTBUILDER_COMBO_FINDER_REFERER } from "@/lib/hutbuilderGetLines";
 import { createSupabaseServiceClient } from "@/lib/supabaseServiceClient";
 
@@ -71,9 +72,15 @@ async function main() {
     process.exit(1);
   }
 
+  const nove = noveTypyOprotiStatickemuKatalogu(rows);
   process.stderr.write(
     `\nHotovo: ${rows.length} typů, nových v DB: ${novychVDb}, aktualizováno: ${rows.length - novychVDb}\n`,
   );
+  if (nove.length > 0) {
+    process.stderr.write(
+      `Nové v dropdownu (mimo statický kód): ${nove.map((r) => r.jmeno_cs).join(", ")}\n`,
+    );
+  }
 }
 
 main().catch((e) => {
