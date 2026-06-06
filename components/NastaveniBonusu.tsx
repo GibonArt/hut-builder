@@ -663,6 +663,7 @@ export function NastaveniBonusu() {
         novych_v_db?: number;
         aktualizovano?: number;
         nove_v_katalogu?: { hodnota_filtru: string; jmeno_cs: string }[];
+        schema_varovani?: string | null;
       };
       if (!res.ok) {
         setSyncTypyChyba(j.error ?? `HTTP ${res.status}`);
@@ -676,8 +677,11 @@ export function NastaveniBonusu() {
         noveUi.length > 0
           ? ` Nové v dropdownu: ${noveUi.map((r) => r.jmeno_cs).join(", ")}.`
           : "";
+      const schemaWarn = j.schema_varovani?.trim();
       setSyncTypyVysledek(
-        `Z Combo Finderu: ${pocet} typů. V databázi nových řádků: ${novych}, aktualizovaných: ${upd}.${noveText}`,
+        `Z Combo Finderu: ${pocet} typů. V databázi nových řádků: ${novych}, aktualizovaných: ${upd}.${noveText}${
+          schemaWarn ? ` ${schemaWarn}` : ""
+        }`,
       );
       await refreshDynamic();
       signalizujSyncTypuKaret();
@@ -1159,9 +1163,11 @@ export function NastaveniBonusu() {
                   hutdbTypKaret.ts
                 </code>
                 . Typy, které Hut Builder má navíc oproti statickému kódu, se uloží do Supabase a hned se objeví v
-                dropdownu Inventáře (bez rebuildu). Nové názvy se doplní automaticky (např. „Crowned“ → „HUT Crowned“).
-                Ikony: lokální soubory, jinak HUTDB CDN, případně přímo z nhlhutbuilder.com. Volitelně{" "}
-                <code className="font-mono text-[11px] text-zinc-300">npm run loga:typy-karet</code> pro mirror na NAS.
+                dropdownu Inventáře (bez rebuildu). Při prvním nasazení spusť v Supabase SQL{" "}
+                <code className="font-mono text-[11px] text-zinc-300">hut_typy_karet_dynamic.sql</code>
+                , případně doplnění{" "}
+                <code className="font-mono text-[11px] text-zinc-300">hut_typy_karet_dynamic_extend.sql</code> (aliasy).
+                Ikony: lokální soubory, jinak HUTDB CDN, případně přímo z nhlhutbuilder.com.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button

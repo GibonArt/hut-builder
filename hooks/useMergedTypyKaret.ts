@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { nactiDynamickeTypyKaret } from "@/lib/hutdbTypKaretDynamicDb";
 import type { HutDbTypKarty } from "@/lib/hutdbTypKaret";
 import { hutdbTypyKaretVTriPoradi } from "@/lib/hutdbTypKaret";
 import {
@@ -18,16 +19,14 @@ export function useMergedTypyKaret() {
   const [aliasMapZBaze, setAliasMapZBaze] = useState<Record<string, string>>({});
 
   const nactiDynamicke = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("hut_typy_karet_dynamic")
-      .select("hodnota_filtru,jmeno_cs,combo_soubor,popis_cs,aliases");
+    const { data, error } = await nactiDynamickeTypyKaret(supabase);
     if (error) {
-      console.warn("hut_typy_karet_dynamic:", error.message);
+      console.warn("hut_typy_karet_dynamic:", error);
       setTypyKaret(staticRadky);
       setAliasMapZBaze({});
-      return { error: error.message as string };
+      return { error };
     }
-    const rows = (data ?? []) as DynamicTypKartyDbRow[];
+    const rows = data;
     setTypyKaret(sloucitStaticADynamickeTypy(staticRadky, rows));
     setAliasMapZBaze(aliasMapZDynamickychRadku(rows));
     return { error: null as string | null };

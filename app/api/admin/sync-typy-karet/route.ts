@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { upsertDynamickeTypyKaret } from "@/lib/hutdbTypKaretDynamicDb";
 import {
   dynamicRadkyZComboFinderHtml,
   noveTypyOprotiStatickemuKatalogu,
@@ -87,10 +88,7 @@ export async function POST() {
   const aktualizovano = rows.length - novychVDb;
 
   const syncedAt = new Date().toISOString();
-  const { error } = await supabase.from("hut_typy_karet_dynamic").upsert(
-    rows.map((r) => ({ ...r, synced_at: syncedAt })),
-    { onConflict: "hodnota_filtru" },
-  );
+  const { error, schema_varovani } = await upsertDynamickeTypyKaret(supabase, rows, syncedAt);
 
   if (error) {
     return NextResponse.json(
@@ -118,5 +116,6 @@ export async function POST() {
       combo_soubor: r.combo_soubor,
     })),
     synced_at: syncedAt,
+    schema_varovani,
   });
 }

@@ -6,6 +6,7 @@
  *
  * npm run sync:typy-karet
  */
+import { upsertDynamickeTypyKaret } from "@/lib/hutdbTypKaretDynamicDb";
 import {
   dynamicRadkyZComboFinderHtml,
   noveTypyOprotiStatickemuKatalogu,
@@ -63,13 +64,13 @@ async function main() {
   }
 
   const syncedAt = new Date().toISOString();
-  const { error } = await supabase.from("hut_typy_karet_dynamic").upsert(
-    rows.map((r) => ({ ...r, synced_at: syncedAt })),
-    { onConflict: "hodnota_filtru" },
-  );
+  const { error, schema_varovani } = await upsertDynamickeTypyKaret(supabase, rows, syncedAt);
   if (error) {
-    console.error(error.message);
+    console.error(error);
     process.exit(1);
+  }
+  if (schema_varovani) {
+    process.stderr.write(`\nVarování: ${schema_varovani}\n`);
   }
 
   const nove = noveTypyOprotiStatickemuKatalogu(rows);
