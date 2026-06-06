@@ -56,6 +56,15 @@ import { TypKartyMiniLogo } from "@/components/TypKartyIkona";
 import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
+import {
+  jeNeplatnyTurnajovyVstup,
+  LimityTurnajeFiltr,
+  maNastavenyTurnajovyFiltr,
+  PRAZDNY_TURNAJ_FILTR,
+  stejneTurnajoveFiltry,
+  type LimityTurnajeFiltrHandle,
+  type TurnajFiltrySnapshot,
+} from "@/components/LimityTurnajeFiltr";
 import { InventarKartaHledac } from "@/components/InventarKartaHledac";
 import { TymHledacNapricLigami } from "@/components/TymHledacNapricLigami";
 import { TymLogo, TymLogoOblast } from "@/components/TymLogo";
@@ -135,30 +144,15 @@ function limityVyskytuOvrZFiltru(
   };
 }
 
-function stejneTurnajoveFiltry(a: SnapshotFiltryOptimalizatoru, b: SnapshotFiltryOptimalizatoru): boolean {
-  return (
-    a.turnajPragOvrStr === b.turnajPragOvrStr &&
-    a.turnajMaxUtokVeFormaciStr === b.turnajMaxUtokVeFormaciStr &&
-    a.turnajMaxUtokCelkemStr === b.turnajMaxUtokCelkemStr &&
-    a.turnajMaxObranaVeFormaciStr === b.turnajMaxObranaVeFormaciStr &&
-    a.turnajMaxObranaCelkemStr === b.turnajMaxObranaCelkemStr
-  );
+function turnajZOptFiltru(f: SnapshotFiltryOptimalizatoru): TurnajFiltrySnapshot {
+  return {
+    turnajPragOvrStr: f.turnajPragOvrStr,
+    turnajMaxUtokVeFormaciStr: f.turnajMaxUtokVeFormaciStr,
+    turnajMaxUtokCelkemStr: f.turnajMaxUtokCelkemStr,
+    turnajMaxObranaVeFormaciStr: f.turnajMaxObranaVeFormaciStr,
+    turnajMaxObranaCelkemStr: f.turnajMaxObranaCelkemStr,
+  };
 }
-
-const TURNAJ_PRESET_95: Pick<
-  SnapshotFiltryOptimalizatoru,
-  | "turnajPragOvrStr"
-  | "turnajMaxUtokVeFormaciStr"
-  | "turnajMaxUtokCelkemStr"
-  | "turnajMaxObranaVeFormaciStr"
-  | "turnajMaxObranaCelkemStr"
-> = {
-  turnajPragOvrStr: "95",
-  turnajMaxUtokVeFormaciStr: "1",
-  turnajMaxUtokCelkemStr: "4",
-  turnajMaxObranaVeFormaciStr: "2",
-  turnajMaxObranaCelkemStr: "3",
-};
 
 function stejneTymyFiltryKapitanskaSouhra(
   a: readonly TymFiltrKapitanskaSouhra[],
@@ -820,11 +814,12 @@ export function OptimalizatorFormaci() {
 
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
-  const [turnajPragOvrStr, setTurnajPragOvrStr] = useState("");
-  const [turnajMaxUtokVeFormaciStr, setTurnajMaxUtokVeFormaciStr] = useState("");
-  const [turnajMaxUtokCelkemStr, setTurnajMaxUtokCelkemStr] = useState("");
-  const [turnajMaxObranaVeFormaciStr, setTurnajMaxObranaVeFormaciStr] = useState("");
-  const [turnajMaxObranaCelkemStr, setTurnajMaxObranaCelkemStr] = useState("");
+  const limityTurnajeRef = useRef<LimityTurnajeFiltrHandle>(null);
+  /** Inkrement po změně draftu limitů turnaje — validace a banner bez re-renderu výsledků. */
+  const [turnajDraftTick, setTurnajDraftTick] = useState(0);
+  const onTurnajDraftChange = useCallback(() => {
+    setTurnajDraftTick((t) => t + 1);
+  }, []);
   const [maxRozpocetMilStr, setMaxRozpocetMilStr] = useState("");
   const [hracKartaId, setHracKartaId] = useState("");
   const [kapitanskaTymy, setKapitanskaTymy] = useState<TymFiltrKapitanskaSouhra[]>([]);
@@ -873,28 +868,9 @@ export function OptimalizatorFormaci() {
     () => parseMaxRozpocetVolitelne(maxRozpocetMilStr),
     [maxRozpocetMilStr],
   );
-  const turnajPragOvr = useMemo(() => parseOvrVolitelne(turnajPragOvrStr), [turnajPragOvrStr]);
-  const turnajMaxUtokVeFormaci = useMemo(
-    () => parsePocetVolitelne(turnajMaxUtokVeFormaciStr),
-    [turnajMaxUtokVeFormaciStr],
-  );
-  const turnajMaxUtokCelkem = useMemo(
-    () => parsePocetVolitelne(turnajMaxUtokCelkemStr),
-    [turnajMaxUtokCelkemStr],
-  );
-  const turnajMaxObranaVeFormaci = useMemo(
-    () => parsePocetVolitelne(turnajMaxObranaVeFormaciStr),
-    [turnajMaxObranaVeFormaciStr],
-  );
-  const turnajMaxObranaCelkem = useMemo(
-    () => parsePocetVolitelne(turnajMaxObranaCelkemStr),
-    [turnajMaxObranaCelkemStr],
-  );
-  const maTurnajovyLimitPole =
-    turnajMaxUtokVeFormaciStr.trim() !== "" ||
-    turnajMaxUtokCelkemStr.trim() !== "" ||
-    turnajMaxObranaVeFormaciStr.trim() !== "" ||
-    turnajMaxObranaCelkemStr.trim() !== "";
+  const turnajDraftSnapshot = useMemo((): TurnajFiltrySnapshot => {
+    return limityTurnajeRef.current?.getSnapshot() ?? PRAZDNY_TURNAJ_FILTR;
+  }, [turnajDraftTick]);
   const chybaOvrRozsah =
     minOvr !== null && maxOvr !== null && minOvr > maxOvr
       ? "Minimální OVR nesmí být vyšší než maximální."
@@ -904,12 +880,7 @@ export function OptimalizatorFormaci() {
     (minOvrStr.trim() !== "" && minOvr === null) ||
     (maxOvrStr.trim() !== "" && maxOvr === null) ||
     (maxRozpocetMilStr.trim() !== "" && maxRozpocetMil === null) ||
-    (turnajPragOvrStr.trim() !== "" && turnajPragOvr === null) ||
-    (maTurnajovyLimitPole && turnajPragOvrStr.trim() === "") ||
-    (turnajMaxUtokVeFormaciStr.trim() !== "" && turnajMaxUtokVeFormaci === null) ||
-    (turnajMaxUtokCelkemStr.trim() !== "" && turnajMaxUtokCelkem === null) ||
-    (turnajMaxObranaVeFormaciStr.trim() !== "" && turnajMaxObranaVeFormaci === null) ||
-    (turnajMaxObranaCelkemStr.trim() !== "" && turnajMaxObranaCelkem === null);
+    jeNeplatnyTurnajovyVstup(turnajDraftSnapshot);
 
   const filtryOdlisneOdHledani = useMemo(() => {
     if (!filtryPoHledani) return false;
@@ -920,19 +891,7 @@ export function OptimalizatorFormaci() {
       filtryPoHledani.hracKartaId !== hracKartaId ||
       filtryPoHledani.typBonusuFiltr !== typBonusuFiltr ||
       !stejneTymyFiltryKapitanskaSouhra(filtryPoHledani.kapitanskaTymy, kapitanskaTymy) ||
-      !stejneTurnajoveFiltry(filtryPoHledani, {
-        minOvrStr,
-        maxOvrStr,
-        maxRozpocetMilStr,
-        hracKartaId,
-        typBonusuFiltr,
-        kapitanskaTymy,
-        turnajPragOvrStr,
-        turnajMaxUtokVeFormaciStr,
-        turnajMaxUtokCelkemStr,
-        turnajMaxObranaVeFormaciStr,
-        turnajMaxObranaCelkemStr,
-      })
+      !stejneTurnajoveFiltry(turnajZOptFiltru(filtryPoHledani), turnajDraftSnapshot)
     );
   }, [
     filtryPoHledani,
@@ -942,11 +901,7 @@ export function OptimalizatorFormaci() {
     hracKartaId,
     typBonusuFiltr,
     kapitanskaTymy,
-    turnajPragOvrStr,
-    turnajMaxUtokVeFormaciStr,
-    turnajMaxUtokCelkemStr,
-    turnajMaxObranaVeFormaciStr,
-    turnajMaxObranaCelkemStr,
+    turnajDraftSnapshot,
   ]);
 
   useEffect(() => {
@@ -1677,6 +1632,7 @@ export function OptimalizatorFormaci() {
         return;
       }
     }
+    const turnaj = limityTurnajeRef.current?.getSnapshot() ?? PRAZDNY_TURNAJ_FILTR;
     startTransition(() => {
       setFiltrPrekryvBonusu("vse");
       setFiltryPoHledani({
@@ -1686,11 +1642,7 @@ export function OptimalizatorFormaci() {
         hracKartaId,
         typBonusuFiltr,
         kapitanskaTymy: [...kapitanskaTymy],
-        turnajPragOvrStr,
-        turnajMaxUtokVeFormaciStr,
-        turnajMaxUtokCelkemStr,
-        turnajMaxObranaVeFormaciStr,
-        turnajMaxObranaCelkemStr,
+        ...turnaj,
       });
     });
   };
@@ -1703,11 +1655,7 @@ export function OptimalizatorFormaci() {
   const maNastaveneFiltryFormulare =
     minOvrStr.trim() !== "" ||
     maxOvrStr.trim() !== "" ||
-    turnajPragOvrStr.trim() !== "" ||
-    turnajMaxUtokVeFormaciStr.trim() !== "" ||
-    turnajMaxUtokCelkemStr.trim() !== "" ||
-    turnajMaxObranaVeFormaciStr.trim() !== "" ||
-    turnajMaxObranaCelkemStr.trim() !== "" ||
+    maNastavenyTurnajovyFiltr(turnajDraftSnapshot) ||
     maxRozpocetMilStr.trim() !== "" ||
     hracKartaId !== "" ||
     kapitanskaTymy.length > 0 ||
@@ -1718,25 +1666,13 @@ export function OptimalizatorFormaci() {
   const vymazatFiltryFormulare = useCallback(() => {
     setMinOvrStr("");
     setMaxOvrStr("");
-    setTurnajPragOvrStr("");
-    setTurnajMaxUtokVeFormaciStr("");
-    setTurnajMaxUtokCelkemStr("");
-    setTurnajMaxObranaVeFormaciStr("");
-    setTurnajMaxObranaCelkemStr("");
+    limityTurnajeRef.current?.clear();
     setMaxRozpocetMilStr("");
     setHracKartaId("");
     setKapitanskaTymy([]);
     setTypBonusuFiltr("vse");
     setKridlaVzajemna(false);
     setLoPoVzajemne(false);
-  }, []);
-
-  const nastavitTurnajPreset95 = useCallback(() => {
-    setTurnajPragOvrStr(TURNAJ_PRESET_95.turnajPragOvrStr);
-    setTurnajMaxUtokVeFormaciStr(TURNAJ_PRESET_95.turnajMaxUtokVeFormaciStr);
-    setTurnajMaxUtokCelkemStr(TURNAJ_PRESET_95.turnajMaxUtokCelkemStr);
-    setTurnajMaxObranaVeFormaciStr(TURNAJ_PRESET_95.turnajMaxObranaVeFormaciStr);
-    setTurnajMaxObranaCelkemStr(TURNAJ_PRESET_95.turnajMaxObranaCelkemStr);
   }, []);
 
   const zobrazitSekciUtok = sekceQuickFiltr === "vse" || sekceQuickFiltr === "utok";
@@ -1906,107 +1842,12 @@ export function OptimalizatorFormaci() {
                 />
               </div>
             </div>
-            <div className="mt-5 rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className={labelClass}>Limity turnaje (počet hráčů s OVR ≥ práh)</p>
-                  <p className="mt-1 text-xs leading-relaxed text-[var(--hut-muted)]/95">
-                    Např. strop 95 OVR: max. 1× na útočnou formaci a 4× celkem v útoku, max. 3× v obraně. Počítá se
-                    každý hráč ve formaci s OVR ≥ práh (ne jen přesně rovno).
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="touch-manipulation shrink-0 rounded-lg border border-[var(--hut-border)] px-3 py-1.5 text-xs font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-zinc-200"
-                  onClick={nastavitTurnajPreset95}
-                >
-                  Předvolba 95 OVR
-                </button>
-              </div>
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                <div className="min-w-0">
-                  <label htmlFor="opt-turnaj-prag" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
-                    Práh OVR
-                  </label>
-                  <input
-                    id="opt-turnaj-prag"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="např. 95"
-                    value={turnajPragOvrStr}
-                    onChange={(e) => setTurnajPragOvrStr(e.target.value)}
-                    className={`${inputClass} sm:max-w-none`}
-                    aria-invalid={turnajPragOvrStr.trim() !== "" && turnajPragOvr === null}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label htmlFor="opt-turnaj-utok-form" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
-                    Útok — max. ve formaci
-                  </label>
-                  <input
-                    id="opt-turnaj-utok-form"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="—"
-                    value={turnajMaxUtokVeFormaciStr}
-                    onChange={(e) => setTurnajMaxUtokVeFormaciStr(e.target.value)}
-                    className={`${inputClass} sm:max-w-none`}
-                    aria-invalid={
-                      turnajMaxUtokVeFormaciStr.trim() !== "" && turnajMaxUtokVeFormaci === null
-                    }
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label htmlFor="opt-turnaj-utok-celkem" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
-                    Útok — max. v soupisce
-                  </label>
-                  <input
-                    id="opt-turnaj-utok-celkem"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="—"
-                    value={turnajMaxUtokCelkemStr}
-                    onChange={(e) => setTurnajMaxUtokCelkemStr(e.target.value)}
-                    className={`${inputClass} sm:max-w-none`}
-                    aria-invalid={turnajMaxUtokCelkemStr.trim() !== "" && turnajMaxUtokCelkem === null}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label htmlFor="opt-turnaj-obrana-form" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
-                    Obrana — max. ve formaci
-                  </label>
-                  <input
-                    id="opt-turnaj-obrana-form"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="—"
-                    value={turnajMaxObranaVeFormaciStr}
-                    onChange={(e) => setTurnajMaxObranaVeFormaciStr(e.target.value)}
-                    className={`${inputClass} sm:max-w-none`}
-                    aria-invalid={
-                      turnajMaxObranaVeFormaciStr.trim() !== "" && turnajMaxObranaVeFormaci === null
-                    }
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label htmlFor="opt-turnaj-obrana-celkem" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
-                    Obrana — max. v soupisce
-                  </label>
-                  <input
-                    id="opt-turnaj-obrana-celkem"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="—"
-                    value={turnajMaxObranaCelkemStr}
-                    onChange={(e) => setTurnajMaxObranaCelkemStr(e.target.value)}
-                    className={`${inputClass} sm:max-w-none`}
-                    aria-invalid={
-                      turnajMaxObranaCelkemStr.trim() !== "" && turnajMaxObranaCelkem === null
-                    }
-                  />
-                </div>
-              </div>
-            </div>
+            <LimityTurnajeFiltr
+              ref={limityTurnajeRef}
+              inputClass={inputClass}
+              labelClass={labelClass}
+              onDraftChange={onTurnajDraftChange}
+            />
             {neplatnyVstup ? (
               <p className="mt-3 text-sm text-amber-200/90" role="alert">
                 OVR a práh turnaje: celé číslo 0–99. Počty výskytů: nezáporné celé číslo. U limitů turnaje vyplň práh
