@@ -11,7 +11,7 @@ import {
 import { useMergedTypyKaret } from "@/hooks/useMergedTypyKaret";
 import type { HutDbTypKarty } from "@/lib/hutdbTypKaret";
 
-/** Po úspěšném syncu v Nastavení bonusů — ostatní stránky (Inventář) si znovu načtou katalog. */
+/** Dispatched after card-type sync so listeners reload the catalog from Supabase. */
 export const HUT_TYPY_KARET_SYNC_EVENT = "hut:typy-karet-sync";
 
 export function signalizujSyncTypuKaret(): void {
@@ -46,16 +46,16 @@ export function TypyKaretProvider({ children }: { children: ReactNode }) {
   return <TypyKaretContext.Provider value={value}>{children}</TypyKaretContext.Provider>;
 }
 
-/** Sloučený katalog (static + Supabase) — jeden stav pro Inventář, bonusy i optimalizátor. */
+/** Merged card-type catalog (static + Supabase) shared across the app. */
 export function useTypyKaret(): TypyKaretContextValue {
   const ctx = useContext(TypyKaretContext);
   if (!ctx) {
-    throw new Error("useTypyKaret musí být uvnitř TypyKaretProvider (app/layout.tsx).");
+    throw new Error("useTypyKaret requires TypyKaretProvider in app/layout.tsx.");
   }
   return ctx;
 }
 
-/** Stejné jako `useTypyKaret().refreshDynamic` — např. po syncu z admin API. */
+/** Alias for useTypyKaret().refreshDynamic */
 export function useObnovitTypyKaret(): () => Promise<{ error: string | null }> {
   const { refreshDynamic } = useTypyKaret();
   return useCallback(() => refreshDynamic(), [refreshDynamic]);

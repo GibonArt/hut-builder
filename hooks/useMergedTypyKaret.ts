@@ -38,7 +38,7 @@ export function useMergedTypyKaret() {
   }, [nactiDynamicke]);
 
   const refreshDynamic = useCallback(async () => {
-    await nactiDynamicke();
+    return nactiDynamicke();
   }, [nactiDynamicke]);
 
   return { typyKaret, aliasMapZBaze, refreshDynamic };
