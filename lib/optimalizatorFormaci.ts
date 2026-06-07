@@ -484,6 +484,34 @@ export function spoctiObranneDvojice(
  * Dvojice brankářů (G + G); stejná logika jako obrana (symboly v libovolném pořadí mezi G1/G2).
  * Každá neuspořádaná dvojice karet jen jednou (kanonicky nižší id jako G1).
  */
+/** Normalizované jméno hráče pro porovnání (stejný hráč, jiný typ karty). */
+export function normalizujJmenoKarty(jmeno: string): string {
+  return jmeno.trim().toLowerCase();
+}
+
+export function utokMaUnikatniJmenaVeFormaci(v: UtocnaFormaceVysledek): boolean {
+  const jmena = [v.lk, v.c, v.pk].map((k) => normalizujJmenoKarty(k.jmeno));
+  return new Set(jmena).size === 3;
+}
+
+export function dvojiceMaUnikatniJmenaVeFormaci(v: DvojiceVysledek): boolean {
+  return (
+    normalizujJmenoKarty(v.a.jmeno) !== normalizujJmenoKarty(v.b.jmeno)
+  );
+}
+
+export function filtrujUtokBezDuplicitnihoJmena(
+  radky: readonly UtocnaFormaceVysledek[],
+): UtocnaFormaceVysledek[] {
+  return radky.filter(utokMaUnikatniJmenaVeFormaci);
+}
+
+export function filtrujDvojiceBezDuplicitnihoJmena(
+  radky: readonly DvojiceVysledek[],
+): DvojiceVysledek[] {
+  return radky.filter(dvojiceMaUnikatniJmenaVeFormaci);
+}
+
 export function spoctiGolmanskeDvojice(
   karty: readonly HutCard[],
   radkyKombinaci: readonly RadekBonusKombinaceUi[],

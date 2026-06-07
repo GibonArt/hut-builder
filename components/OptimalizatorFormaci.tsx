@@ -26,11 +26,14 @@ import {
   type TypBonusuKombinace,
 } from "@/lib/bonusKombinaceDb";
 import {
+  filtrujDvojiceBezDuplicitnihoJmena,
   filtrujDvojicePodleMaxVyskytuOvr,
   filtrujDvojicePodleTymuKapitanskaSouhra,
   filtrujKartyPodleOvr,
+  filtrujUtokBezDuplicitnihoJmena,
   filtrujUtokPodleMaxVyskytuOvr,
   filtrujUtokPodleTymuKapitanskaSouhra,
+  normalizujJmenoKarty,
   klicTymFiltruKapitanskaSouhra,
   parseOvrVolitelne,
   parsePocetVolitelne,
@@ -70,11 +73,19 @@ import { TymLogo, TymLogoOblast } from "@/components/TymLogo";
 import {
   SOUPISKA_POZADOVANE,
   jeKompletniSoupiska,
-  nactiUlozenouSoupisku,
+  nactiDraftSoupisku,
+  nactiPojmenovaneSoupisky,
   obnovVyberyZNactenych,
   pocetRadkuSoupisky,
-  smazUlozenouSoupisku,
-  ulozSoupiskuOpt,
+  smazDraftSoupisku,
+  smazPojmenovanouSoupisku,
+  ulozDraftSoupisku,
+  ulozPojmenovanouSoupisku,
+  type NahledHraceSoupisky,
+  type NahledRadkuDvojiceSoupisky,
+  type NahledRadkuUtokSoupisky,
+  type NahledSoupisky,
+  type UlozenaSoupiskaNamedV2,
   type UlozenaSoupiskaOptV1,
 } from "@/lib/optimalizatorSoupiskaStorage";
 
@@ -101,14 +112,15 @@ const TYP_BONUSU_FILTR: { id: TypBonusuKombinace | "vse"; label: string; title: 
   { id: "BS", label: "BS", title: "Body synergie (BS)" },
 ];
 
-type SekceVysledkuQuick = "vse" | "utok" | "obrana" | "golmani";
+type SekceVysledkuQuick = "utok" | "obrana" | "golmani";
 
 const SEKCE_QUICK_FILTR: { id: SekceVysledkuQuick; label: string; title: string }[] = [
-  { id: "vse", label: "Vše", title: "Útok, obrana i brankáři" },
-  { id: "utok", label: "Útok (LK · C · PK)", title: "Jen seznam útočných formací" },
-  { id: "obrana", label: "Obrana (LO · PO)", title: "Jen seznam obranných dvojic" },
-  { id: "golmani", label: "Brankáři (G · G)", title: "Jen seznam brankářských dvojic" },
+  { id: "utok", label: "Útok (LK · C · PK)", title: "Seznam útočných formací" },
+  { id: "obrana", label: "Obrana (LO · PO)", title: "Seznam obranných dvojic" },
+  { id: "golmani", label: "Brankáři (G · G)", title: "Seznam brankářských dvojic" },
 ];
+
+const VELIKOST_STRANKY_VYSLEDKU = 20;
 
 type SnapshotFiltryOptimalizatoru = {
   minOvrStr: string;
@@ -393,18 +405,122 @@ function dalsiBonusyPrekryvuProRadek(
   }));
 }
 
-function maUtokSpolecnehoHrace(
+function maUtokSpolecneJmeno(
   v: UtocnaFormaceVysledek,
-  zakazaneId: ReadonlySet<string>,
+  zakazanaJmena: ReadonlySet<string>,
 ): boolean {
-  return zakazaneId.has(v.lk.id) || zakazaneId.has(v.c.id) || zakazaneId.has(v.pk.id);
+  return (
+    zakazanaJmena.has(normalizujJmenoKarty(v.lk.jmeno)) ||
+    zakazanaJmena.has(normalizujJmenoKarty(v.c.jmeno)) ||
+    zakazanaJmena.has(normalizujJmenoKarty(v.pk.jmeno))
+  );
 }
 
-function maDvojiceSpolecnehoHrace(
+function maDvojiceSpolecneJmeno(
   v: DvojiceVysledek,
-  zakazaneId: ReadonlySet<string>,
+  zakazanaJmena: ReadonlySet<string>,
 ): boolean {
-  return zakazaneId.has(v.a.id) || zakazaneId.has(v.b.id);
+  return (
+    zakazanaJmena.has(normalizujJmenoKarty(v.a.jmeno)) ||
+    zakazanaJmena.has(normalizujJmenoKarty(v.b.jmeno))
+  );
+}
+
+function nahledHraceZKarty(k: HutCard): NahledHraceSoupisky {
+  return { id: k.id, jmeno: k.jmeno, ovr: k.ovr, pozice: k.pozice };
+}
+
+function vytvorNahledSoupisky(
+  vyberyUtok: Record<TypBonusuKombinace, string[]>,
+  vyberyObrana: Record<TypBonusuKombinace, string[]>,
+  vyberyGolmani: Record<TypBonusuKombinace, string[]>,
+  mapaUtok: ReadonlyMap<string, UtocnaFormaceVysledek>,
+  mapaObrana: ReadonlyMap<string, DvojiceVysledek>,
+  mapaGolmani: ReadonlyMap<string, DvojiceVysledek>,
+): NahledSoupisky {
+  const utok: NahledRadkuUtokSoupisky[] = [];
+  const obrana: NahledRadkuDvojiceSoupisky[] = [];
+  const golmani: NahledRadkuDvojiceSoupisky[] = [];
+  for (const typ of TYPY_BONUSU_KOMBINACE) {
+    for (const klic of vyberyUtok[typ]) {
+      const v = mapaUtok.get(klic);
+      if (!v) continue;
+      utok.push({
+        klic,
+        bonusTyp: v.kombinace.bonusTyp,
+        bonusHodnota: v.kombinace.bonusHodnota,
+        lk: nahledHraceZKarty(v.lk),
+        c: nahledHraceZKarty(v.c),
+        pk: nahledHraceZKarty(v.pk),
+      });
+    }
+    for (const klic of vyberyObrana[typ]) {
+      const v = mapaObrana.get(klic);
+      if (!v) continue;
+      obrana.push({
+        klic,
+        bonusTyp: v.kombinace.bonusTyp,
+        bonusHodnota: v.kombinace.bonusHodnota,
+        a: nahledHraceZKarty(v.a),
+        b: nahledHraceZKarty(v.b),
+      });
+    }
+    for (const klic of vyberyGolmani[typ]) {
+      const v = mapaGolmani.get(klic);
+      if (!v) continue;
+      golmani.push({
+        klic,
+        bonusTyp: v.kombinace.bonusTyp,
+        bonusHodnota: v.kombinace.bonusHodnota,
+        a: nahledHraceZKarty(v.a),
+        b: nahledHraceZKarty(v.b),
+      });
+    }
+  }
+  return { utok, obrana, golmani };
+}
+
+function StrankovaniVysledku({
+  stranka,
+  celkem,
+  onStranka,
+}: {
+  stranka: number;
+  celkem: number;
+  onStranka: (s: number) => void;
+}) {
+  const pocetStranek = Math.max(1, Math.ceil(celkem / VELIKOST_STRANKY_VYSLEDKU));
+  if (celkem <= VELIKOST_STRANKY_VYSLEDKU) return null;
+  const od = stranka * VELIKOST_STRANKY_VYSLEDKU + 1;
+  const doIdx = Math.min(celkem, (stranka + 1) * VELIKOST_STRANKY_VYSLEDKU);
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--hut-border)] pt-3">
+      <p className="text-xs text-[var(--hut-muted)]">
+        Zobrazeno {od}–{doIdx} z {celkem}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={stranka <= 0}
+          onClick={() => onStranka(stranka - 1)}
+          className="touch-manipulation rounded-full border border-[var(--hut-border)] px-3 py-1.5 text-xs font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-40"
+        >
+          Předchozí
+        </button>
+        <span className="self-center text-xs tabular-nums text-[var(--hut-muted)]">
+          {stranka + 1} / {pocetStranek}
+        </span>
+        <button
+          type="button"
+          disabled={stranka >= pocetStranek - 1}
+          onClick={() => onStranka(stranka + 1)}
+          className="touch-manipulation rounded-full border border-[var(--hut-border)] px-3 py-1.5 text-xs font-medium text-[var(--hut-muted)] transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-40"
+        >
+          Další
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /** Max. připnutých řádků na celou soupisku (všechny typy bonusu dohromady). */
@@ -420,39 +536,39 @@ function pocetPripnutych(vybery: Record<TypBonusuKombinace, string[]>): number {
   return TYPY_BONUSU_KOMBINACE.reduce((n, t) => n + vybery[t].length, 0);
 }
 
-function zakazaneIdZUtokKlicu(
+function zakazanaJmenaZUtokKlicu(
   mapa: ReadonlyMap<string, UtocnaFormaceVysledek>,
   vybery: Record<TypBonusuKombinace, string[]>,
 ): Set<string> {
-  const ids = new Set<string>();
+  const jmena = new Set<string>();
   for (const typ of TYPY_BONUSU_KOMBINACE) {
     for (const klic of vybery[typ]) {
       const v = mapa.get(klic);
       if (v) {
-        ids.add(v.lk.id);
-        ids.add(v.c.id);
-        ids.add(v.pk.id);
+        jmena.add(normalizujJmenoKarty(v.lk.jmeno));
+        jmena.add(normalizujJmenoKarty(v.c.jmeno));
+        jmena.add(normalizujJmenoKarty(v.pk.jmeno));
       }
     }
   }
-  return ids;
+  return jmena;
 }
 
-function zakazaneIdZDvojicKlicu(
+function zakazanaJmenaZDvojicKlicu(
   mapa: ReadonlyMap<string, DvojiceVysledek>,
   vybery: Record<TypBonusuKombinace, string[]>,
 ): Set<string> {
-  const ids = new Set<string>();
+  const jmena = new Set<string>();
   for (const typ of TYPY_BONUSU_KOMBINACE) {
     for (const klic of vybery[typ]) {
       const v = mapa.get(klic);
       if (v) {
-        ids.add(v.a.id);
-        ids.add(v.b.id);
+        jmena.add(normalizujJmenoKarty(v.a.jmeno));
+        jmena.add(normalizujJmenoKarty(v.b.jmeno));
       }
     }
   }
-  return ids;
+  return jmena;
 }
 
 function soucetPlatuKaret(karty: readonly HutCard[]): number {
@@ -823,7 +939,12 @@ export function OptimalizatorFormaci() {
     null,
   );
   /** Rychlý výběr, který blok výsledků zobrazit — méně scrollování při velkém počtu kombinací. */
-  const [sekceQuickFiltr, setSekceQuickFiltr] = useState<SekceVysledkuQuick>("vse");
+  const [sekceQuickFiltr, setSekceQuickFiltr] = useState<SekceVysledkuQuick>("utok");
+  const [strankaUtok, setStrankaUtok] = useState(0);
+  const [strankaObrana, setStrankaObrana] = useState(0);
+  const [strankaGolmani, setStrankaGolmani] = useState(0);
+  const [ulozeneSoupisky, setUlozeneSoupisky] = useState<UlozenaSoupiskaNamedV2[]>([]);
+  const [rozbalenaUlozenaId, setRozbalenaUlozenaId] = useState<string | null>(null);
   /**
    * Řazení seznamů výsledků (útok / obrana / brankáři) podle čísla u uložené kombinace = platí pro PLAT, CLK i BS
    * (srovnatelná hodnota v rámci řádku).
@@ -910,7 +1031,7 @@ export function OptimalizatorFormaci() {
       setUlozenaSoupiskaMeta(null);
       return;
     }
-    setUlozenaSoupiskaMeta(nactiUlozenouSoupisku(user.id));
+    setUlozenaSoupiskaMeta(nactiDraftSoupisku(user.id));
   }, [user?.id]);
 
   const kartyProVyberHrace = useMemo(() => {
@@ -1106,17 +1227,44 @@ export function OptimalizatorFormaci() {
     loPoVzajemne,
   ]);
 
+  const vysledkyUtokBezDup = useMemo(
+    () => filtrujUtokBezDuplicitnihoJmena(vysledkyUtok),
+    [vysledkyUtok],
+  );
+  const vysledkyObranaBezDup = useMemo(
+    () => filtrujDvojiceBezDuplicitnihoJmena(vysledkyObrana),
+    [vysledkyObrana],
+  );
+  const vysledkyGolmaniBezDup = useMemo(
+    () => filtrujDvojiceBezDuplicitnihoJmena(vysledkyGolmani),
+    [vysledkyGolmani],
+  );
+
+  useEffect(() => {
+    setStrankaUtok(0);
+    setStrankaObrana(0);
+    setStrankaGolmani(0);
+  }, [filtryPoHledani, sekceQuickFiltr]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setUlozeneSoupisky([]);
+      return;
+    }
+    setUlozeneSoupisky(nactiPojmenovaneSoupisky(user.id));
+  }, [user?.id, ulozenaSoupiskaMeta]);
+
   const utokZobrazeno = useMemo(
-    () => filtrujVysledkyPodleTypuBonusu(vysledkyUtok, typBonusuAplikovany),
-    [vysledkyUtok, typBonusuAplikovany],
+    () => filtrujVysledkyPodleTypuBonusu(vysledkyUtokBezDup, typBonusuAplikovany),
+    [vysledkyUtokBezDup, typBonusuAplikovany],
   );
   const obranaZobrazeno = useMemo(
-    () => filtrujVysledkyPodleTypuBonusu(vysledkyObrana, typBonusuAplikovany),
-    [vysledkyObrana, typBonusuAplikovany],
+    () => filtrujVysledkyPodleTypuBonusu(vysledkyObranaBezDup, typBonusuAplikovany),
+    [vysledkyObranaBezDup, typBonusuAplikovany],
   );
   const golmaniZobrazeno = useMemo(
-    () => filtrujVysledkyPodleTypuBonusu(vysledkyGolmani, typBonusuAplikovany),
-    [vysledkyGolmani, typBonusuAplikovany],
+    () => filtrujVysledkyPodleTypuBonusu(vysledkyGolmaniBezDup, typBonusuAplikovany),
+    [vysledkyGolmaniBezDup, typBonusuAplikovany],
   );
 
   const utokZobrazenoPoRozpoctu = useMemo(
@@ -1180,16 +1328,16 @@ export function OptimalizatorFormaci() {
   const golmaniZobrazenoPoTurnaji = golmaniZobrazenoPoKapitanske;
 
   const mapaBonusuUtok = useMemo(
-    () => mapaTypuBonusuNaSestavuUtok(vysledkyUtok),
-    [vysledkyUtok],
+    () => mapaTypuBonusuNaSestavuUtok(utokZobrazenoPoTurnaji),
+    [utokZobrazenoPoTurnaji],
   );
   const mapaBonusuObrana = useMemo(
-    () => mapaTypuBonusuNaSestavuDvojice(vysledkyObrana),
-    [vysledkyObrana],
+    () => mapaTypuBonusuNaSestavuDvojice(obranaZobrazenoPoTurnaji),
+    [obranaZobrazenoPoTurnaji],
   );
   const mapaBonusuGolmani = useMemo(
-    () => mapaTypuBonusuNaSestavuDvojice(vysledkyGolmani),
-    [vysledkyGolmani],
+    () => mapaTypuBonusuNaSestavuDvojice(golmaniZobrazenoPoTurnaji),
+    [golmaniZobrazenoPoTurnaji],
   );
 
   const klicePrekryvuKDispozici = useMemo(() => {
@@ -1233,34 +1381,34 @@ export function OptimalizatorFormaci() {
 
   const mapaUtok = useMemo(() => {
     const m = new Map<string, UtocnaFormaceVysledek>();
-    for (const x of vysledkyUtok) m.set(klicUtocnaFormace(x), x);
+    for (const x of vysledkyUtokBezDup) m.set(klicUtocnaFormace(x), x);
     return m;
-  }, [vysledkyUtok]);
+  }, [vysledkyUtokBezDup]);
 
   const mapaObrana = useMemo(() => {
     const m = new Map<string, DvojiceVysledek>();
-    for (const x of vysledkyObrana) m.set(klicRadkuDvojice(x), x);
+    for (const x of vysledkyObranaBezDup) m.set(klicRadkuDvojice(x), x);
     return m;
-  }, [vysledkyObrana]);
+  }, [vysledkyObranaBezDup]);
 
   const mapaGolmani = useMemo(() => {
     const m = new Map<string, DvojiceVysledek>();
-    for (const x of vysledkyGolmani) m.set(klicRadkuDvojice(x), x);
+    for (const x of vysledkyGolmaniBezDup) m.set(klicRadkuDvojice(x), x);
     return m;
-  }, [vysledkyGolmani]);
+  }, [vysledkyGolmaniBezDup]);
 
-  const zakazaneIdUtok = useMemo(
-    () => zakazaneIdZUtokKlicu(mapaUtok, vyberyUtok),
+  const zakazanaJmenaUtok = useMemo(
+    () => zakazanaJmenaZUtokKlicu(mapaUtok, vyberyUtok),
     [mapaUtok, vyberyUtok],
   );
 
-  const zakazaneIdObrana = useMemo(
-    () => zakazaneIdZDvojicKlicu(mapaObrana, vyberyObrana),
+  const zakazanaJmenaObrana = useMemo(
+    () => zakazanaJmenaZDvojicKlicu(mapaObrana, vyberyObrana),
     [mapaObrana, vyberyObrana],
   );
 
-  const zakazaneIdGolmani = useMemo(
-    () => zakazaneIdZDvojicKlicu(mapaGolmani, vyberyGolmani),
+  const zakazanaJmenaGolmani = useMemo(
+    () => zakazanaJmenaZDvojicKlicu(mapaGolmani, vyberyGolmani),
     [mapaGolmani, vyberyGolmani],
   );
 
@@ -1278,19 +1426,19 @@ export function OptimalizatorFormaci() {
   );
 
   const utokZobrazenoPoVylouceni = useMemo(() => {
-    if (!zakazaneIdUtok.size) return utokZobrazenoPoPrekryvu;
-    return utokZobrazenoPoPrekryvu.filter((row) => !maUtokSpolecnehoHrace(row, zakazaneIdUtok));
-  }, [utokZobrazenoPoPrekryvu, zakazaneIdUtok]);
+    if (!zakazanaJmenaUtok.size) return utokZobrazenoPoPrekryvu;
+    return utokZobrazenoPoPrekryvu.filter((row) => !maUtokSpolecneJmeno(row, zakazanaJmenaUtok));
+  }, [utokZobrazenoPoPrekryvu, zakazanaJmenaUtok]);
 
   const obranaZobrazenoPoVylouceni = useMemo(() => {
-    if (!zakazaneIdObrana.size) return obranaZobrazenoPoPrekryvu;
-    return obranaZobrazenoPoPrekryvu.filter((row) => !maDvojiceSpolecnehoHrace(row, zakazaneIdObrana));
-  }, [obranaZobrazenoPoPrekryvu, zakazaneIdObrana]);
+    if (!zakazanaJmenaObrana.size) return obranaZobrazenoPoPrekryvu;
+    return obranaZobrazenoPoPrekryvu.filter((row) => !maDvojiceSpolecneJmeno(row, zakazanaJmenaObrana));
+  }, [obranaZobrazenoPoPrekryvu, zakazanaJmenaObrana]);
 
   const golmaniZobrazenoPoVylouceni = useMemo(() => {
-    if (!zakazaneIdGolmani.size) return golmaniZobrazenoPoPrekryvu;
-    return golmaniZobrazenoPoPrekryvu.filter((row) => !maDvojiceSpolecnehoHrace(row, zakazaneIdGolmani));
-  }, [golmaniZobrazenoPoPrekryvu, zakazaneIdGolmani]);
+    if (!zakazanaJmenaGolmani.size) return golmaniZobrazenoPoPrekryvu;
+    return golmaniZobrazenoPoPrekryvu.filter((row) => !maDvojiceSpolecneJmeno(row, zakazanaJmenaGolmani));
+  }, [golmaniZobrazenoPoPrekryvu, zakazanaJmenaGolmani]);
 
   const utokZobrazenoPoVylouceniSerazeno = useMemo(
     () => seraditUtocneVysledky(utokZobrazenoPoVylouceni, typRazeniVysledku, smerRazeniHodnotyBonusu),
@@ -1305,11 +1453,26 @@ export function OptimalizatorFormaci() {
     [golmaniZobrazenoPoVylouceni, typRazeniVysledku, smerRazeniHodnotyBonusu],
   );
 
+  const utokStrankovano = useMemo(() => {
+    const od = strankaUtok * VELIKOST_STRANKY_VYSLEDKU;
+    return utokZobrazenoPoVylouceniSerazeno.slice(od, od + VELIKOST_STRANKY_VYSLEDKU);
+  }, [utokZobrazenoPoVylouceniSerazeno, strankaUtok]);
+
+  const obranaStrankovano = useMemo(() => {
+    const od = strankaObrana * VELIKOST_STRANKY_VYSLEDKU;
+    return obranaZobrazenoPoVylouceniSerazeno.slice(od, od + VELIKOST_STRANKY_VYSLEDKU);
+  }, [obranaZobrazenoPoVylouceniSerazeno, strankaObrana]);
+
+  const golmaniStrankovano = useMemo(() => {
+    const od = strankaGolmani * VELIKOST_STRANKY_VYSLEDKU;
+    return golmaniZobrazenoPoVylouceniSerazeno.slice(od, od + VELIKOST_STRANKY_VYSLEDKU);
+  }, [golmaniZobrazenoPoVylouceniSerazeno, strankaGolmani]);
+
   const soupiska = useMemo(() => {
     let platUtok = 0;
     let platObrana = 0;
     let platGolmani = 0;
-    const hracIds = new Set<string>();
+    const hracJmena = new Set<string>();
     const utokRadky: UtocnaFormaceVysledek[] = [];
     const obranaRadky: DvojiceVysledek[] = [];
 
@@ -1319,24 +1482,24 @@ export function OptimalizatorFormaci() {
         if (!v) continue;
         utokRadky.push(v);
         platUtok += soucetPlatuKaret([v.lk, v.c, v.pk]);
-        hracIds.add(v.lk.id);
-        hracIds.add(v.c.id);
-        hracIds.add(v.pk.id);
+        hracJmena.add(normalizujJmenoKarty(v.lk.jmeno));
+        hracJmena.add(normalizujJmenoKarty(v.c.jmeno));
+        hracJmena.add(normalizujJmenoKarty(v.pk.jmeno));
       }
       for (const klic of vyberyObrana[typ]) {
         const v = mapaObrana.get(klic);
         if (!v) continue;
         obranaRadky.push(v);
         platObrana += soucetPlatuKaret([v.a, v.b]);
-        hracIds.add(v.a.id);
-        hracIds.add(v.b.id);
+        hracJmena.add(normalizujJmenoKarty(v.a.jmeno));
+        hracJmena.add(normalizujJmenoKarty(v.b.jmeno));
       }
       for (const klic of vyberyGolmani[typ]) {
         const v = mapaGolmani.get(klic);
         if (!v) continue;
         platGolmani += soucetPlatuKaret([v.a, v.b]);
-        hracIds.add(v.a.id);
-        hracIds.add(v.b.id);
+        hracJmena.add(normalizujJmenoKarty(v.a.jmeno));
+        hracJmena.add(normalizujJmenoKarty(v.b.jmeno));
       }
     }
 
@@ -1362,7 +1525,7 @@ export function OptimalizatorFormaci() {
       platObrana,
       platGolmani,
       platCelkem: platUtok + platObrana + platGolmani,
-      unikatniHracu: hracIds.size,
+      unikatniHracu: hracJmena.size,
       pocetRadku,
       vyskytUtok,
       vyskytObrana,
@@ -1391,14 +1554,31 @@ export function OptimalizatorFormaci() {
       );
       return;
     }
-    ulozSoupiskuOpt(user.id, {
+    const nazev = window.prompt("Název uložené soupisky:", `Soupiska ${new Date().toLocaleDateString("cs-CZ")}`);
+    if (nazev === null) return;
+    const trimmed = nazev.trim();
+    if (!trimmed) {
+      toast.error("Název soupisky nesmí být prázdný.");
+      return;
+    }
+    const nahled = vytvorNahledSoupisky(
+      vyberyUtok,
+      vyberyObrana,
+      vyberyGolmani,
+      mapaUtok,
+      mapaObrana,
+      mapaGolmani,
+    );
+    ulozPojmenovanouSoupisku(user.id, {
+      nazev: trimmed,
       utok: vyberyUtok,
       obrana: vyberyObrana,
       golmani: vyberyGolmani,
       platCelkem: soupiska.platCelkem,
+      nahled,
     });
-    setUlozenaSoupiskaMeta(nactiUlozenouSoupisku(user.id));
-    toast.success("Kompletní soupiska uložena v tomto prohlížeči.");
+    setUlozeneSoupisky(nactiPojmenovaneSoupisky(user.id));
+    toast.success(`Soupiska „${trimmed}“ uložena.`);
   }, [
     user?.id,
     kompletniSoupiska,
@@ -1406,13 +1586,19 @@ export function OptimalizatorFormaci() {
     vyberyObrana,
     vyberyGolmani,
     soupiska.platCelkem,
+    mapaUtok,
+    mapaObrana,
+    mapaGolmani,
   ]);
 
   const aplikovatUlozenouSoupisku = useCallback(
-    (ulozena: UlozenaSoupiskaOptV1, options?: { toast?: boolean }) => {
-      const validUtok = new Set(vysledkyUtok.map((x) => klicUtocnaFormace(x)));
-      const validObrana = new Set(vysledkyObrana.map((x) => klicRadkuDvojice(x)));
-      const validGolmani = new Set(vysledkyGolmani.map((x) => klicRadkuDvojice(x)));
+    (
+      ulozena: Pick<UlozenaSoupiskaOptV1, "utok" | "obrana" | "golmani">,
+      options?: { toast?: boolean },
+    ) => {
+      const validUtok = new Set(vysledkyUtokBezDup.map((x) => klicUtocnaFormace(x)));
+      const validObrana = new Set(vysledkyObranaBezDup.map((x) => klicRadkuDvojice(x)));
+      const validGolmani = new Set(vysledkyGolmaniBezDup.map((x) => klicRadkuDvojice(x)));
 
       const u = obnovVyberyZNactenych(ulozena.utok, validUtok);
       const o = obnovVyberyZNactenych(ulozena.obrana, validObrana);
@@ -1438,36 +1624,33 @@ export function OptimalizatorFormaci() {
         toast.success("Uložená soupiska načtena.");
       }
     },
-    [vysledkyUtok, vysledkyObrana, vysledkyGolmani],
+    [vysledkyUtokBezDup, vysledkyObranaBezDup, vysledkyGolmaniBezDup],
   );
 
-  const nacistUlozenouSoupisku = useCallback(() => {
-    if (!user?.id) return;
-    if (!filtryPoHledani) {
-      toast.error("Nejdřív spusť Hledat — načtení soupisky potřebuje aktuální výsledky.");
-      return;
-    }
-    const ulozena = nactiUlozenouSoupisku(user.id);
-    if (!ulozena) {
-      toast.error("Žádná uložená soupiska.");
-      return;
-    }
-    aplikovatUlozenouSoupisku(ulozena, { toast: true });
-  }, [user?.id, filtryPoHledani, aplikovatUlozenouSoupisku]);
+  const nacistPojmenovanouSoupisku = useCallback(
+    (ulozena: UlozenaSoupiskaNamedV2) => {
+      if (!filtryPoHledani) {
+        toast.error("Nejdřív spusť Hledat — načtení do aktivní soupisky potřebuje aktuální výsledky.");
+        return;
+      }
+      aplikovatUlozenouSoupisku(ulozena, { toast: true });
+    },
+    [filtryPoHledani, aplikovatUlozenouSoupisku],
+  );
 
-  const smazatUlozenouSoupisku = useCallback(() => {
-    if (!user?.id) return;
-    smazUlozenouSoupisku(user.id);
-    setUlozenaSoupiskaMeta(null);
-    preskocitAutoUlozeniRef.current = true;
-    setVyberyUtok(prazdneVyberyPodleTypu());
-    setVyberyObrana(prazdneVyberyPodleTypu());
-    setVyberyGolmani(prazdneVyberyPodleTypu());
-    toast.success("Uložená soupiska smazána.");
-  }, [user?.id]);
+  const smazatPojmenovanouSoupisku = useCallback(
+    (id: string) => {
+      if (!user?.id) return;
+      smazPojmenovanouSoupisku(user.id, id);
+      setUlozeneSoupisky(nactiPojmenovaneSoupisky(user.id));
+      if (rozbalenaUlozenaId === id) setRozbalenaUlozenaId(null);
+      toast.success("Uložená soupiska smazána.");
+    },
+    [user?.id, rozbalenaUlozenaId],
+  );
 
   useEffect(() => {
-    const valid = new Set(vysledkyUtok.map((x) => klicUtocnaFormace(x)));
+    const valid = new Set(vysledkyUtokBezDup.map((x) => klicUtocnaFormace(x)));
     setVyberyUtok((prev) => {
       let changed = false;
       const next = prazdneVyberyPodleTypu();
@@ -1477,10 +1660,10 @@ export function OptimalizatorFormaci() {
       }
       return changed ? next : prev;
     });
-  }, [vysledkyUtok]);
+  }, [vysledkyUtokBezDup]);
 
   useEffect(() => {
-    const valid = new Set(vysledkyObrana.map((x) => klicRadkuDvojice(x)));
+    const valid = new Set(vysledkyObranaBezDup.map((x) => klicRadkuDvojice(x)));
     setVyberyObrana((prev) => {
       let changed = false;
       const next = prazdneVyberyPodleTypu();
@@ -1490,10 +1673,10 @@ export function OptimalizatorFormaci() {
       }
       return changed ? next : prev;
     });
-  }, [vysledkyObrana]);
+  }, [vysledkyObranaBezDup]);
 
   useEffect(() => {
-    const valid = new Set(vysledkyGolmani.map((x) => klicRadkuDvojice(x)));
+    const valid = new Set(vysledkyGolmaniBezDup.map((x) => klicRadkuDvojice(x)));
     setVyberyGolmani((prev) => {
       let changed = false;
       const next = prazdneVyberyPodleTypu();
@@ -1503,14 +1686,18 @@ export function OptimalizatorFormaci() {
       }
       return changed ? next : prev;
     });
-  }, [vysledkyGolmani]);
+  }, [vysledkyGolmaniBezDup]);
 
   useEffect(() => {
     if (!user?.id || !filtryPoHledani || obnovenoPoHledatRef.current) return;
-    if (vysledkyUtok.length === 0 && vysledkyObrana.length === 0 && vysledkyGolmani.length === 0) {
+    if (
+      vysledkyUtokBezDup.length === 0 &&
+      vysledkyObranaBezDup.length === 0 &&
+      vysledkyGolmaniBezDup.length === 0
+    ) {
       return;
     }
-    const ulozena = nactiUlozenouSoupisku(user.id);
+    const ulozena = nactiDraftSoupisku(user.id);
     obnovenoPoHledatRef.current = true;
     if (!ulozena || pocetRadkuSoupisky(ulozena.utok) + pocetRadkuSoupisky(ulozena.obrana) + pocetRadkuSoupisky(ulozena.golmani) === 0) {
       return;
@@ -1519,9 +1706,9 @@ export function OptimalizatorFormaci() {
   }, [
     user?.id,
     filtryPoHledani,
-    vysledkyUtok,
-    vysledkyObrana,
-    vysledkyGolmani,
+    vysledkyUtokBezDup,
+    vysledkyObranaBezDup,
+    vysledkyGolmaniBezDup,
     aplikovatUlozenouSoupisku,
   ]);
 
@@ -1531,13 +1718,13 @@ export function OptimalizatorFormaci() {
       preskocitAutoUlozeniRef.current = false;
       return;
     }
-    ulozSoupiskuOpt(user.id, {
+    ulozDraftSoupisku(user.id, {
       utok: vyberyUtok,
       obrana: vyberyObrana,
       golmani: vyberyGolmani,
       platCelkem: soupiska.platCelkem,
     });
-    setUlozenaSoupiskaMeta(nactiUlozenouSoupisku(user.id));
+    setUlozenaSoupiskaMeta(nactiDraftSoupisku(user.id));
   }, [user?.id, filtryPoHledani, vyberyUtok, vyberyObrana, vyberyGolmani, soupiska.platCelkem]);
 
   const pridatUtok = (v: UtocnaFormaceVysledek) => {
@@ -1716,16 +1903,12 @@ export function OptimalizatorFormaci() {
     setLoPoVzajemne(false);
   }, []);
 
-  const zobrazitSekciUtok = sekceQuickFiltr === "vse" || sekceQuickFiltr === "utok";
-  const zobrazitSekciObranu = sekceQuickFiltr === "vse" || sekceQuickFiltr === "obrana";
-  const zobrazitSekciGolmany = sekceQuickFiltr === "vse" || sekceQuickFiltr === "golmani";
+  const zobrazitSekciUtok = sekceQuickFiltr === "utok";
+  const zobrazitSekciObranu = sekceQuickFiltr === "obrana";
+  const zobrazitSekciGolmany = sekceQuickFiltr === "golmani";
 
-  const zobrazitPripnutouSekci =
-    !!filtryPoHledani &&
-    ((sekceQuickFiltr === "vse" && (maVybranouUtok || maVybranouObranu || maVybraneGolmany)) ||
-      (sekceQuickFiltr === "utok" && maVybranouUtok) ||
-      (sekceQuickFiltr === "obrana" && maVybranouObranu) ||
-      (sekceQuickFiltr === "golmani" && maVybraneGolmany));
+  const maNecoPripnuto = maVybranouUtok || maVybranouObranu || maVybraneGolmany;
+  const zobrazitPripnutouSekci = !!filtryPoHledani && maNecoPripnuto;
 
   const nastaveniBonusuJakoOdkaz = jeBonusAdmin(user?.email);
 
@@ -2075,6 +2258,461 @@ export function OptimalizatorFormaci() {
             </div>
           ) : null}
 
+          {user ? (
+            <section
+              className="space-y-3 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-surface)]/60 p-4 sm:p-5"
+              aria-label="Uložené soupisky"
+            >
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
+                Uložené soupisky
+              </h3>
+              <p className="text-xs text-[var(--hut-muted)]">
+                Rozklikni náhled bez Hledat. Načtení do aktivní soupisky vyžaduje aktuální výsledky (Hledat).
+              </p>
+              {ulozeneSoupisky.length === 0 ? (
+                <p className="text-xs text-[var(--hut-muted)]/80">
+                  Zatím žádná — po sestavení kompletní soupisky použij „Uložit soupisku pod názvem…“.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {ulozeneSoupisky.map((s) => {
+                    const rozbaleno = rozbalenaUlozenaId === s.id;
+                    const pocet =
+                      pocetRadkuSoupisky(s.utok) +
+                      pocetRadkuSoupisky(s.obrana) +
+                      pocetRadkuSoupisky(s.golmani);
+                    return (
+                      <li
+                        key={s.id}
+                        className="rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50"
+                      >
+                        <div className="flex flex-wrap items-center gap-2 p-3">
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 text-left text-sm font-medium text-white"
+                            onClick={() =>
+                              setRozbalenaUlozenaId(rozbaleno ? null : s.id)
+                            }
+                          >
+                            {s.nazev}
+                            <span className="mt-0.5 block text-xs font-normal text-[var(--hut-muted)]">
+                              {new Date(s.ulozeno).toLocaleString("cs-CZ", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
+                              {" · "}
+                              {pocet} řádků · plat {formatovatPlatVMil(s.platCelkem)}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            className={btnVyberFiltrClass}
+                            disabled={!filtryPoHledani}
+                            title={
+                              filtryPoHledani
+                                ? "Načíst do aktivní soupisky"
+                                : "Nejdřív spusť Hledat"
+                            }
+                            onClick={() => nacistPojmenovanouSoupisku(s)}
+                          >
+                            Načíst
+                          </button>
+                          <button
+                            type="button"
+                            className={btnZrusitVyberClass}
+                            onClick={() => {
+                              if (window.confirm(`Smazat soupisku „${s.nazev}“?`)) {
+                                smazatPojmenovanouSoupisku(s.id);
+                              }
+                            }}
+                          >
+                            Smazat
+                          </button>
+                        </div>
+                        {rozbaleno ? (
+                          <div className="space-y-2 border-t border-[var(--hut-border)] px-3 py-3 text-xs text-[var(--hut-muted)]">
+                            {s.nahled.utok.map((r) => (
+                              <p key={r.klic}>
+                                Útok {r.bonusTyp}: {r.lk.jmeno} · {r.c.jmeno} · {r.pk.jmeno}
+                              </p>
+                            ))}
+                            {s.nahled.obrana.map((r) => (
+                              <p key={r.klic}>
+                                Obrana {r.bonusTyp}: {r.a.jmeno} · {r.b.jmeno}
+                              </p>
+                            ))}
+                            {s.nahled.golmani.map((r) => (
+                              <p key={r.klic}>
+                                Brankáři {r.bonusTyp}: {r.a.jmeno} · {r.b.jmeno}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          ) : null}
+
+          {filtryPoHledani && !nacitani && !vypocetFormaciBezi && zobrazitPripnutouSekci ? (
+            <section
+              className="space-y-4 rounded-xl border border-[var(--hut-lime)]/40 bg-[var(--hut-surface-raised)]/90 p-4 shadow-inner shadow-black/15 sm:p-5"
+              aria-label="Soupiska — připnuté sestavy"
+            >
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
+                  Soupiska (připnuté sestavy)
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--hut-muted)]">
+                  Skládáš soupisku: útok {SOUPISKA_POZADOVANE.utok}, obrana {SOUPISKA_POZADOVANE.obrana}, brankáři{" "}
+                  {SOUPISKA_POZADOVANE.golmani} řádků. Stejné jméno hráče (jiný typ karty) se v soupisce i ve výsledcích
+                  neopakuje. Rozpracování se automaticky ukládá v prohlížeči.
+                </p>
+                {ulozenaSoupiskaMeta ? (
+                  <p className="mt-2 text-xs text-[var(--hut-lime)]/95">
+                    Rozpracováno{" "}
+                    {new Date(ulozenaSoupiskaMeta.ulozeno).toLocaleString("cs-CZ", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}{" "}
+                    · plat {formatovatPlatVMil(ulozenaSoupiskaMeta.platCelkem)}
+                  </p>
+                ) : null}
+              </div>
+
+              {maVybranouUtok ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-xs font-semibold text-white">
+                      Útočná formace (LK · C · PK) — {soupiska.pocetUtok}/{MAX_VYBER_UTOK}
+                    </p>
+                    <button
+                      type="button"
+                      className={btnZrusitVyberClass}
+                      onClick={() => setVyberyUtok(prazdneVyberyPodleTypu())}
+                    >
+                      Zrušit vše (útok)
+                    </button>
+                  </div>
+                  {TYPY_BONUSU_KOMBINACE.map((typ) =>
+                    vyberyUtok[typ].length === 0 ? null : (
+                      <div key={typ} className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
+                          Bonus {typ}
+                          {vyberyUtok[typ].length > 1 ? ` · ${vyberyUtok[typ].length} řádky` : null}
+                        </p>
+                        {vyberyUtok[typ].map((klic) => {
+                          const v = mapaUtok.get(klic);
+                          if (!v) return null;
+                          const dalsiPin = dalsiBonusyPrekryvuProRadek(
+                            v.kombinace.bonusTyp,
+                            mapaBonusuUtok.get(klicHracuUtokTrojice(v)),
+                          );
+                          return (
+                            <article
+                              key={klic}
+                              className={[
+                                polozkaFormaceClass,
+                                "border-[var(--hut-focus)]/30 bg-[var(--hut-bg-elevated)]/70",
+                                dalsiPin.length ? "border-l-2 border-amber-400/45" : "",
+                              ].join(" ")}
+                            >
+                              <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
+                                <button
+                                  type="button"
+                                  className={btnZrusitVyberClass}
+                                  onClick={() =>
+                                    setVyberyUtok((p) => ({
+                                      ...p,
+                                      [typ]: p[typ].filter((k) => k !== klic),
+                                    }))
+                                  }
+                                >
+                                  Odebrat
+                                </button>
+                              </div>
+                              <UtocnaFormaceObsah
+                                v={v}
+                                narodnostiVolby={narodnostiVolby}
+                                zobrazitTlacitkoVyber={false}
+                                onVybratProFiltrHrace={() => {}}
+                                dalsiBonusyPrekryvu={
+                                  dalsiPin.length ? dalsiPin : undefined
+                                }
+                              />
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ),
+                  )}
+                </div>
+              ) : null}
+
+              {maVybranouObranu ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-xs font-semibold text-white">
+                      Obranná dvojice (LO · PO) — {soupiska.pocetObrana}/{MAX_VYBER_OBRANA}
+                    </p>
+                    <button
+                      type="button"
+                      className={btnZrusitVyberClass}
+                      onClick={() => setVyberyObrana(prazdneVyberyPodleTypu())}
+                    >
+                      Zrušit vše (obrana)
+                    </button>
+                  </div>
+                  {TYPY_BONUSU_KOMBINACE.map((typ) =>
+                    vyberyObrana[typ].length === 0 ? null : (
+                      <div key={typ} className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
+                          Bonus {typ}
+                          {vyberyObrana[typ].length > 1 ? ` · ${vyberyObrana[typ].length} řádky` : null}
+                        </p>
+                        {vyberyObrana[typ].map((klic) => {
+                          const v = mapaObrana.get(klic);
+                          if (!v) return null;
+                          const dalsiPin = dalsiBonusyPrekryvuProRadek(
+                            v.kombinace.bonusTyp,
+                            mapaBonusuObrana.get(klicHracuDvojiceIde(v)),
+                          );
+                          return (
+                            <article
+                              key={klic}
+                              className={[
+                                polozkaFormaceClass,
+                                "border-[var(--hut-focus)]/30 bg-[var(--hut-bg-elevated)]/70",
+                                dalsiPin.length ? "border-l-2 border-amber-400/45" : "",
+                              ].join(" ")}
+                            >
+                              <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
+                                <button
+                                  type="button"
+                                  className={btnZrusitVyberClass}
+                                  onClick={() =>
+                                    setVyberyObrana((p) => ({
+                                      ...p,
+                                      [typ]: p[typ].filter((k) => k !== klic),
+                                    }))
+                                  }
+                                >
+                                  Odebrat
+                                </button>
+                              </div>
+                              <DvojiceFormaceObsah
+                                v={v}
+                                narodnostiVolby={narodnostiVolby}
+                                zobrazitTlacitkoVyber={false}
+                                onVybratProFiltrHrace={() => {}}
+                                roleA="LO"
+                                roleB="PO"
+                                filtrHint="obranné dvojice"
+                                dalsiBonusyPrekryvu={
+                                  dalsiPin.length ? dalsiPin : undefined
+                                }
+                              />
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ),
+                  )}
+                </div>
+              ) : null}
+
+              {maVybraneGolmany ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-xs font-semibold text-white">
+                      Brankářská dvojice (G1 · G2) — {soupiska.pocetGolmani}/{MAX_VYBER_GOLMAN}
+                    </p>
+                    <button
+                      type="button"
+                      className={btnZrusitVyberClass}
+                      onClick={() => setVyberyGolmani(prazdneVyberyPodleTypu())}
+                    >
+                      Zrušit vše (brankáři)
+                    </button>
+                  </div>
+                  {TYPY_BONUSU_KOMBINACE.map((typ) =>
+                    vyberyGolmani[typ].length === 0 ? null : (
+                      <div key={typ} className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
+                          Bonus {typ}
+                          {vyberyGolmani[typ].length > 1 ? ` · ${vyberyGolmani[typ].length} řádky` : null}
+                        </p>
+                        {vyberyGolmani[typ].map((klic) => {
+                          const v = mapaGolmani.get(klic);
+                          if (!v) return null;
+                          const dalsiPin = dalsiBonusyPrekryvuProRadek(
+                            v.kombinace.bonusTyp,
+                            mapaBonusuGolmani.get(klicHracuDvojiceIde(v)),
+                          );
+                          return (
+                            <article
+                              key={klic}
+                              className={[
+                                polozkaFormaceClass,
+                                "border-[var(--hut-focus)]/30 bg-[var(--hut-bg-elevated)]/70",
+                                dalsiPin.length ? "border-l-2 border-amber-400/45" : "",
+                              ].join(" ")}
+                            >
+                              <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
+                                <button
+                                  type="button"
+                                  className={btnZrusitVyberClass}
+                                  onClick={() =>
+                                    setVyberyGolmani((p) => ({
+                                      ...p,
+                                      [typ]: p[typ].filter((k) => k !== klic),
+                                    }))
+                                  }
+                                >
+                                  Odebrat
+                                </button>
+                              </div>
+                              <DvojiceFormaceObsah
+                                v={v}
+                                narodnostiVolby={narodnostiVolby}
+                                zobrazitTlacitkoVyber={false}
+                                onVybratProFiltrHrace={() => {}}
+                                roleA="G1"
+                                roleB="G2"
+                                filtrHint="brankářské dvojice"
+                                dalsiBonusyPrekryvu={
+                                  dalsiPin.length ? dalsiPin : undefined
+                                }
+                              />
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ),
+                  )}
+                </div>
+              ) : null}
+
+              {filtryPoHledani ? (
+                <div className="flex flex-wrap items-center gap-2 border-t border-[var(--hut-border)] pt-4">
+                  <button
+                    type="button"
+                    className={btnVyberFiltrClass}
+                    disabled={!kompletniSoupiska}
+                    title={
+                      kompletniSoupiska
+                        ? "Uložit pojmenovanou soupisku do sekce Uložené soupisky"
+                        : `Potřeba ${SOUPISKA_POZADOVANE.utok} útok + ${SOUPISKA_POZADOVANE.obrana} obrana + ${SOUPISKA_POZADOVANE.golmani} brankář`
+                    }
+                    onClick={ulozitKompletniSoupisku}
+                  >
+                    Uložit soupisku pod názvem…
+                  </button>
+                  {!kompletniSoupiska && soupiska.pocetRadku > 0 ? (
+                    <span className="text-[11px] text-[var(--hut-muted)]">
+                      K uložení chybí{" "}
+                      {[
+                        soupiska.pocetUtok < SOUPISKA_POZADOVANE.utok
+                          ? `${SOUPISKA_POZADOVANE.utok - soupiska.pocetUtok} útok`
+                          : null,
+                        soupiska.pocetObrana < SOUPISKA_POZADOVANE.obrana
+                          ? `${SOUPISKA_POZADOVANE.obrana - soupiska.pocetObrana} obrana`
+                          : null,
+                        soupiska.pocetGolmani < SOUPISKA_POZADOVANE.golmani
+                          ? `${SOUPISKA_POZADOVANE.golmani - soupiska.pocetGolmani} brankář`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {soupiska.pocetRadku > 0 ? (
+                <div className="mt-2 flex flex-col gap-3 border-t border-[var(--hut-border)] pt-4 sm:flex-row sm:items-end sm:justify-between">
+                  <p className="text-xs leading-relaxed text-[var(--hut-muted)]">
+                    Řádky: útok {soupiska.pocetUtok}/{MAX_VYBER_UTOK}, obrana {soupiska.pocetObrana}/
+                    {MAX_VYBER_OBRANA}, brankáři {soupiska.pocetGolmani}/{MAX_VYBER_GOLMAN}
+                    {soupiska.pocetRadku > soupiska.unikatniHracu ? (
+                      <>
+                        {" "}
+                        · <span className="text-zinc-300">{soupiska.unikatniHracu} unikátních jmen</span> (plat řádků
+                        může být vyšší)
+                      </>
+                    ) : null}
+                    {maxRozpocetAplikovany !== null ? (
+                      <>
+                        {" "}
+                        · limit filtru{" "}
+                        <span className="tabular-nums text-zinc-300">
+                          {formatovatPlatVMil(maxRozpocetAplikovany)}
+                        </span>
+                        {soupiska.platCelkem > maxRozpocetAplikovany ? (
+                          <span className="text-amber-200/95"> — nad rozpočtem</span>
+                        ) : (
+                          <span className="text-[var(--hut-lime)]"> — vejde se</span>
+                        )}
+                      </>
+                    ) : null}
+                    {limityTurnajAplikovane && soupiska.vyskytUtok !== null ? (
+                      <>
+                        {" "}
+                        · OVR ≥ {limityTurnajAplikovane.pragOvr} útok{" "}
+                        <span
+                          className={
+                            limityTurnajAplikovane.maxCelkemUtok !== null &&
+                            soupiska.vyskytUtok > limityTurnajAplikovane.maxCelkemUtok
+                              ? "text-amber-200/95"
+                              : "text-zinc-300"
+                          }
+                        >
+                          {soupiska.vyskytUtok}
+                          {limityTurnajAplikovane.maxCelkemUtok !== null
+                            ? `/${limityTurnajAplikovane.maxCelkemUtok}`
+                            : ""}
+                        </span>
+                        {soupiska.vyskytObrana !== null ? (
+                          <>
+                            , obrana{" "}
+                            <span
+                              className={
+                                limityTurnajAplikovane.maxCelkemObrana !== null &&
+                                soupiska.vyskytObrana > limityTurnajAplikovane.maxCelkemObrana
+                                  ? "text-amber-200/95"
+                                  : "text-zinc-300"
+                              }
+                            >
+                              {soupiska.vyskytObrana}
+                              {limityTurnajAplikovane.maxCelkemObrana !== null
+                                ? `/${limityTurnajAplikovane.maxCelkemObrana}`
+                                : ""}
+                            </span>
+                          </>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </p>
+                  <div className="shrink-0 text-left sm:text-right">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+                      Plat soupisky celkem
+                    </p>
+                    <p className="text-xl font-semibold tabular-nums text-white">
+                      {formatovatPlatVMil(soupiska.platCelkem)}
+                    </p>
+                    <p className="mt-0.5 text-[11px] tabular-nums text-[var(--hut-muted)]">
+                      útok {formatovatPlatVMil(soupiska.platUtok)} · obrana{" "}
+                      {formatovatPlatVMil(soupiska.platObrana)} · brankáři{" "}
+                      {formatovatPlatVMil(soupiska.platGolmani)}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           {filtryPoHledani && !nacitani && !vypocetFormaciBezi ? (
             <div className="space-y-3">
               <p className="text-xs text-[var(--hut-muted)]">
@@ -2089,7 +2727,7 @@ export function OptimalizatorFormaci() {
                     ? ` · max. plat ≤ ${formatovatPlatVMil(maxRozpocetAplikovany)}: útok ${utokZobrazenoPoRozpoctu.length}, obrana ${obranaZobrazenoPoRozpoctu.length}, brankáři ${golmaniZobrazenoPoRozpoctu.length}`
                     : filtryPoHledani.typBonusuFiltr !== "vse"
                       ? ` · zobrazeno jen ${filtryPoHledani.typBonusuFiltr}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
-                      : ` · výsledků: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`}
+                      : ` · výsledků (bez duplicit jmen): útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`}
                 {maVybranouUtok || maVybranouObranu || maVybraneGolmany
                   ? ` · po výběru hráčů: útok ${utokZobrazenoPoVylouceni.length}/${utokZobrazenoPoPrekryvu.length}, obrana ${obranaZobrazenoPoVylouceni.length}/${obranaZobrazenoPoPrekryvu.length}, brankáři ${golmaniZobrazenoPoVylouceni.length}/${golmaniZobrazenoPoPrekryvu.length}`
                   : ""}
@@ -2179,8 +2817,9 @@ export function OptimalizatorFormaci() {
                 ))}
               </div>
               <p className="text-[11px] leading-relaxed text-[var(--hut-muted)]/90">
-                Zobraz jen jednu kategorii výsledků — méně scrollování při stovkách kombinací. Pro změnu filtrů použij
-                znovu tlačítko Hledat v sekci nahoře.
+                Zobraz jen jednu kategorii (útok / obrana / brankáři) po {VELIKOST_STRANKY_VYSLEDKU} řádcích — méně
+                scrollování. Ve výsledcích není stejné jméno hráče dvakrát v jedné formaci ani dvě karty stejného jména
+                v soupisce.
               </p>
               <div
                 className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--hut-border)]/80 pt-3"
@@ -2267,386 +2906,6 @@ export function OptimalizatorFormaci() {
             </div>
           ) : null}
 
-          {filtryPoHledani && !nacitani && !vypocetFormaciBezi && zobrazitPripnutouSekci ? (
-            <section
-              className="space-y-4 rounded-xl border border-[var(--hut-lime)]/40 bg-[var(--hut-surface-raised)]/90 p-4 shadow-inner shadow-black/15 sm:p-5"
-              aria-label="Soupiska — připnuté sestavy"
-            >
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
-                  Soupiska (připnuté sestavy)
-                </h3>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--hut-muted)]">
-                  Skládáš soupisku: útok {SOUPISKA_POZADOVANE.utok}, obrana {SOUPISKA_POZADOVANE.obrana}, brankáři{" "}
-                  {SOUPISKA_POZADOVANE.golmani} řádků. Připnuté řádky se automaticky ukládají v tomto prohlížeči a po
-                  Hledat se obnoví. Plat se sčítá po řádcích.
-                </p>
-                {ulozenaSoupiskaMeta ? (
-                  <p className="mt-2 text-xs text-[var(--hut-lime)]/95">
-                    Uloženo{" "}
-                    {new Date(ulozenaSoupiskaMeta.ulozeno).toLocaleString("cs-CZ", {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}{" "}
-                    · plat {formatovatPlatVMil(ulozenaSoupiskaMeta.platCelkem)}
-                  </p>
-                ) : null}
-              </div>
-
-              {maVybranouUtok && zobrazitSekciUtok ? (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="text-xs font-semibold text-white">
-                      Útočná formace (LK · C · PK) — {soupiska.pocetUtok}/{MAX_VYBER_UTOK}
-                    </p>
-                    <button
-                      type="button"
-                      className={btnZrusitVyberClass}
-                      onClick={() => setVyberyUtok(prazdneVyberyPodleTypu())}
-                    >
-                      Zrušit vše (útok)
-                    </button>
-                  </div>
-                  {TYPY_BONUSU_KOMBINACE.map((typ) =>
-                    vyberyUtok[typ].length === 0 ? null : (
-                      <div key={typ} className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
-                          Bonus {typ}
-                          {vyberyUtok[typ].length > 1 ? ` · ${vyberyUtok[typ].length} řádky` : null}
-                        </p>
-                        {vyberyUtok[typ].map((klic) => {
-                          const v = mapaUtok.get(klic);
-                          if (!v) return null;
-                          const dalsiPin = dalsiBonusyPrekryvuProRadek(
-                            v.kombinace.bonusTyp,
-                            mapaBonusuUtok.get(klicHracuUtokTrojice(v)),
-                          );
-                          return (
-                            <article
-                              key={klic}
-                              className={[
-                                polozkaFormaceClass,
-                                "border-[var(--hut-focus)]/30 bg-[var(--hut-bg-elevated)]/70",
-                                dalsiPin.length ? "border-l-2 border-amber-400/45" : "",
-                              ].join(" ")}
-                            >
-                              <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
-                                <button
-                                  type="button"
-                                  className={btnZrusitVyberClass}
-                                  onClick={() =>
-                                    setVyberyUtok((p) => ({
-                                      ...p,
-                                      [typ]: p[typ].filter((k) => k !== klic),
-                                    }))
-                                  }
-                                >
-                                  Odebrat
-                                </button>
-                              </div>
-                              <UtocnaFormaceObsah
-                                v={v}
-                                narodnostiVolby={narodnostiVolby}
-                                zobrazitTlacitkoVyber={false}
-                                onVybratProFiltrHrace={() => {}}
-                                dalsiBonusyPrekryvu={
-                                  dalsiPin.length ? dalsiPin : undefined
-                                }
-                              />
-                            </article>
-                          );
-                        })}
-                      </div>
-                    ),
-                  )}
-                </div>
-              ) : null}
-
-              {maVybranouObranu && zobrazitSekciObranu ? (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="text-xs font-semibold text-white">
-                      Obranná dvojice (LO · PO) — {soupiska.pocetObrana}/{MAX_VYBER_OBRANA}
-                    </p>
-                    <button
-                      type="button"
-                      className={btnZrusitVyberClass}
-                      onClick={() => setVyberyObrana(prazdneVyberyPodleTypu())}
-                    >
-                      Zrušit vše (obrana)
-                    </button>
-                  </div>
-                  {TYPY_BONUSU_KOMBINACE.map((typ) =>
-                    vyberyObrana[typ].length === 0 ? null : (
-                      <div key={typ} className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
-                          Bonus {typ}
-                          {vyberyObrana[typ].length > 1 ? ` · ${vyberyObrana[typ].length} řádky` : null}
-                        </p>
-                        {vyberyObrana[typ].map((klic) => {
-                          const v = mapaObrana.get(klic);
-                          if (!v) return null;
-                          const dalsiPin = dalsiBonusyPrekryvuProRadek(
-                            v.kombinace.bonusTyp,
-                            mapaBonusuObrana.get(klicHracuDvojiceIde(v)),
-                          );
-                          return (
-                            <article
-                              key={klic}
-                              className={[
-                                polozkaFormaceClass,
-                                "border-[var(--hut-focus)]/30 bg-[var(--hut-bg-elevated)]/70",
-                                dalsiPin.length ? "border-l-2 border-amber-400/45" : "",
-                              ].join(" ")}
-                            >
-                              <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
-                                <button
-                                  type="button"
-                                  className={btnZrusitVyberClass}
-                                  onClick={() =>
-                                    setVyberyObrana((p) => ({
-                                      ...p,
-                                      [typ]: p[typ].filter((k) => k !== klic),
-                                    }))
-                                  }
-                                >
-                                  Odebrat
-                                </button>
-                              </div>
-                              <DvojiceFormaceObsah
-                                v={v}
-                                narodnostiVolby={narodnostiVolby}
-                                zobrazitTlacitkoVyber={false}
-                                onVybratProFiltrHrace={() => {}}
-                                roleA="LO"
-                                roleB="PO"
-                                filtrHint="obranné dvojice"
-                                dalsiBonusyPrekryvu={
-                                  dalsiPin.length ? dalsiPin : undefined
-                                }
-                              />
-                            </article>
-                          );
-                        })}
-                      </div>
-                    ),
-                  )}
-                </div>
-              ) : null}
-
-              {maVybraneGolmany && zobrazitSekciGolmany ? (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="text-xs font-semibold text-white">
-                      Brankářská dvojice (G · G) — {soupiska.pocetGolmani}/{MAX_VYBER_GOLMAN}
-                    </p>
-                    <button
-                      type="button"
-                      className={btnZrusitVyberClass}
-                      onClick={() => setVyberyGolmani(prazdneVyberyPodleTypu())}
-                    >
-                      Zrušit vše (brankáři)
-                    </button>
-                  </div>
-                  {TYPY_BONUSU_KOMBINACE.map((typ) =>
-                    vyberyGolmani[typ].length === 0 ? null : (
-                      <div key={typ} className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-lime)]">
-                          Bonus {typ}
-                        </p>
-                        {vyberyGolmani[typ].map((klic) => {
-                          const v = mapaGolmani.get(klic);
-                          if (!v) return null;
-                          const dalsiPin = dalsiBonusyPrekryvuProRadek(
-                            v.kombinace.bonusTyp,
-                            mapaBonusuGolmani.get(klicHracuDvojiceIde(v)),
-                          );
-                          return (
-                            <article
-                              key={klic}
-                              className={[
-                                polozkaFormaceClass,
-                                "border-[var(--hut-focus)]/30 bg-[var(--hut-bg-elevated)]/70",
-                                dalsiPin.length ? "border-l-2 border-amber-400/45" : "",
-                              ].join(" ")}
-                            >
-                              <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
-                                <button
-                                  type="button"
-                                  className={btnZrusitVyberClass}
-                                  onClick={() =>
-                                    setVyberyGolmani((p) => ({
-                                      ...p,
-                                      [typ]: p[typ].filter((k) => k !== klic),
-                                    }))
-                                  }
-                                >
-                                  Odebrat
-                                </button>
-                              </div>
-                              <DvojiceFormaceObsah
-                                v={v}
-                                narodnostiVolby={narodnostiVolby}
-                                zobrazitTlacitkoVyber={false}
-                                onVybratProFiltrHrace={() => {}}
-                                roleA="G1"
-                                roleB="G2"
-                                filtrHint="brankářské dvojice"
-                                dalsiBonusyPrekryvu={
-                                  dalsiPin.length ? dalsiPin : undefined
-                                }
-                              />
-                            </article>
-                          );
-                        })}
-                      </div>
-                    ),
-                  )}
-                </div>
-              ) : null}
-
-              {filtryPoHledani ? (
-                <div className="flex flex-wrap items-center gap-2 border-t border-[var(--hut-border)] pt-4">
-                  <button
-                    type="button"
-                    className={btnVyberFiltrClass}
-                    disabled={!kompletniSoupiska}
-                    title={
-                      kompletniSoupiska
-                        ? "Uložit 4+3+1 do prohlížeče"
-                        : `Potřeba ${SOUPISKA_POZADOVANE.utok} útok + ${SOUPISKA_POZADOVANE.obrana} obrana + ${SOUPISKA_POZADOVANE.golmani} brankář`
-                    }
-                    onClick={ulozitKompletniSoupisku}
-                  >
-                    Uložit kompletní soupisku
-                  </button>
-                  <button
-                    type="button"
-                    className={btnZrusitVyberClass}
-                    disabled={!ulozenaSoupiskaMeta}
-                    onClick={nacistUlozenouSoupisku}
-                  >
-                    Obnovit z uložené
-                  </button>
-                  {ulozenaSoupiskaMeta ? (
-                    <button
-                      type="button"
-                      className={btnZrusitVyberClass}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "Smazat uloženou soupisku z tohoto prohlížeče?",
-                          )
-                        ) {
-                          smazatUlozenouSoupisku();
-                        }
-                      }}
-                    >
-                      Smazat uloženou
-                    </button>
-                  ) : null}
-                  {!kompletniSoupiska && soupiska.pocetRadku > 0 ? (
-                    <span className="text-[11px] text-[var(--hut-muted)]">
-                      K uložení chybí{" "}
-                      {[
-                        soupiska.pocetUtok < SOUPISKA_POZADOVANE.utok
-                          ? `${SOUPISKA_POZADOVANE.utok - soupiska.pocetUtok} útok`
-                          : null,
-                        soupiska.pocetObrana < SOUPISKA_POZADOVANE.obrana
-                          ? `${SOUPISKA_POZADOVANE.obrana - soupiska.pocetObrana} obrana`
-                          : null,
-                        soupiska.pocetGolmani < SOUPISKA_POZADOVANE.golmani
-                          ? `${SOUPISKA_POZADOVANE.golmani - soupiska.pocetGolmani} brankář`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(", ")}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {soupiska.pocetRadku > 0 ? (
-                <div className="mt-2 flex flex-col gap-3 border-t border-[var(--hut-border)] pt-4 sm:flex-row sm:items-end sm:justify-between">
-                  <p className="text-xs leading-relaxed text-[var(--hut-muted)]">
-                    Řádky: útok {soupiska.pocetUtok}/{MAX_VYBER_UTOK}, obrana {soupiska.pocetObrana}/
-                    {MAX_VYBER_OBRANA}, brankáři {soupiska.pocetGolmani}/{MAX_VYBER_GOLMAN}
-                    {soupiska.pocetRadku > soupiska.unikatniHracu ? (
-                      <>
-                        {" "}
-                        · <span className="text-zinc-300">{soupiska.unikatniHracu} unikátních hráčů</span> (plat
-                        řádků může být vyšší)
-                      </>
-                    ) : null}
-                    {maxRozpocetAplikovany !== null ? (
-                      <>
-                        {" "}
-                        · limit filtru{" "}
-                        <span className="tabular-nums text-zinc-300">
-                          {formatovatPlatVMil(maxRozpocetAplikovany)}
-                        </span>
-                        {soupiska.platCelkem > maxRozpocetAplikovany ? (
-                          <span className="text-amber-200/95"> — nad rozpočtem</span>
-                        ) : (
-                          <span className="text-[var(--hut-lime)]"> — vejde se</span>
-                        )}
-                      </>
-                    ) : null}
-                    {limityTurnajAplikovane && soupiska.vyskytUtok !== null ? (
-                      <>
-                        {" "}
-                        · OVR ≥ {limityTurnajAplikovane.pragOvr} útok{" "}
-                        <span
-                          className={
-                            limityTurnajAplikovane.maxCelkemUtok !== null &&
-                            soupiska.vyskytUtok > limityTurnajAplikovane.maxCelkemUtok
-                              ? "text-amber-200/95"
-                              : "text-zinc-300"
-                          }
-                        >
-                          {soupiska.vyskytUtok}
-                          {limityTurnajAplikovane.maxCelkemUtok !== null
-                            ? `/${limityTurnajAplikovane.maxCelkemUtok}`
-                            : ""}
-                        </span>
-                        {soupiska.vyskytObrana !== null ? (
-                          <>
-                            , obrana{" "}
-                            <span
-                              className={
-                                limityTurnajAplikovane.maxCelkemObrana !== null &&
-                                soupiska.vyskytObrana > limityTurnajAplikovane.maxCelkemObrana
-                                  ? "text-amber-200/95"
-                                  : "text-zinc-300"
-                              }
-                            >
-                              {soupiska.vyskytObrana}
-                              {limityTurnajAplikovane.maxCelkemObrana !== null
-                                ? `/${limityTurnajAplikovane.maxCelkemObrana}`
-                                : ""}
-                            </span>
-                          </>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </p>
-                  <div className="shrink-0 text-left sm:text-right">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
-                      Plat soupisky celkem
-                    </p>
-                    <p className="text-xl font-semibold tabular-nums text-white">
-                      {formatovatPlatVMil(soupiska.platCelkem)}
-                    </p>
-                    <p className="mt-0.5 text-[11px] tabular-nums text-[var(--hut-muted)]">
-                      útok {formatovatPlatVMil(soupiska.platUtok)} · obrana{" "}
-                      {formatovatPlatVMil(soupiska.platObrana)} · brankáři{" "}
-                      {formatovatPlatVMil(soupiska.platGolmani)}
-                    </p>
-                  </div>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
 
           {filtryPoHledani && !vypocetFormaciBezi && zobrazitSekciUtok ? (
           <section>
@@ -2702,7 +2961,7 @@ export function OptimalizatorFormaci() {
               </p>
             ) : null}
             <ul className="mt-4 space-y-4">
-              {utokZobrazenoPoVylouceniSerazeno.map((v) => {
+              {utokStrankovano.map((v) => {
                 const dalsi = dalsiBonusyPrekryvuProRadek(
                   v.kombinace.bonusTyp,
                   mapaBonusuUtok.get(klicHracuUtokTrojice(v)),
@@ -2726,6 +2985,11 @@ export function OptimalizatorFormaci() {
                 );
               })}
             </ul>
+            <StrankovaniVysledku
+              stranka={strankaUtok}
+              celkem={utokZobrazenoPoVylouceniSerazeno.length}
+              onStranka={setStrankaUtok}
+            />
           </section>
           ) : null}
 
@@ -2781,7 +3045,7 @@ export function OptimalizatorFormaci() {
               </p>
             ) : null}
             <ul className="mt-4 space-y-4">
-              {obranaZobrazenoPoVylouceniSerazeno.map((v) => {
+              {obranaStrankovano.map((v) => {
                 const dalsi = dalsiBonusyPrekryvuProRadek(
                   v.kombinace.bonusTyp,
                   mapaBonusuObrana.get(klicHracuDvojiceIde(v)),
@@ -2808,6 +3072,11 @@ export function OptimalizatorFormaci() {
                 );
               })}
             </ul>
+            <StrankovaniVysledku
+              stranka={strankaObrana}
+              celkem={obranaZobrazenoPoVylouceniSerazeno.length}
+              onStranka={setStrankaObrana}
+            />
           </section>
           ) : null}
 
@@ -2854,7 +3123,7 @@ export function OptimalizatorFormaci() {
               </p>
             ) : null}
             <ul className="mt-4 space-y-4">
-              {golmaniZobrazenoPoVylouceniSerazeno.map((v) => {
+              {golmaniStrankovano.map((v) => {
                 const dalsi = dalsiBonusyPrekryvuProRadek(
                   v.kombinace.bonusTyp,
                   mapaBonusuGolmani.get(klicHracuDvojiceIde(v)),
@@ -2881,6 +3150,11 @@ export function OptimalizatorFormaci() {
                 );
               })}
             </ul>
+            <StrankovaniVysledku
+              stranka={strankaGolmani}
+              celkem={golmaniZobrazenoPoVylouceniSerazeno.length}
+              onStranka={setStrankaGolmani}
+            />
           </section>
           ) : null}
         </>
