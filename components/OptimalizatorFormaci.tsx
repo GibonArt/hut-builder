@@ -855,6 +855,11 @@ export function OptimalizatorFormaci() {
   const preskocitAutoUlozeniRef = useRef(false);
   /** Po prvním Hledat v této relaci načteme uloženou soupisku z prohlížeče. */
   const obnovenoPoHledatRef = useRef(false);
+  const [vysledkyUtok, setVysledkyUtok] = useState<UtocnaFormaceVysledek[]>([]);
+  const [vysledkyObrana, setVysledkyObrana] = useState<DvojiceVysledek[]>([]);
+  const [vysledkyGolmani, setVysledkyGolmani] = useState<DvojiceVysledek[]>([]);
+  const [vypocetFormaciBezi, setVypocetFormaciBezi] = useState(false);
+  const vypocetFormaciGenRef = useRef(0);
 
   const minOvr = useMemo(() => parseOvrVolitelne(minOvrStr), [minOvrStr]);
   const maxOvr = useMemo(() => parseOvrVolitelne(maxOvrStr), [maxOvrStr]);
@@ -1036,26 +1041,70 @@ export function OptimalizatorFormaci() {
     );
   }, []);
 
-  const vysledkyUtok = useMemo(
-    () =>
-      spoctiUtocneFormace(kartyVeFiltru, utocneRadky, narodnostiVolby, {
+  useEffect(() => {
+    if (!filtryPoHledani) {
+      setVysledkyUtok([]);
+      setVysledkyObrana([]);
+      setVysledkyGolmani([]);
+      setVypocetFormaciBezi(false);
+      return;
+    }
+
+    const gen = ++vypocetFormaciGenRef.current;
+    setVypocetFormaciBezi(true);
+    setVysledkyUtok([]);
+    setVysledkyObrana([]);
+    setVysledkyGolmani([]);
+
+    let zruseno = false;
+    const yieldMain = () =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 0);
+      });
+
+    void (async () => {
+      await yieldMain();
+      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+
+      const utok = spoctiUtocneFormace(kartyVeFiltru, utocneRadky, narodnostiVolby, {
         kridlaVzajemna,
-      }),
-    [kartyVeFiltru, utocneRadky, narodnostiVolby, kridlaVzajemna],
-  );
+      });
+      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+      startTransition(() => setVysledkyUtok(utok));
 
-  const vysledkyObrana = useMemo(
-    () =>
-      spoctiObranneDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby, {
+      await yieldMain();
+      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+
+      const obrana = spoctiObranneDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby, {
         loPoVzajemne,
-      }),
-    [kartyVeFiltru, obranneRadky, narodnostiVolby, loPoVzajemne],
-  );
+      });
+      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+      startTransition(() => setVysledkyObrana(obrana));
 
-  const vysledkyGolmani = useMemo(
-    () => spoctiGolmanskeDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby),
-    [kartyVeFiltru, obranneRadky, narodnostiVolby],
-  );
+      await yieldMain();
+      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+
+      const golmani = spoctiGolmanskeDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby);
+      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+      startTransition(() => {
+        setVysledkyGolmani(golmani);
+        setVypocetFormaciBezi(false);
+      });
+    })();
+
+    return () => {
+      zruseno = true;
+      vypocetFormaciGenRef.current += 1;
+    };
+  }, [
+    filtryPoHledani,
+    kartyVeFiltru,
+    utocneRadky,
+    obranneRadky,
+    narodnostiVolby,
+    kridlaVzajemna,
+    loPoVzajemne,
+  ]);
 
   const utokZobrazeno = useMemo(
     () => filtrujVysledkyPodleTypuBonusu(vysledkyUtok, typBonusuAplikovany),
@@ -1638,7 +1687,11 @@ export function OptimalizatorFormaci() {
   const nacitani = authLoading || loadingKarty || loadingKomb;
 
   const hledatDisabled =
-    nacitani || !!chybaKarty || !!chybaKomb || !karty.some((k) => !k.prodano);
+    nacitani ||
+    vypocetFormaciBezi ||
+    !!chybaKarty ||
+    !!chybaKomb ||
+    !karty.some((k) => !k.prodano);
 
   const maNastaveneFiltryFormulare =
     minOvrStr.trim() !== "" ||
@@ -2004,6 +2057,15 @@ export function OptimalizatorFormaci() {
             <p className="text-sm text-[var(--hut-muted)]">Načítám karty a kombinace…</p>
           ) : null}
 
+          {filtryPoHledani && !nacitani && vypocetFormaciBezi ? (
+            <p className="text-sm text-[var(--hut-muted)]" role="status" aria-live="polite">
+              Počítám formace podle bonusů…
+              {vysledkyUtok.length > 0
+                ? ` Útok: ${vysledkyUtok.length}${vysledkyObrana.length > 0 ? ` · obrana: ${vysledkyObrana.length}` : ""}${vysledkyGolmani.length > 0 ? ` · brankáři: ${vysledkyGolmani.length}` : ""}.`
+                : ""}
+            </p>
+          ) : null}
+
           {!nacitani && !filtryPoHledani && !chybaKarty && karty.length > 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--hut-border)] bg-[var(--hut-surface)]/40 px-4 py-6 text-center sm:px-6">
               <p className="text-sm leading-relaxed text-[var(--hut-muted)]">
@@ -2013,7 +2075,7 @@ export function OptimalizatorFormaci() {
             </div>
           ) : null}
 
-          {filtryPoHledani && !nacitani ? (
+          {filtryPoHledani && !nacitani && !vypocetFormaciBezi ? (
             <div className="space-y-3">
               <p className="text-xs text-[var(--hut-muted)]">
                 V úvaze: {kartyVeFiltru.length} karet
@@ -2205,7 +2267,7 @@ export function OptimalizatorFormaci() {
             </div>
           ) : null}
 
-          {filtryPoHledani && !nacitani && zobrazitPripnutouSekci ? (
+          {filtryPoHledani && !nacitani && !vypocetFormaciBezi && zobrazitPripnutouSekci ? (
             <section
               className="space-y-4 rounded-xl border border-[var(--hut-lime)]/40 bg-[var(--hut-surface-raised)]/90 p-4 shadow-inner shadow-black/15 sm:p-5"
               aria-label="Soupiska — připnuté sestavy"
@@ -2586,7 +2648,7 @@ export function OptimalizatorFormaci() {
             </section>
           ) : null}
 
-          {filtryPoHledani && zobrazitSekciUtok ? (
+          {filtryPoHledani && !vypocetFormaciBezi && zobrazitSekciUtok ? (
           <section>
             <h3 className="text-lg font-medium text-white">Útočné formace (LK · C · PK)</h3>
             {!utocneRadky.length && !loadingKomb ? (
@@ -2667,7 +2729,7 @@ export function OptimalizatorFormaci() {
           </section>
           ) : null}
 
-          {filtryPoHledani && zobrazitSekciObranu ? (
+          {filtryPoHledani && !vypocetFormaciBezi && zobrazitSekciObranu ? (
           <section>
             <h3 className="text-lg font-medium text-white">Obranné dvojice (LO · PO)</h3>
             {!obranneRadky.length && !loadingKomb ? (
@@ -2749,7 +2811,7 @@ export function OptimalizatorFormaci() {
           </section>
           ) : null}
 
-          {filtryPoHledani && zobrazitSekciGolmany ? (
+          {filtryPoHledani && !vypocetFormaciBezi && zobrazitSekciGolmany ? (
           <section>
             <h3 className="text-lg font-medium text-white">Brankářské dvojice (G · G)</h3>
             <p className="mt-1 text-xs text-[var(--hut-muted)]">
