@@ -5,6 +5,7 @@ import {
 } from "@/lib/hutbuilderBonusImport";
 import {
   fetchHutbuilderLinesPage,
+  HUTBUILDER_CLI_DEFAULT_TIMEOUT_MS,
   type HutbuilderLineType,
 } from "@/lib/hutbuilderGetLines";
 
@@ -15,8 +16,16 @@ export type HutbuilderImportPruchod = {
 };
 
 export const VYCHOZI_PRUCHODY_IMPORTU: HutbuilderImportPruchod[] = [
-  { optimizeFor: null, timeoutMs: 240_000, popisek: "žebříček" },
-  { optimizeFor: "overall", timeoutMs: 240_000, popisek: "overall (CLK)" },
+  {
+    optimizeFor: null,
+    timeoutMs: HUTBUILDER_CLI_DEFAULT_TIMEOUT_MS,
+    popisek: "žebříček",
+  },
+  {
+    optimizeFor: "overall",
+    timeoutMs: HUTBUILDER_CLI_DEFAULT_TIMEOUT_MS,
+    popisek: "overall (CLK)",
+  },
 ];
 
 const LINE_TYPES: HutbuilderLineType[] = ["forwards", "defense", "goalie"];
@@ -36,6 +45,8 @@ export type StahniKombinaceOpts = {
   maxPages?: number;
   onLog?: (msg: string) => void;
   shouldAbort?: () => boolean;
+  /** true = přes Next.js proxy; výchozí false = přímý fetch z NAS/CLI. */
+  presProxy?: boolean;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -60,6 +71,7 @@ export async function stahniKombinaceZHutbuilder(
   const pruchody = opts?.pruchody ?? VYCHOZI_PRUCHODY_IMPORTU;
   const delayMs = opts?.delayMs ?? 280;
   const maxPages = opts?.maxPages ?? 650;
+  const presProxy = opts?.presProxy === true;
   const log = opts?.onLog ?? (() => {});
 
   const noveUt: RadekBonusKombinaceUi[] = [];
@@ -83,6 +95,7 @@ export async function stahniKombinaceZHutbuilder(
         const raw = await fetchHutbuilderLinesPage(lt, page, pr.timeoutMs, {
           optimizeFor: pr.optimizeFor,
           retries: 4,
+          presProxy,
         });
         stazenychStranek += 1;
 

@@ -8,6 +8,7 @@
  * Volitelně: HUT_IMPORT_EDITOR_USER_ID (UUID admina pro updated_by)
  *
  * npm run import:hutbuilder-kombinace
+ * npm run import:hutbuilder-kombinace -- --timeout=300000
  * npm run import:hutbuilder-kombinace -- --jen-stahnout --out=data/hutbuilder-import-cache.json
  */
 import { writeFileSync, mkdirSync } from "fs";
@@ -19,7 +20,7 @@ import {
   ulozBonusKombinaciSdilenou,
   type RadekBonusKombinaceUi,
 } from "@/lib/bonusKombinaceDb";
-import { stahniKombinaceZHutbuilder } from "@/lib/hutbuilderImportKombinaceRun";
+import { stahniKombinaceZHutbuilder, VYCHOZI_PRUCHODY_IMPORTU } from "@/lib/hutbuilderImportKombinaceRun";
 import {
   createSupabaseServiceClient,
   editorUserIdZSupabase,
@@ -29,25 +30,32 @@ function parseArgs(argv: string[]) {
   let jenStahnout = false;
   let outPath = "";
   let delayMs = 280;
+  let timeoutMs = 240_000;
   for (const a of argv) {
     if (a === "--jen-stahnout") jenStahnout = true;
     else if (a.startsWith("--out=")) outPath = a.slice("--out=".length).trim();
     else if (a.startsWith("--delay=")) {
       delayMs = Math.max(0, Number(a.slice("--delay=".length)) || 280);
+    } else if (a.startsWith("--timeout=")) {
+      timeoutMs = Math.max(30_000, Number(a.slice("--timeout=".length)) || 240_000);
     }
   }
-  return { jenStahnout, outPath, delayMs };
+  return { jenStahnout, outPath, delayMs, timeoutMs };
 }
 
 async function main() {
-  const { jenStahnout, outPath, delayMs } = parseArgs(process.argv.slice(2));
+  const { jenStahnout, outPath, delayMs, timeoutMs } = parseArgs(process.argv.slice(2));
 
   const onLog = (msg: string) => process.stderr.write(`${msg}\n`);
 
-  onLog("Začínám stahování z Hut Builderu (může trvat dlouho)…");
+  onLog(
+    `Začínám stahování z Hut Builderu (timeout ${Math.round(timeoutMs / 1000)} s na pokus, může trvat dlouho)…`,
+  );
   const stazeno = await stahniKombinaceZHutbuilder({
     delayMs,
     onLog,
+    presProxy: false,
+    pruchody: VYCHOZI_PRUCHODY_IMPORTU.map((p) => ({ ...p, timeoutMs })),
   });
 
   onLog(

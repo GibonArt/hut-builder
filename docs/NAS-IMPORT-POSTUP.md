@@ -95,7 +95,7 @@ npm run hutbuilder:kombinace
 |---------|--------|
 | `SUPABASE_SERVICE_ROLE_KEY` chybí | Doplň do `.env` na NAS |
 | `new row violates row-level security` | Použij service role, ne anon klíč |
-| Hut Builder timeout | Skript opakuje pokusy; spusť znovu krok 2 |
+| Hut Builder timeout | Skript opakuje pokusy (4×, až 180 s na pokus z CLI). Při opakovaném selhání: `./scripts/nas/02-import-kombinace.sh -- --timeout=300000 --delay=500` |
 | `npm ci` v Dockeru trvá dlouho | Normální při prvním běhu; další běhy jsou rychlejší |
 
 Import kombinací **nepotřebuje** běžící prohlížeč ani otevřenou záložku — stačí běžící NAS a síť.

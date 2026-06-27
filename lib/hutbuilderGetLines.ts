@@ -9,6 +9,10 @@ export const HUTBUILDER_COMBO_FINDER_REFERER =
 /** Bezpečný strop jedné stránky přes naši API (Synology/nginx reverse proxy bývá ~60 s). */
 export const HUTBUILDER_PROXY_SAFE_TIMEOUT_MS = 52_000;
 
+/** Přímý fetch z CLI (NAS skript) — Hut Builder někdy odpovídá až ~2–3 min. */
+export const HUTBUILDER_CLI_DEFAULT_TIMEOUT_MS = 240_000;
+export const HUTBUILDER_CLI_MAX_ATTEMPT_MS = 180_000;
+
 export type HutbuilderLineType = "forwards" | "defense" | "goalie";
 
 /** Volitelné parametry stejného endpointu jako Combo Finder. */
@@ -20,6 +24,11 @@ export type HutbuilderGetLinesOpts = {
   optimizeFor?: string | null;
   /** Kolikrát znovu zavolat Hut Builder při timeoutu / síťové chybě (stejná stránka). */
   retries?: number;
+  /**
+   * true (výchozí) = volání přes Next.js / reverse proxy (~52 s celkem).
+   * false = přímý fetch z CLI (NAS skript) — delší timeout na pokus.
+   */
+  presProxy?: boolean;
 };
 
 export function buildGetLinesSearchParams(
@@ -116,12 +125,40 @@ export async function fetchHutbuilderLinesPage(
   timeoutMs: number,
   opts?: HutbuilderGetLinesOpts | null,
 ): Promise<unknown> {
+  const presProxy = opts?.presProxy !== false;
+  const maxPokusu = Math.max(1, Math.min(5, opts?.retries ?? 3));
+  const pauzaPoChybeMs = presProxy ? 1800 : 3500;
+
+  if (!presProxy) {
+    const attemptTimeoutMs = Math.min(
+      HUTBUILDER_CLI_MAX_ATTEMPT_MS,
+      Math.max(8000, timeoutMs),
+    );
+    let posledni: unknown;
+    for (let pokus = 1; pokus <= maxPokusu; pokus++) {
+      try {
+        return await fetchHutbuilderLinesPageOnce(
+          lineType,
+          page,
+          attemptTimeoutMs,
+          opts,
+        );
+      } catch (e) {
+        posledni = e;
+        const znovu = pokus < maxPokusu && jeOpakovatelnaChybaHutbuilder(e);
+        if (!znovu) throw e;
+        await sleep(pauzaPoChybeMs);
+      }
+    }
+    throw posledni instanceof Error
+      ? posledni
+      : new Error(String(posledni ?? "Hut Builder — neznámá chyba"));
+  }
+
   const budgetMs = Math.min(
     HUTBUILDER_PROXY_SAFE_TIMEOUT_MS,
     Math.max(8000, timeoutMs),
   );
-  const maxPokusu = Math.max(1, Math.min(5, opts?.retries ?? 3));
-  const pauzaPoChybeMs = 1800;
   const deadline = Date.now() + budgetMs;
   let posledni: unknown;
 
