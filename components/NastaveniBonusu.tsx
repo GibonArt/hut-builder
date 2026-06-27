@@ -683,7 +683,13 @@ export function NastaveniBonusu() {
           schemaWarn ? ` ${schemaWarn}` : ""
         }`,
       );
-      await refreshDynamic();
+      const refresh = await refreshDynamic();
+      if (refresh.error) {
+        setSyncTypyVysledek(
+          (prev) =>
+            `${prev ?? ""} Varování: seznam v aplikaci se nepodařilo načíst (${refresh.error}) — zkus F5.`,
+        );
+      }
       signalizujSyncTypuKaret();
       setUlozenoOk(true);
       setTimeout(() => setUlozenoOk(false), 4000);
