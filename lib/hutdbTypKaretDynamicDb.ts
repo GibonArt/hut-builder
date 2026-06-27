@@ -13,7 +13,6 @@ function jeChybaChybejiciRpc(zprava: string): boolean {
   return /could not find the function|42883|schema cache.*function/i.test(zprava);
 }
 
-
 function zakladniUpsertRadky(
   rows: readonly DynamicTypKartyDbRow[],
   syncedAt: string,
@@ -54,6 +53,27 @@ function payloadProRpc(
   }));
 }
 
+async function upsertPresTabulku(
+  supabase: SupabaseClient,
+  rows: readonly DynamicTypKartyDbRow[],
+  syncedAt: string,
+): Promise<{ error: string | null; schema_varovani: string | null }> {
+  const opts = { onConflict: "hodnota_filtru" as const };
+  const plny = await supabase.from(TABULKA).upsert(rozsireneUpsertRadky(rows, syncedAt), opts);
+  if (!plny.error) {
+    return { error: null, schema_varovani: null };
+  }
+  if (!jeChybaChybejicihoSloupceSchema(plny.error.message)) {
+    return { error: plny.error.message, schema_varovani: null };
+  }
+
+  const zaklad = await supabase.from(TABULKA).upsert(zakladniUpsertRadky(rows, syncedAt), opts);
+  if (zaklad.error) {
+    return { error: zaklad.error.message, schema_varovani: null };
+  }
+  return { error: null, schema_varovani: null };
+}
+
 /** Upsert do Supabase; preferuje RPC (obejde schema cache PostgREST). */
 export async function upsertDynamickeTypyKaret(
   supabase: SupabaseClient,
@@ -71,25 +91,9 @@ export async function upsertDynamickeTypyKaret(
   if (/Pristup zamitnut/i.test(rpcMsg)) {
     return { error: rpcMsg, schema_varovani: null };
   }
-  if (!jeChybaChybejiciRpc(rpcMsg) && !jeChybaChybejicihoSloupceSchema(rpcMsg)) {
-    return { error: rpcMsg, schema_varovani: null };
-  }
 
-  const opts = { onConflict: "hodnota_filtru" as const };
-  const plny = await supabase.from(TABULKA).upsert(rozsireneUpsertRadky(rows, syncedAt), opts);
-  if (!plny.error) {
-    return { error: null, schema_varovani: null };
-  }
-  if (!jeChybaChybejicihoSloupceSchema(plny.error.message)) {
-    return { error: plny.error.message, schema_varovani: null };
-  }
-
-  const zaklad = await supabase.from(TABULKA).upsert(zakladniUpsertRadky(rows, syncedAt), opts);
-  if (zaklad.error) {
-    return { error: zaklad.error.message, schema_varovani: null };
-  }
-  // Aliasy se dopočítají v aplikaci (efektivniAliasesDynamickehoRadku) — varování není potřeba.
-  return { error: null, schema_varovani: null };
+  // Jakákoli jiná chyba RPC → přímý upsert (chybějící funkce, schema cache, špatný jsonb, …).
+  return upsertPresTabulku(supabase, rows, syncedAt);
 }
 
 const SELECT_ROZSIRENY = "hodnota_filtru,jmeno_cs,combo_soubor,popis_cs,aliases";
@@ -118,15 +122,9 @@ function radkyZRawSelectu(data: unknown): DynamicTypKartyDbRow[] {
   return out;
 }
 
-/** Načte dynamické typy; preferuje RPC (plné sloupce i při schema cache). */
-export async function nactiDynamickeTypyKaret(
+async function nactiPresSelect(
   supabase: SupabaseClient,
 ): Promise<{ data: DynamicTypKartyDbRow[]; error: string | null }> {
-  const rpc = await supabase.rpc("list_hut_typy_karet_dynamic");
-  if (!rpc.error) {
-    return { data: radkyZRawSelectu(rpc.data), error: null };
-  }
-
   for (const select of [SELECT_ROZSIRENY, SELECT_STREDNI, SELECT_ZAKLADNI]) {
     const { data, error } = await supabase.from(TABULKA).select(select);
     if (!error) {
@@ -137,4 +135,28 @@ export async function nactiDynamickeTypyKaret(
     }
   }
   return { data: [], error: "Nepodařilo se načíst dynamické typy karet." };
+}
+
+/** Načte dynamické typy; preferuje RPC, při chybě nebo prázdné odpovědi padá na SELECT. */
+export async function nactiDynamickeTypyKaret(
+  supabase: SupabaseClient,
+): Promise<{ data: DynamicTypKartyDbRow[]; error: string | null }> {
+  const rpc = await supabase.rpc("list_hut_typy_karet_dynamic");
+  if (!rpc.error) {
+    const zRpc = radkyZRawSelectu(rpc.data);
+    if (zRpc.length > 0) {
+      return { data: zRpc, error: null };
+    }
+  }
+
+  const zeSelectu = await nactiPresSelect(supabase);
+  if (zeSelectu.data.length > 0 || zeSelectu.error) {
+    return zeSelectu;
+  }
+
+  if (rpc.error && !jeChybaChybejiciRpc(rpc.error.message)) {
+    return { data: [], error: rpc.error.message };
+  }
+
+  return zeSelectu;
 }

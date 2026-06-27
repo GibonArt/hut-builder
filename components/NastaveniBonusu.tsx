@@ -656,7 +656,10 @@ export function NastaveniBonusu() {
     setSyncTypyVysledek(null);
     setUlozChyba(null);
     try {
-      const res = await fetch("/api/admin/sync-typy-karet", { method: "POST" });
+      const res = await fetch("/api/admin/sync-typy-karet", {
+        method: "POST",
+        credentials: "same-origin",
+      });
       const j = (await res.json().catch(() => ({}))) as {
         error?: string;
         pocet?: number;
