@@ -93,6 +93,16 @@ async function main() {
   }
 
   const supabase = createSupabaseServiceClient();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+  if (supabaseUrl) {
+    try {
+      const u = new URL(supabaseUrl);
+      onLog(`Supabase projekt: ${u.protocol}//${u.hostname}`);
+    } catch {
+      onLog("Supabase projekt: (neplatná NEXT_PUBLIC_SUPABASE_URL)");
+    }
+  }
+
   const editorId = await editorUserIdZSupabase(supabase);
 
   onLog("Načítám stávající kombinace z Supabase…");

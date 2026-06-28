@@ -909,7 +909,7 @@ const polozkaFormaceClass =
   "rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/50 p-3 sm:p-4";
 
 export function OptimalizatorFormaci() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const supabase = useMemo(() => createClient(), []);
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
   const { typyKaret, aliasMapZBaze } = useTypyKaret();
@@ -1086,29 +1086,56 @@ export function OptimalizatorFormaci() {
   }, [user?.id, supabase]);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user || !session) {
+      startTransition(() => {
+        setLoadingKomb(false);
+        setChybaKomb(null);
+        setUtocneRadky([]);
+        setObranneRadky([]);
+      });
+      return;
+    }
+
     let zruseno = false;
     startTransition(() => {
       setLoadingKomb(true);
       setChybaKomb(null);
     });
-    nactiBonusKombinaceSdilene(supabase).then(({ utocna, obranna, error }) => {
+
+    void (async () => {
+      let lastError: string | null = null;
+      for (let pokus = 0; pokus < 2; pokus++) {
+        if (pokus > 0) {
+          await new Promise((r) => window.setTimeout(r, 600));
+        }
+        const { utocna, obranna, error } = await nactiBonusKombinaceSdilene(supabase);
+        if (zruseno) return;
+        if (!error) {
+          startTransition(() => {
+            setLoadingKomb(false);
+            setChybaKomb(null);
+            setUtocneRadky(utocna);
+            setObranneRadky(obranna);
+          });
+          return;
+        }
+        lastError = ceskaZpravaAuthNeboDb(error.message);
+        console.warn(`bonus_kombinace_global (pokus ${pokus + 1}):`, error.message);
+      }
       if (zruseno) return;
       startTransition(() => {
         setLoadingKomb(false);
-        if (error) {
-          setChybaKomb(ceskaZpravaAuthNeboDb(error.message));
-          setUtocneRadky([]);
-          setObranneRadky([]);
-          return;
-        }
-        setUtocneRadky(utocna);
-        setObranneRadky(obranna);
+        setChybaKomb(lastError);
+        setUtocneRadky([]);
+        setObranneRadky([]);
       });
-    });
+    })();
+
     return () => {
       zruseno = true;
     };
-  }, [supabase]);
+  }, [supabase, authLoading, user, session]);
 
   const kartyVeFiltru = useMemo(() => {
     if (!filtryPoHledani) return [];
@@ -2233,6 +2260,21 @@ export function OptimalizatorFormaci() {
           {chybaKomb ? (
             <p className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-200" role="alert">
               Kombinace: {chybaKomb}
+            </p>
+          ) : null}
+          {!loadingKomb && !chybaKomb && user ? (
+            <p className="text-xs text-[var(--hut-muted)]" role="status">
+              V databázi: <strong className="font-medium text-zinc-300">{utocneRadky.length}</strong> útočných
+              a <strong className="font-medium text-zinc-300">{obranneRadky.length}</strong> obranných kombinací.
+              {utocneRadky.length === 0 ? (
+                <>
+                  {" "}
+                  Po importu na NAS ověř log (útok &gt; 0) a stejný Supabase projekt jako v aplikaci — pak F5 a
+                  Hledat.
+                </>
+              ) : !filtryPoHledani ? (
+                <> Pro výpočet formací klikni na Hledat.</>
+              ) : null}
             </p>
           ) : null}
 
