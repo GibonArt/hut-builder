@@ -750,6 +750,8 @@ export function NastaveniBonusu() {
           let page = 1;
           let perPage = 20;
           const seenLineIds = new Set<number>();
+          let strankyJenDuplicity = 0;
+
           for (;;) {
             if (sig.aborted) {
               throw new DOMException("Zrušeno uživatelem.", "AbortError");
@@ -793,7 +795,12 @@ export function NastaveniBonusu() {
               `${lt} — ${pr.popisek} — stránka ${page} (${zpracovanoRadku} nových řádků API / ${seenLineIds.size} unikát. line_id v průchodu)`,
             );
 
-            if (lines.length > 0 && zpracovanoRadku === 0) break;
+            if (zpracovanoRadku === 0) {
+              strankyJenDuplicity += 1;
+              if (strankyJenDuplicity >= 3) break;
+            } else {
+              strankyJenDuplicity = 0;
+            }
 
             if (chunk.has_more === false) break;
             if (lines.length < perPage) break;

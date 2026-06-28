@@ -30,6 +30,9 @@ export const VYCHOZI_PRUCHODY_IMPORTU: HutbuilderImportPruchod[] = [
 
 const LINE_TYPES: HutbuilderLineType[] = ["forwards", "defense", "goalie"];
 
+/** Po tolika po sobě jdoucích stránkách bez nového line_id ukončíme průchod (API někdy opakuje stejné řádky). */
+const MAX_STRANEK_JEN_DUPLICITY = 3;
+
 export type HutbuilderStazeneKombinace = {
   noveUt: RadekBonusKombinaceUi[];
   noveOb: RadekBonusKombinaceUi[];
@@ -84,6 +87,7 @@ export async function stahniKombinaceZHutbuilder(
       let page = 1;
       let perPage = 20;
       const seenLineIds = new Set<number>();
+      let strankyJenDuplicity = 0;
 
       for (;;) {
         if (opts?.shouldAbort?.()) {
@@ -139,7 +143,16 @@ export async function stahniKombinaceZHutbuilder(
           `${lt} — ${pr.popisek} — stránka ${page} (${zpracovanoRadku} nových řádků API / ${seenLineIds.size} unikát. line_id v průchodu)`,
         );
 
-        if (lines.length > 0 && zpracovanoRadku === 0) break;
+        if (zpracovanoRadku === 0) {
+          strankyJenDuplicity += 1;
+          log(
+            `${lt} — ${pr.popisek} — stránka ${page} bez nového line_id (${strankyJenDuplicity}/${MAX_STRANEK_JEN_DUPLICITY})`,
+          );
+          if (strankyJenDuplicity >= MAX_STRANEK_JEN_DUPLICITY) break;
+        } else {
+          strankyJenDuplicity = 0;
+        }
+
         if (raw.has_more === false) break;
         if (lines.length < perPage) break;
 

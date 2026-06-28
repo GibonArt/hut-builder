@@ -3,6 +3,8 @@
  * npm run over:kombinace-v-db
  */
 import {
+  jeKompletniRadek,
+  radkyZJsonb,
   nactiBonusKombinaceSdilene,
   type RadekBonusKombinaceUi,
 } from "@/lib/bonusKombinaceDb";
@@ -17,10 +19,38 @@ function maskUrl(url: string): string {
   }
 }
 
-function ukazka(radky: RadekBonusKombinaceUi[], n = 2): void {
+function pocetKompletnich(
+  radky: RadekBonusKombinaceUi[],
+  typ: "utocna" | "obranna",
+): number {
+  return radky.filter((r) => jeKompletniRadek(r, typ)).length;
+}
+
+function rozpadParametru(radky: RadekBonusKombinaceUi[], typ: "utocna" | "obranna"): string {
+  const need = typ === "utocna" ? 3 : 2;
+  const keys = new Map<string, number>();
+  for (const r of radky) {
+    if (!jeKompletniRadek(r, typ)) continue;
+    const params = [r.param1, r.param2, ...(need === 3 ? [r.param3] : [])];
+    const k = params.map((p) => p.typ).join("+");
+    keys.set(k, (keys.get(k) ?? 0) + 1);
+  }
+  return [...keys.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => `${k}: ${n}`)
+    .join(", ");
+}
+
+function ukazka(radky: RadekBonusKombinaceUi[], n = 3): void {
   for (const r of radky.slice(0, n)) {
+    const p3 =
+      r.param3?.typ === "narodnost" && !r.param3.narodnostKod.trim()
+        ? ""
+        : r.param3
+          ? `, ${r.param3.typ}`
+          : "";
     process.stdout.write(
-      `  - bonus ${r.bonusHodnota} ${r.bonusTyp}: ${r.param1.typ}, ${r.param2.typ}${r.param3?.typ ? `, ${r.param3.typ}` : ""}\n`,
+      `  - bonus ${r.bonusHodnota} ${r.bonusTyp}: ${r.param1.typ}, ${r.param2.typ}${p3}\n`,
     );
   }
 }
@@ -33,25 +63,67 @@ async function main() {
   process.stdout.write(`Supabase: ${maskUrl(url)}\n\n`);
 
   const supabase = createSupabaseServiceClient();
-  const { utocna, obranna, error } = await nactiBonusKombinaceSdilene(supabase);
-  if (error) throw error;
+  const { data, error } = await supabase
+    .from("bonus_kombinace_global")
+    .select("typ_kombinace, radky, updated_at");
 
-  process.stdout.write(`Kompletní řádky (po filtru aplikace):\n`);
+  if (error) throw new Error(error.message);
+
+  let utocnaRaw: RadekBonusKombinaceUi[] = [];
+  let obrannaRaw: RadekBonusKombinaceUi[] = [];
+  let updatedUt = "";
+  let updatedOb = "";
+
+  for (const row of data ?? []) {
+    const parsed = radkyZJsonb(row.radky);
+    if (row.typ_kombinace === "utocna") {
+      utocnaRaw = parsed;
+      updatedUt = row.updated_at ?? "";
+    }
+    if (row.typ_kombinace === "obranna") {
+      obrannaRaw = parsed;
+      updatedOb = row.updated_at ?? "";
+    }
+  }
+
+  const utKompletni = pocetKompletnich(utocnaRaw, "utocna");
+  const obKompletni = pocetKompletnich(obrannaRaw, "obranna");
+
+  process.stdout.write("Raw JSONB (před filtrem aplikace):\n");
+  process.stdout.write(`  útok:   ${utocnaRaw.length} (kompletních ${utKompletni})\n`);
+  process.stdout.write(`  obrana: ${obrannaRaw.length} (kompletních ${obKompletni})\n`);
+  if (updatedUt || updatedOb) {
+    process.stdout.write(`  updated_at útok: ${updatedUt || "—"}, obrana: ${updatedOb || "—"}\n`);
+  }
+  process.stdout.write("\n");
+
+  const { utocna, obranna, error: loadErr } = await nactiBonusKombinaceSdilene(supabase);
+  if (loadErr) throw loadErr;
+
+  process.stdout.write("Po filtru aplikace (co vidí optimalizátor):\n");
   process.stdout.write(`  útok:   ${utocna.length}\n`);
   process.stdout.write(`  obrana: ${obranna.length}\n\n`);
+
+  process.stdout.write(`Rozpad útoku: ${rozpadParametru(utocnaRaw, "utocna") || "—"}\n`);
+  process.stdout.write(`Rozpad obrany: ${rozpadParametru(obrannaRaw, "obranna") || "—"}\n\n`);
+
+  if (utocna.length < 500) {
+    process.stdout.write(
+      "⚠ Málo útočných kombinací — plný import z Hut Builderu obvykle dá tisíce řádků.\n" +
+        "  Spusť: ./scripts/nas/02-import-kombinace.sh -- --nahradit\n" +
+        "  a sleduj log „nových řádků útok“ a počet stažených stránek.\n\n",
+    );
+  }
 
   if (utocna.length > 0) {
     process.stdout.write("Ukázka útoku:\n");
     ukazka(utocna);
-  } else {
-    process.stdout.write(
-      "Útok je prázdný — spusť znovu import po git pull (oprava nationality) a zkontroluj log „nových řádků útok“.\n",
-    );
   }
   if (obranna.length > 0) {
     process.stdout.write("\nUkázka obrany:\n");
     ukazka(obranna);
   }
+  process.stdout.write("\n");
 }
 
 main().catch((e) => {

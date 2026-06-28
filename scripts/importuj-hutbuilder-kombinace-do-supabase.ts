@@ -9,6 +9,7 @@
  *
  * npm run import:hutbuilder-kombinace
  * npm run import:hutbuilder-kombinace -- --timeout=300000
+ * npm run import:hutbuilder-kombinace -- --nahradit
  * npm run import:hutbuilder-kombinace -- --jen-stahnout --out=data/hutbuilder-import-cache.json
  */
 import { writeFileSync, mkdirSync } from "fs";
@@ -28,11 +29,13 @@ import {
 
 function parseArgs(argv: string[]) {
   let jenStahnout = false;
+  let nahradit = false;
   let outPath = "";
   let delayMs = 280;
   let timeoutMs = 240_000;
   for (const a of argv) {
     if (a === "--jen-stahnout") jenStahnout = true;
+    else if (a === "--nahradit") nahradit = true;
     else if (a.startsWith("--out=")) outPath = a.slice("--out=".length).trim();
     else if (a.startsWith("--delay=")) {
       delayMs = Math.max(0, Number(a.slice("--delay=".length)) || 280);
@@ -40,11 +43,11 @@ function parseArgs(argv: string[]) {
       timeoutMs = Math.max(30_000, Number(a.slice("--timeout=".length)) || 240_000);
     }
   }
-  return { jenStahnout, outPath, delayMs, timeoutMs };
+  return { jenStahnout, nahradit, outPath, delayMs, timeoutMs };
 }
 
 async function main() {
-  const { jenStahnout, outPath, delayMs, timeoutMs } = parseArgs(process.argv.slice(2));
+  const { jenStahnout, nahradit, outPath, delayMs, timeoutMs } = parseArgs(process.argv.slice(2));
 
   const onLog = (msg: string) => process.stderr.write(`${msg}\n`);
 
@@ -64,6 +67,11 @@ async function main() {
   if (stazeno.noveUt.length === 0 && stazeno.noveOb.length > 0) {
     onLog(
       "Varování: z Hut Builderu nepřišly žádné útočné řádky — zkontroluj, že proběhl i průchod forwards.",
+    );
+  }
+  if (stazeno.noveUt.length < 500) {
+    onLog(
+      `Varování: staženo jen ${stazeno.noveUt.length} útočných řádků — očekává se tisíce. Zkontroluj log stránek (${stazeno.stazenychStranek}) a případně spusť znovu.`,
     );
   }
 
@@ -111,20 +119,28 @@ async function main() {
     throw existujici.error;
   }
   onLog(
-    `V DB před sloučením: útok ${existujici.utocna.length}, obrana ${existujici.obranna.length}`,
+    `V DB před zápisem: útok ${existujici.utocna.length}, obrana ${existujici.obranna.length}`,
   );
 
-  const merged = {
-    utocna: deduplikujRadkyBonusu(
-      [...existujici.utocna, ...stazeno.noveUt],
-      "utocna",
-    ),
-    obranna: deduplikujRadkyBonusu(
-      [...existujici.obranna, ...stazeno.noveOb],
-      "obranna",
-    ),
-  };
-  const deduped = deduplikujPayloadBonusu(merged);
+  const deduped = nahradit
+    ? deduplikujPayloadBonusu({
+        utocna: deduplikujRadkyBonusu(stazeno.noveUt, "utocna"),
+        obranna: deduplikujRadkyBonusu(stazeno.noveOb, "obranna"),
+      })
+    : deduplikujPayloadBonusu({
+        utocna: deduplikujRadkyBonusu(
+          [...existujici.utocna, ...stazeno.noveUt],
+          "utocna",
+        ),
+        obranna: deduplikujRadkyBonusu(
+          [...existujici.obranna, ...stazeno.noveOb],
+          "obranna",
+        ),
+      });
+
+  if (nahradit) {
+    onLog("Režim --nahradit: stávající řádky v DB se přepíší staženými (bez sloučení).");
+  }
 
   onLog(
     `Ukládám — útok ${deduped.utocna.length} řádků, obrana ${deduped.obranna.length}…`,
