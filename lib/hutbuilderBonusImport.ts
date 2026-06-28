@@ -6,7 +6,7 @@ import {
   type TypBonusuKombinace,
 } from "@/lib/bonusKombinaceDb";
 import { najdiMetaTypuKarty } from "@/lib/hutdbTypKaret";
-import type { DynamicTypKartyDbRow } from "@/lib/hutdbTypKaretMerge";
+import { narodnostKodZHutbuilderJmena } from "@/lib/narodnosti";
 import { najdiTymPodlePresnehoNazvu } from "@/lib/tymyPodleLigy";
 
 function noveIdRadku(): string {
@@ -57,13 +57,19 @@ function detailNaParametr(d: HutbuilderDetail): BonusKombinaceParametr | null {
     if (!hit) return null;
     return { typ: "tym", liga: hit.liga, tym: hit.tym };
   }
+  if (typ === "nationality") {
+    const name = String(d.name ?? "").trim();
+    if (!name) return null;
+    const kod = narodnostKodZHutbuilderJmena(name);
+    if (!kod) return null;
+    return { typ: "narodnost", narodnostKod: kod };
+  }
   return null;
 }
 
 /**
  * Z jedné hutbuilder řádkové chemie: první 3 (útok) nebo 2 (obrana / goalie) sloty synergy
- * přemapované na parametry — `card_type` i `team` (BS/AP je skoro vždy smíchané).
- * Každý boost SAL/AP/OVR → samostatný řádek.
+ * přemapované na parametry — typ karty, tým i národnost. Každý boost SAL/AP/OVR → samostatný řádek.
  */
 export function radkyZChemieHutbuilderLine(
   line: HutbuilderImportedLine,

@@ -711,7 +711,7 @@ export function NastaveniBonusu() {
     if (!user?.id) return;
     const ok = window.confirm(
       "Stáhnout předgenerované řádky z NHL HUT Builderu a připojit je ke sdíleným kombinacím?\n\n" +
-        "• Útok / obrana / brankáři — sloty synergy: typ karty i tým (národnost zatím ne).\n" +
+        "• Útok / obrana / brankáři — sloty synergy: typ karty, tým i národnost.\n" +
         "• Hut Builder SAL → PLAT, AP → BS, OVR → CLK.\n" +
         "• Duplicity se sloučí s už uloženými řádky.\n" +
         "• Může to trvat několik minut (sekvenční stahování stránek z Hut Builderu).\n" +

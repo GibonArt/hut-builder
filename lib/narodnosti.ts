@@ -98,3 +98,66 @@ export function kodNarodnostiPodleLabelu(
   const hit = volby.find((v) => v.label === n);
   return hit?.code ?? null;
 }
+
+/** Aliasy z NHL HUT Builder (`data-card-type-name` / synergy nationality). */
+const HUTBUILDER_NARODNOST_ALIASES: Record<string, string> = {
+  CANADA: "CA",
+  "UNITED STATES": "US",
+  USA: "US",
+  RUSSIA: "RU",
+  FINLAND: "FI",
+  SWEDEN: "SE",
+  CZECHIA: "CZ",
+  "CZECH REPUBLIC": "CZ",
+  SLOVAKIA: "SK",
+  GERMANY: "DE",
+  SWITZERLAND: "CH",
+  AUSTRIA: "AT",
+  DENMARK: "DK",
+  NORWAY: "NO",
+  LATVIA: "LV",
+  FRANCE: "FR",
+  POLAND: "PL",
+  "UNITED KINGDOM": "GB",
+  "GREAT BRITAIN": "GB",
+  SLOVENIA: "SI",
+  KAZAKHSTAN: "KZ",
+  BELARUS: "BY",
+  UKRAINE: "UA",
+  ITALY: "IT",
+  JAPAN: "JP",
+};
+
+let cacheHutbuilderNarodnosti: Map<string, string> | null = null;
+
+function mapaHutbuilderNarodnostiNaKod(): Map<string, string> {
+  if (cacheHutbuilderNarodnosti) return cacheHutbuilderNarodnosti;
+  const m = new Map<string, string>();
+  for (const [alias, code] of Object.entries(HUTBUILDER_NARODNOST_ALIASES)) {
+    m.set(alias.toUpperCase(), code);
+  }
+  try {
+    const intl = Intl as typeof Intl & {
+      supportedValuesOf?: (key: "region") => string[];
+    };
+    if (typeof intl.supportedValuesOf === "function") {
+      const dn = new Intl.DisplayNames(["en"], { type: "region" });
+      for (const code of intl.supportedValuesOf("region")) {
+        if (/^\d{3}$/.test(code)) continue;
+        const en = dn.of(code);
+        if (en) m.set(en.trim().toUpperCase(), code);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  cacheHutbuilderNarodnosti = m;
+  return m;
+}
+
+/** Anglický název z Hut Builder synergy → ISO kód pro `narodnostKod` v bonus kombinaci. */
+export function narodnostKodZHutbuilderJmena(name: string): string | null {
+  const n = name.trim();
+  if (!n) return null;
+  return mapaHutbuilderNarodnostiNaKod().get(n.toUpperCase()) ?? null;
+}

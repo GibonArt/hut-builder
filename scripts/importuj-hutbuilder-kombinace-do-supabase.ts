@@ -61,6 +61,11 @@ async function main() {
   onLog(
     `Staženo: ${stazeno.stazenychStranek} stránek, ${stazeno.unikatnichLineId} line_id, nových řádků útok ${stazeno.noveUt.length}, obrana ${stazeno.noveOb.length}`,
   );
+  if (stazeno.noveUt.length === 0 && stazeno.noveOb.length > 0) {
+    onLog(
+      "Varování: z Hut Builderu nepřišly žádné útočné řádky — zkontroluj, že proběhl i průchod forwards.",
+    );
+  }
 
   if (jenStahnout) {
     const file =
@@ -95,6 +100,9 @@ async function main() {
   if (existujici.error) {
     throw existujici.error;
   }
+  onLog(
+    `V DB před sloučením: útok ${existujici.utocna.length}, obrana ${existujici.obranna.length}`,
+  );
 
   const merged = {
     utocna: deduplikujRadkyBonusu(
