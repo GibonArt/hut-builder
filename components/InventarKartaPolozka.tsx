@@ -55,6 +55,10 @@ type Props = {
   onSmazat: (id: string) => void;
   /** Volitelně — duplikace jako nová karta (Inventář). */
   onDuplikovat?: (k: HutCard) => void;
+  /** Okamžité označení prodáno (Moje karty). */
+  onProdanoChange?: (k: HutCard, prodano: boolean) => void;
+  /** ID karty, u které právě probíhá uložení prodáno. */
+  meniProdanoId?: string | null;
   formZakazany: boolean;
   /** Mřížka po čtyřech na řádku (~25 % šířky kontejneru na velkém viewportu). */
   mrizkaCtvrtiny?: boolean;
@@ -66,11 +70,14 @@ export function InventarKartaPolozka({
   onEditovat,
   onSmazat,
   onDuplikovat,
+  onProdanoChange,
+  meniProdanoId = null,
   formZakazany,
   mrizkaCtvrtiny = false,
 }: Props) {
   const typKartyMetaOpts = useTypKartyMetaOpts();
   const kodNarKarty = kodNarodnostiPodleLabelu(k.narodnost, narodnostiVolby);
+  const prodanoUklada = meniProdanoId === k.id;
 
   const sirkaTridy = mrizkaCtvrtiny
     ? "w-full min-w-0 max-w-full"
@@ -94,7 +101,7 @@ export function InventarKartaPolozka({
           <div className="min-w-0 w-full flex-1 overflow-hidden">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <JmenoNaKarteFit text={celeJmenoHrace(k)} maxPx={18} minPx={8} />
-              {k.prodano ? (
+              {k.prodano && !onProdanoChange ? (
                 <span className="shrink-0 rounded border border-amber-500/40 bg-amber-950/50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100/95">
                   Prodáno
                 </span>
@@ -159,7 +166,36 @@ export function InventarKartaPolozka({
         ) : null}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-center gap-2 border-t border-white/[0.08] pt-3">
+      {onProdanoChange ? (
+        <label
+          className={`mt-3 flex cursor-pointer items-center gap-2.5 border-t border-white/[0.08] pt-3 ${
+            prodanoUklada ? "opacity-60" : ""
+          }`}
+          title="Karta zůstane v databázi, ale nepočítá se v optimalizátoru formací."
+        >
+          <input
+            type="checkbox"
+            className="h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] text-[var(--hut-lime)] focus:ring-[var(--hut-focus-ring)]"
+            checked={k.prodano === true}
+            disabled={formZakazany || prodanoUklada}
+            onChange={(e) => onProdanoChange(k, e.target.checked)}
+          />
+          <span className="text-xs font-semibold uppercase tracking-wide text-zinc-200">
+            Prodáno
+            {prodanoUklada ? (
+              <span className="ml-1.5 font-normal normal-case tracking-normal text-[var(--hut-muted)]">
+                ukládám…
+              </span>
+            ) : null}
+          </span>
+        </label>
+      ) : null}
+
+      <div
+        className={`flex flex-wrap items-center justify-center gap-2 border-t border-white/[0.08] pt-3 ${
+          onProdanoChange ? "mt-2" : "mt-3"
+        }`}
+      >
         <button
           type="button"
           onClick={() => onEditovat(k)}

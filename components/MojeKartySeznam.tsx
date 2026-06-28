@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import type { HutCard, Pozice } from "@/types";
 import { useAuth } from "@/components/AuthProvider";
 import {
+  aktualizujKartu,
   nactiKartyUzivatele,
   smazKartuPodleSlug,
 } from "@/lib/cardsDb";
@@ -16,6 +17,8 @@ import { HUT_POZICE, HUT_POZICE_ZKRATKA } from "@/lib/hutPozice";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { HutShell } from "@/components/HutShell";
 import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
+import { useTypyKaret } from "@/components/TypyKaretProvider";
+import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
 import { seraditKarty, type RazeniKaret } from "@/lib/hutRazeniKaret";
 import {
@@ -51,6 +54,13 @@ export function MojeKartySeznam() {
   const [maxOvrStr, setMaxOvrStr] = useState("");
   const [razeniKaret, nastavRazeniKaret] = useRazeniKaret();
   const [mazuId, setMazuId] = useState<string | null>(null);
+  const [meniProdanoId, setMeniProdanoId] = useState<string | null>(null);
+
+  const { typyKaret, aliasMapZBaze } = useTypyKaret();
+  const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
+    () => ({ radky: typyKaret, aliasMapZBaze }),
+    [typyKaret, aliasMapZBaze],
+  );
 
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
 
@@ -175,7 +185,44 @@ export function MojeKartySeznam() {
     [user?.id, supabase],
   );
 
-  const formZakazany = !user || authLoading || mazuId !== null;
+  const zmenProdano = useCallback(
+    async (k: HutCard, prodano: boolean) => {
+      if (!user?.id) return;
+      const predchozi = k.prodano === true;
+      if (predchozi === prodano) return;
+
+      const aktualizovana: HutCard = { ...k };
+      if (prodano) aktualizovana.prodano = true;
+      else delete aktualizovana.prodano;
+
+      setMeniProdanoId(k.id);
+      setKarty((prev) =>
+        prev.map((c) => (c.id === k.id ? aktualizovana : c)),
+      );
+
+      const { error } = await aktualizujKartu(
+        supabase,
+        user.id,
+        k.id,
+        aktualizovana,
+        k,
+        { typKartyMeta: typKartyMetaOpts, inventarFallback: karty },
+      );
+
+      setMeniProdanoId(null);
+      if (error) {
+        setKarty((prev) =>
+          prev.map((c) => (c.id === k.id ? k : c)),
+        );
+        setChyba(ceskaZpravaAuthNeboDb(error.message));
+        return;
+      }
+      toast.success(prodano ? "Karta označena jako prodaná." : "Karta znovu aktivní v optimalizátoru.");
+    },
+    [user?.id, supabase, typKartyMetaOpts, karty],
+  );
+
+  const formZakazany = !user || authLoading || mazuId !== null || meniProdanoId !== null;
 
   return (
     <HutShell
@@ -418,6 +465,8 @@ export function MojeKartySeznam() {
                 onEditovat={editovat}
                 onDuplikovat={duplikovat}
                 onSmazat={smazat}
+                onProdanoChange={zmenProdano}
+                meniProdanoId={meniProdanoId}
                 formZakazany={formZakazany}
               />
             ))}
