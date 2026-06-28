@@ -51,7 +51,8 @@ function kartaSplnujeParametrRychle(
     case "typ_karty":
       return (
         Boolean(p.typKarty.trim()) &&
-        k.typKarty.trim() === p.typKarty.trim()
+        (p.typKarty.trim() === "*" ||
+          k.typKarty.trim() === p.typKarty.trim())
       );
   }
 }
@@ -119,7 +120,8 @@ export function kartaSplnujeParametr(
     case "typ_karty":
       return (
         Boolean(p.typKarty.trim()) &&
-        k.typKarty.trim() === p.typKarty.trim()
+        (p.typKarty.trim() === "*" ||
+          k.typKarty.trim() === p.typKarty.trim())
       );
   }
 }

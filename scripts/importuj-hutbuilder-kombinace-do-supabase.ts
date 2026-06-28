@@ -1,6 +1,6 @@
 /**
  * Krok 2 — import kombinací z Hut Builderu do Supabase (bonus_kombinace_global).
- * Stejná logika jako tlačítko „Načíst kombinace z Hut Builderu“ v Nastavení bonusů.
+ * Výchozí zdroj: Chemistry Combos (stejné jako nhlhutbuilder.com/chemistry-combos.php).
  *
  * Vyžaduje v .env:
  *   NEXT_PUBLIC_SUPABASE_URL
@@ -8,8 +8,8 @@
  * Volitelně: HUT_IMPORT_EDITOR_USER_ID (UUID admina pro updated_by)
  *
  * npm run import:hutbuilder-kombinace
- * npm run import:hutbuilder-kombinace -- --timeout=300000
  * npm run import:hutbuilder-kombinace -- --nahradit
+ * npm run import:hutbuilder-kombinace -- --zdroj=combo-finder
  * npm run import:hutbuilder-kombinace -- --jen-stahnout --out=data/hutbuilder-import-cache.json
  */
 import { writeFileSync, mkdirSync } from "fs";
@@ -21,21 +21,27 @@ import {
   ulozBonusKombinaciSdilenou,
   type RadekBonusKombinaceUi,
 } from "@/lib/bonusKombinaceDb";
+import { stahniKombinaceZChemistryCombos } from "@/lib/hutbuilderChemistryCombosHtml";
 import { stahniKombinaceZHutbuilder, VYCHOZI_PRUCHODY_IMPORTU } from "@/lib/hutbuilderImportKombinaceRun";
 import {
   createSupabaseServiceClient,
   editorUserIdZSupabase,
 } from "@/lib/supabaseServiceClient";
 
+type ZdrojImportu = "chemistry" | "combo-finder";
+
 function parseArgs(argv: string[]) {
   let jenStahnout = false;
   let nahradit = false;
+  let zdroj: ZdrojImportu = "chemistry";
   let outPath = "";
   let delayMs = 280;
   let timeoutMs = 240_000;
   for (const a of argv) {
     if (a === "--jen-stahnout") jenStahnout = true;
     else if (a === "--nahradit") nahradit = true;
+    else if (a === "--zdroj=combo-finder") zdroj = "combo-finder";
+    else if (a === "--zdroj=chemistry") zdroj = "chemistry";
     else if (a.startsWith("--out=")) outPath = a.slice("--out=".length).trim();
     else if (a.startsWith("--delay=")) {
       delayMs = Math.max(0, Number(a.slice("--delay=".length)) || 280);
@@ -43,36 +49,60 @@ function parseArgs(argv: string[]) {
       timeoutMs = Math.max(30_000, Number(a.slice("--timeout=".length)) || 240_000);
     }
   }
-  return { jenStahnout, nahradit, outPath, delayMs, timeoutMs };
+  if (zdroj === "chemistry") nahradit = true;
+  return { jenStahnout, nahradit, zdroj, outPath, delayMs, timeoutMs };
 }
 
 async function main() {
-  const { jenStahnout, nahradit, outPath, delayMs, timeoutMs } = parseArgs(process.argv.slice(2));
+  const { jenStahnout, nahradit, zdroj, outPath, delayMs, timeoutMs } = parseArgs(
+    process.argv.slice(2),
+  );
 
   const onLog = (msg: string) => process.stderr.write(`${msg}\n`);
 
-  onLog(
-    `Začínám stahování z Hut Builderu (timeout ${Math.round(timeoutMs / 1000)} s na pokus, může trvat dlouho)…`,
-  );
-  const stazeno = await stahniKombinaceZHutbuilder({
-    delayMs,
-    onLog,
-    presProxy: false,
-    pruchody: VYCHOZI_PRUCHODY_IMPORTU.map((p) => ({ ...p, timeoutMs })),
-  });
+  let noveUt: RadekBonusKombinaceUi[] = [];
+  let noveOb: RadekBonusKombinaceUi[] = [];
+  let meta: Record<string, unknown> = { zdroj };
 
-  onLog(
-    `Staženo: ${stazeno.stazenychStranek} stránek, ${stazeno.unikatnichLineId} line_id, nových řádků útok ${stazeno.noveUt.length}, obrana ${stazeno.noveOb.length}`,
-  );
-  if (stazeno.noveUt.length === 0 && stazeno.noveOb.length > 0) {
+  if (zdroj === "chemistry") {
+    onLog("Stahuji Chemistry Combos z nhlhutbuilder.com…");
+    const parsed = await stahniKombinaceZChemistryCombos(55_000);
+    noveUt = parsed.utocna;
+    noveOb = parsed.obranna;
+    meta = {
+      ...meta,
+      stazeno_v: parsed.stazeno_v,
+      preskoceno_radku: parsed.preskocenoRadku,
+    };
     onLog(
-      "Varování: z Hut Builderu nepřišly žádné útočné řádky — zkontroluj, že proběhl i průchod forwards.",
+      `Staženo Chemistry Combos: útok ${noveUt.length}, obrana ${noveOb.length}` +
+        (parsed.preskocenoRadku ? `, přeskočeno ${parsed.preskocenoRadku}` : ""),
     );
-  }
-  if (stazeno.noveUt.length < 500) {
+  } else {
     onLog(
-      `Varování: staženo jen ${stazeno.noveUt.length} útočných řádků — očekává se tisíce. Zkontroluj log stránek (${stazeno.stazenychStranek}) a případně spusť znovu.`,
+      `Začínám Combo Finder (get_lines.php, timeout ${Math.round(timeoutMs / 1000)} s na pokus)…`,
     );
+    const stazeno = await stahniKombinaceZHutbuilder({
+      delayMs,
+      onLog,
+      presProxy: false,
+      pruchody: VYCHOZI_PRUCHODY_IMPORTU.map((p) => ({ ...p, timeoutMs })),
+    });
+    noveUt = stazeno.noveUt;
+    noveOb = stazeno.noveOb;
+    meta = {
+      ...meta,
+      stazenych_stranek: stazeno.stazenychStranek,
+      unikatnich_line_id: stazeno.unikatnichLineId,
+    };
+    onLog(
+      `Staženo Combo Finder: ${stazeno.stazenychStranek} stránek, ${stazeno.unikatnichLineId} line_id, útok ${noveUt.length}, obrana ${noveOb.length}`,
+    );
+    if (noveUt.length < 200) {
+      onLog(
+        "Varování: Combo Finder vrátil málo útočných řádků — doporučujeme výchozí --zdroj=chemistry.",
+      );
+    }
   }
 
   if (jenStahnout) {
@@ -89,7 +119,9 @@ async function main() {
       JSON.stringify(
         {
           stazeno_v: new Date().toISOString(),
-          ...stazeno,
+          noveUt,
+          noveOb,
+          ...meta,
         },
         null,
         2,
@@ -124,22 +156,22 @@ async function main() {
 
   const deduped = nahradit
     ? deduplikujPayloadBonusu({
-        utocna: deduplikujRadkyBonusu(stazeno.noveUt, "utocna"),
-        obranna: deduplikujRadkyBonusu(stazeno.noveOb, "obranna"),
+        utocna: deduplikujRadkyBonusu(noveUt, "utocna"),
+        obranna: deduplikujRadkyBonusu(noveOb, "obranna"),
       })
     : deduplikujPayloadBonusu({
         utocna: deduplikujRadkyBonusu(
-          [...existujici.utocna, ...stazeno.noveUt],
+          [...existujici.utocna, ...noveUt],
           "utocna",
         ),
         obranna: deduplikujRadkyBonusu(
-          [...existujici.obranna, ...stazeno.noveOb],
+          [...existujici.obranna, ...noveOb],
           "obranna",
         ),
       });
 
   if (nahradit) {
-    onLog("Režim --nahradit: stávající řádky v DB se přepíší staženými (bez sloučení).");
+    onLog("Režim přepsání: stávající řádky v DB se nahradí staženými.");
   }
 
   onLog(

@@ -107,11 +107,11 @@ async function main() {
   process.stdout.write(`Rozpad útoku: ${rozpadParametru(utocnaRaw, "utocna") || "—"}\n`);
   process.stdout.write(`Rozpad obrany: ${rozpadParametru(obrannaRaw, "obranna") || "—"}\n\n`);
 
-  if (utocna.length < 500) {
+  if (utocna.length < 200) {
     process.stdout.write(
-      "⚠ Málo útočných kombinací — plný import z Hut Builderu obvykle dá tisíce řádků.\n" +
-        "  Spusť: ./scripts/nas/02-import-kombinace.sh -- --nahradit\n" +
-        "  a sleduj log „nových řádků útok“ a počet stažených stránek.\n\n",
+      "⚠ Málo útočných kombinací — spusť import Chemistry Combos:\n" +
+        "  ./scripts/nas/02-import-kombinace.sh\n" +
+        "  (očekává se ~280 útok / ~230 obrana z nhlhutbuilder.com/chemistry-combos.php)\n\n",
     );
   }
 

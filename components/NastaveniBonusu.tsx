@@ -46,10 +46,6 @@ import {
   LIGY_V_PORADI,
   tymyProLigu,
 } from "@/lib/tymyPodleLigy";
-import {
-  radkyZRadekHutbuilder,
-  type HutbuilderImportedLine,
-} from "@/lib/hutbuilderBonusImport";
 import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import type { HutDbTypKarty, NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
@@ -71,48 +67,6 @@ type Payload = {
   utocna: RadekBonusKombinaceUi[];
   obranna: RadekBonusKombinaceUi[];
 };
-
-function jeOpakovatelnaChybaFetch(e: unknown): boolean {
-  if (e instanceof DOMException && e.name === "AbortError") return false;
-  if (e instanceof TypeError) return true;
-  const msg = String(e instanceof Error ? e.message : e);
-  return /failed to fetch|network|timeout|502|503|504|hut builder neodpověděl/i.test(
-    msg,
-  );
-}
-
-async function fetchJsonHutbuilderAdminPage(
-  url: string,
-  sig: AbortSignal,
-  onRetry?: (pokus: number, max: number) => void,
-): Promise<Record<string, unknown>> {
-  const maxPokusu = 4;
-  let posledni: unknown;
-  for (let pokus = 1; pokus <= maxPokusu; pokus++) {
-    try {
-      const res = await fetch(url, { signal: sig, cache: "no-store" });
-      const rawText = await res.text();
-      let chunk: Record<string, unknown>;
-      try {
-        chunk = JSON.parse(rawText) as Record<string, unknown>;
-      } catch {
-        throw new Error(rawText.slice(0, 280));
-      }
-      if (!res.ok) {
-        throw new Error(String(chunk.error ?? rawText.slice(0, 280)));
-      }
-      return chunk;
-    } catch (e) {
-      posledni = e;
-      if (sig.aborted) throw e;
-      const znovu = pokus < maxPokusu && jeOpakovatelnaChybaFetch(e);
-      if (!znovu) throw e;
-      onRetry?.(pokus + 1, maxPokusu);
-      await new Promise((r) => setTimeout(r, 1800 * pokus));
-    }
-  }
-  throw posledni instanceof Error ? posledni : new Error(String(posledni));
-}
 
 function prazdnyFiltrNahled(): BonusKombinaceParametr {
   return novyParametrPrazdny("narodnost");
@@ -710,14 +664,11 @@ export function NastaveniBonusu() {
   const importujKombinaceZHutbuilder = useCallback(async () => {
     if (!user?.id) return;
     const ok = window.confirm(
-      "Stáhnout předgenerované řádky z NHL HUT Builderu a připojit je ke sdíleným kombinacím?\n\n" +
-        "• Útok / obrana / brankáři — sloty synergy: typ karty, tým i národnost.\n" +
-        "• Hut Builder SAL → PLAT, AP → BS, OVR → CLK.\n" +
-        "• Duplicity se sloučí s už uloženými řádky.\n" +
-        "• Může to trvat několik minut (sekvenční stahování stránek z Hut Builderu).\n" +
-        "• Při timeoutu se stránka automaticky zkusí znovu (až 4×).\n" +
-        "• Dva průchody Hut Builderu: výchozí žebříček (PLAT/BS) + režim „overall“ kvůli OVR → CLK.\n" +
-        "• Jakmile v průchodu začne API opakovat jen duplicitní line_id, daný průchod u typu řady končí.",
+      "Stáhnout kompletní katalog z NHL HUT Builder — stránka Chemistry Combos?\n\n" +
+        "• Stejné kombinace jako na nhlhutbuilder.com/chemistry-combos.php\n" +
+        "• Útok (3 sloty) + obrana (2 sloty); wild card = libovolný typ karty\n" +
+        "• Hut Builder SAL → PLAT, AP → BS, OVR → CLK\n" +
+        "• Stávající sdílené řádky se přepíšou (ne sloučí).",
     );
     if (!ok) return;
 
@@ -727,99 +678,44 @@ export function NastaveniBonusu() {
 
     setImportHbBezi(true);
     setImportHbChyba(null);
-    setImportHbLog("Začínám…");
+    setImportHbLog("Stahuji Chemistry Combos…");
     setUlozChyba(null);
     setUlozenoOk(false);
 
-    const noveUt: RadekBonusKombinaceUi[] = [];
-    const noveOb: RadekBonusKombinaceUi[] = [];
-
-    /** Každá stránka jde zvlášť — limit ~52 s kvůli reverse proxy (Synology/nginx ~60 s). */
-    const PRUCHODY_IMPORTU: {
-      optimizeFor: string | null;
-      timeoutMs: number;
-      popisek: string;
-    }[] = [
-      { optimizeFor: null, timeoutMs: 50_000, popisek: "žebříček" },
-      { optimizeFor: "overall", timeoutMs: 50_000, popisek: "overall (CLK)" },
-    ];
-
     try {
-      for (const lt of ["forwards", "defense", "goalie"] as const) {
-        for (const pr of PRUCHODY_IMPORTU) {
-          let page = 1;
-          let perPage = 20;
-          const seenLineIds = new Set<number>();
-          let strankyJenDuplicity = 0;
-
-          for (;;) {
-            if (sig.aborted) {
-              throw new DOMException("Zrušeno uživatelem.", "AbortError");
-            }
-            const paramOptimize =
-              pr.optimizeFor === null
-                ? ""
-                : `&optimizeFor=${encodeURIComponent(pr.optimizeFor)}`;
-            setImportHbLog(`${lt} — ${pr.popisek} — stránka ${page} (stahuji…)`);
-            const chunk = await fetchJsonHutbuilderAdminPage(
-              `/api/admin/hutbuilder-page?lineType=${encodeURIComponent(lt)}&page=${page}&timeoutMs=${pr.timeoutMs}${paramOptimize}`,
-              sig,
-              (pokus, max) => {
-                setImportHbLog(
-                  `${lt} — ${pr.popisek} — stránka ${page} — opakuji ${pokus}/${max}…`,
-                );
-              },
-            );
-
-            const lines = Array.isArray(chunk.lines) ? chunk.lines : [];
-            if (lines.length === 0) break;
-
-            if (typeof chunk.per_page === "number") perPage = chunk.per_page;
-
-            /** Řádky bez nového line_id přeskočíme; když je celá stránka jen duplicity, API často pořád vrací „plnou“ stránku — bez ukončení by import běžel stovky requestů zbytečně (viz skript stahni-hutbuilder-kombinace.mjs). */
-            let zpracovanoRadku = 0;
-            for (const row of lines) {
-              const line = row as { line_id?: number };
-              const lid = line.line_id;
-              if (lid != null && seenLineIds.has(lid)) continue;
-              if (lid != null) seenLineIds.add(lid);
-              zpracovanoRadku += 1;
-              const { utocna: u, obranna: o } = radkyZRadekHutbuilder(
-                row as HutbuilderImportedLine,
-              );
-              noveUt.push(...u);
-              noveOb.push(...o);
-            }
-
-            setImportHbLog(
-              `${lt} — ${pr.popisek} — stránka ${page} (${zpracovanoRadku} nových řádků API / ${seenLineIds.size} unikát. line_id v průchodu)`,
-            );
-
-            if (zpracovanoRadku === 0) {
-              strankyJenDuplicity += 1;
-              if (strankyJenDuplicity >= 3) break;
-            } else {
-              strankyJenDuplicity = 0;
-            }
-
-            if (chunk.has_more === false) break;
-            if (lines.length < perPage) break;
-            page += 1;
-            if (page > 650) break;
-            await new Promise((r) => setTimeout(r, 280));
-          }
-        }
+      const res = await fetch("/api/admin/hutbuilder-chemistry-combos", {
+        signal: sig,
+        cache: "no-store",
+      });
+      const rawText = await res.text();
+      let data: {
+        utocna?: RadekBonusKombinaceUi[];
+        obranna?: RadekBonusKombinaceUi[];
+        preskocenoRadku?: number;
+        error?: string;
+      };
+      try {
+        data = JSON.parse(rawText) as typeof data;
+      } catch {
+        throw new Error(rawText.slice(0, 280));
+      }
+      if (!res.ok) {
+        throw new Error(data.error ?? `HTTP ${res.status}`);
       }
 
-      const merged: Payload = {
-        utocna: deduplikujRadkyBonusu([...payload.utocna, ...noveUt], "utocna"),
-        obranna: deduplikujRadkyBonusu([...payload.obranna, ...noveOb], "obranna"),
-      };
-      const deduped = deduplikujPayloadBonusu(merged);
-
+      const noveUt = data.utocna ?? [];
+      const noveOb = data.obranna ?? [];
       setImportHbLog(
-        `Ukládám (${deduped.utocna.length} útok / ${deduped.obranna.length} obrana)…`,
+        `Staženo — útok ${noveUt.length}, obrana ${noveOb.length}` +
+          (data.preskocenoRadku ? ` (přeskočeno ${data.preskocenoRadku})` : "") +
+          " — ukládám…",
       );
+
+      const deduped = deduplikujPayloadBonusu({
+        utocna: deduplikujRadkyBonusu(noveUt, "utocna"),
+        obranna: deduplikujRadkyBonusu(noveOb, "obranna"),
+      });
+
       setUkladam(true);
       const saveRes = await persistPayload(deduped);
       setUkladam(false);
@@ -845,7 +741,7 @@ export function NastaveniBonusu() {
       setImportHbBezi(false);
       importHbAbortRef.current = null;
     }
-  }, [user?.id, payload, persistPayload]);
+  }, [user?.id, persistPayload]);
 
   const ulozKombinaci = useCallback(async () => {
     if (!user?.id) return;
@@ -1219,12 +1115,11 @@ export function NastaveniBonusu() {
                 2 — Kombinace z Hut Builderu → databáze
               </h3>
               <p className="mt-2 text-xs leading-relaxed text-[var(--hut-muted)] sm:text-sm">
-                Projede předgenerované útoky, obranu i brankáře na Hut Builderu a{" "}
-                <span className="font-medium text-zinc-400">připojí</span> řádky ke stávajícím v této tabulce
-                (nezahazuje ruční úpravy). Sloty synergy se berou v pořadí: typ karty i tým — BS (AP) je často
-                kombinace obojího. Neznámý název týmu v našem seznamu lig se přeskočí. Import běží dvakrát za řadu:
-                výchozí žebříček (hlavně PLAT + BS) a pak režim „overall“, kde Hut Builder doplní synergii s{" "}
-                <span className="font-medium text-zinc-400">OVR → CLK</span>.
+                Stáhne kompletní katalog ze stránky{" "}
+                <span className="font-medium text-zinc-400">Chemistry Combos</span> na nhlhutbuilder.com — stejné
+                řádky jako v jejich tabulce Forwards / Defense. Útok má 3 sloty (tým, národnost, typ karty), obrana 2;
+                wild card = libovolný typ karty. SAL → PLAT, AP → BS, OVR → CLK. Stávající sdílené řádky se{" "}
+                <span className="font-medium text-zinc-400">přepíšou</span> (ne sloučí).
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
