@@ -49,7 +49,7 @@ export function MojeKartySeznam() {
   const [loading, setLoading] = useState(false);
   const [chyba, setChyba] = useState<string | null>(null);
   const [filtrPozice, setFiltrPozice] = useState<FiltrPozice>("vse");
-  const [filtrProdano, setFiltrProdano] = useState<FiltrProdano>("vse");
+  const [filtrProdano, setFiltrProdano] = useState<FiltrProdano>("neprodane");
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
   const [razeniKaret, nastavRazeniKaret] = useRazeniKaret();
