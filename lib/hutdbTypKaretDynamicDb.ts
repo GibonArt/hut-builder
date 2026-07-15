@@ -6,7 +6,11 @@ const TABULKA = "hut_typy_karet_dynamic";
 export const HUT_TYPY_KARET_EXTEND_SQL = "hut_typy_karet_dynamic_extend.sql";
 
 export function jeChybaChybejicihoSloupceSchema(zprava: string): boolean {
-  return /schema cache|could not find the '[^']+' column/i.test(zprava);
+  return (
+    /schema cache|could not find the '[^']+' column|42703|column [\w".]+\.[\w"]+ does not exist|column "[^"]+" does not exist/i.test(
+      zprava,
+    )
+  );
 }
 
 function jeChybaChybejiciRpc(zprava: string): boolean {
@@ -97,7 +101,6 @@ export async function upsertDynamickeTypyKaret(
 }
 
 const SELECT_ROZSIRENY = "hodnota_filtru,jmeno_cs,combo_soubor,popis_cs,aliases";
-const SELECT_STREDNI = "hodnota_filtru,jmeno_cs,combo_soubor,popis_cs";
 const SELECT_ZAKLADNI = "hodnota_filtru,jmeno_cs,combo_soubor";
 
 function radkyZRawSelectu(data: unknown): DynamicTypKartyDbRow[] {
@@ -125,7 +128,7 @@ function radkyZRawSelectu(data: unknown): DynamicTypKartyDbRow[] {
 async function nactiPresSelect(
   supabase: SupabaseClient,
 ): Promise<{ data: DynamicTypKartyDbRow[]; error: string | null }> {
-  for (const select of [SELECT_ROZSIRENY, SELECT_STREDNI, SELECT_ZAKLADNI]) {
+  for (const select of [SELECT_ROZSIRENY, SELECT_ZAKLADNI]) {
     const { data, error } = await supabase.from(TABULKA).select(select);
     if (!error) {
       return { data: radkyZRawSelectu(data), error: null };
@@ -154,7 +157,11 @@ export async function nactiDynamickeTypyKaret(
     return zeSelectu;
   }
 
-  if (rpc.error && !jeChybaChybejiciRpc(rpc.error.message)) {
+  if (
+    rpc.error &&
+    !jeChybaChybejiciRpc(rpc.error.message) &&
+    !jeChybaChybejicihoSloupceSchema(rpc.error.message)
+  ) {
     return { data: [], error: rpc.error.message };
   }
 

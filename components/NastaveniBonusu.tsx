@@ -48,6 +48,7 @@ import {
 } from "@/lib/tymyPodleLigy";
 import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import type { HutDbTypKarty, NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
+import { HUT_TYPY_KARET_EXTEND_SQL } from "@/lib/hutdbTypKaretDynamicDb";
 import { vsechnyNarodnostiCS, vlajkaZeme } from "@/lib/narodnosti";
 import { signalizujSyncTypuKaret, useTypyKaret } from "@/components/TypyKaretProvider";
 import { urlLogaTymu } from "@/lib/tymLoga";
@@ -642,9 +643,16 @@ export function NastaveniBonusu() {
       );
       const refresh = await refreshDynamic();
       if (refresh.error) {
+        const potrebujeExtendSql = /popis_cs|aliases|does not exist|schema cache/i.test(
+          refresh.error,
+        );
         setSyncTypyVysledek(
           (prev) =>
-            `${prev ?? ""} Varování: seznam v aplikaci se nepodařilo načíst (${refresh.error}) — zkus F5.`,
+            `${prev ?? ""} Varování: seznam v aplikaci se nepodařilo načíst (${refresh.error})${
+              potrebujeExtendSql
+                ? ` — v Supabase SQL Editoru spusť soubor ${HUT_TYPY_KARET_EXTEND_SQL}, pak F5.`
+                : " — zkus F5."
+            }`,
         );
       }
       signalizujSyncTypuKaret();
