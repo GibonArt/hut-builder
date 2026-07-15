@@ -247,6 +247,13 @@ export type TymFiltrKapitanskaSouhra = {
   tym: string;
 };
 
+/**
+ * Logika výběru více týmů kapitánské souhry:
+ * - `alespon_jeden` (NEBO) — ve formaci alespoň jeden hráč z některého zvoleného týmu
+ * - `vsechny` (A) — ve formaci musí být zastoupen každý zvolený tým
+ */
+export type OperatorKapitanskaSouhra = "alespon_jeden" | "vsechny";
+
 export function klicTymFiltruKapitanskaSouhra(t: TymFiltrKapitanskaSouhra): string {
   return `${t.liga}|${t.tym.trim().toLowerCase()}`;
 }
@@ -259,36 +266,52 @@ export function kartaJeZTymFiltruKapitanskaSouhra(
 }
 
 /**
- * Ve formaci je alespoň jeden hráč z některého zvoleného týmu.
- * Formace bez těchto týmů se neukáže; ostatní hráči ve formaci mohou být i z jiných týmů.
+ * Kapitánská souhra — podle operátoru NEBO / A.
+ * Ostatní hráči ve formaci mohou být i z jiných týmů.
  */
-export function formaceMaAlesponJedenVybranyTymKapitanskaSouhra(
+export function formaceSplnujeTymyKapitanskaSouhra(
   hraci: readonly HutCard[],
   tymy: readonly TymFiltrKapitanskaSouhra[],
+  operator: OperatorKapitanskaSouhra = "alespon_jeden",
 ): boolean {
   if (tymy.length === 0) return true;
+  if (operator === "vsechny") {
+    return tymy.every((t) =>
+      hraci.some((k) => kartaJeZTymFiltruKapitanskaSouhra(k, t)),
+    );
+  }
   return hraci.some((k) =>
     tymy.some((t) => kartaJeZTymFiltruKapitanskaSouhra(k, t)),
   );
 }
 
+/** @deprecated Použij `formaceSplnujeTymyKapitanskaSouhra` (výchozí = alespoň jeden). */
+export function formaceMaAlesponJedenVybranyTymKapitanskaSouhra(
+  hraci: readonly HutCard[],
+  tymy: readonly TymFiltrKapitanskaSouhra[],
+): boolean {
+  return formaceSplnujeTymyKapitanskaSouhra(hraci, tymy, "alespon_jeden");
+}
+
 export function filtrujUtokPodleTymuKapitanskaSouhra(
   radky: readonly UtocnaFormaceVysledek[],
   tymy: readonly TymFiltrKapitanskaSouhra[],
+  operator: OperatorKapitanskaSouhra = "alespon_jeden",
 ): UtocnaFormaceVysledek[] {
   if (tymy.length === 0) return [...radky];
   return radky.filter((v) =>
-    formaceMaAlesponJedenVybranyTymKapitanskaSouhra([v.lk, v.c, v.pk], tymy),
+    formaceSplnujeTymyKapitanskaSouhra([v.lk, v.c, v.pk], tymy, operator),
   );
 }
 
 export function filtrujDvojicePodleTymuKapitanskaSouhra(
   radky: readonly DvojiceVysledek[],
   tymy: readonly TymFiltrKapitanskaSouhra[],
+  operator: OperatorKapitanskaSouhra = "alespon_jeden",
 ): DvojiceVysledek[] {
   if (tymy.length === 0) return [...radky];
   return radky.filter((v) =>
-    formaceMaAlesponJedenVybranyTymKapitanskaSouhra([v.a, v.b], tymy),
+    formaceSplnujeTymyKapitanskaSouhra([v.a, v.b], tymy, operator),
   );
 }
 

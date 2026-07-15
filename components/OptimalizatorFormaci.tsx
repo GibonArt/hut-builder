@@ -45,6 +45,7 @@ import {
   spocetVyskytuOvrUtokSoupiska,
   type DvojiceVysledek,
   type LimityVyskytuOvrTurnaj,
+  type OperatorKapitanskaSouhra,
   type TymFiltrKapitanskaSouhra,
   type UtocnaFormaceVysledek,
 } from "@/lib/optimalizatorFormaci";
@@ -130,8 +131,10 @@ type SnapshotFiltryOptimalizatoru = {
   /** Prázdné = všichni; jinak `HutCard.id` — jen formace obsahující tuto kartu z inventáře. */
   hracKartaId: string;
   typBonusuFiltr: TypBonusuKombinace | "vse";
-  /** Týmy z požadavku kapitánské souhry — v každé formaci alespoň jeden hráč z těchto týmů. */
+  /** Týmy z požadavku kapitánské souhry. */
   kapitanskaTymy: TymFiltrKapitanskaSouhra[];
+  /** NEBO = alespoň jeden tým; A = všechny vybrané týmy ve formaci. */
+  kapitanskaOperator: OperatorKapitanskaSouhra;
   /** Turnajové limity počtu hráčů s OVR ≥ práh (prázdné pole = bez daného limitu). */
   turnajPragOvrStr: string;
   turnajMaxUtokVeFormaciStr: string;
@@ -933,6 +936,8 @@ export function OptimalizatorFormaci() {
   const [maxRozpocetMilStr, setMaxRozpocetMilStr] = useState("");
   const [hracKartaId, setHracKartaId] = useState("");
   const [kapitanskaTymy, setKapitanskaTymy] = useState<TymFiltrKapitanskaSouhra[]>([]);
+  const [kapitanskaOperator, setKapitanskaOperator] =
+    useState<OperatorKapitanskaSouhra>("alespon_jeden");
   const [typBonusuFiltr, setTypBonusuFiltr] = useState<TypBonusuKombinace | "vse">("vse");
   /** Hodnoty filtrů použité u posledního výpočtu (klik „Hledat“). Dokud je null, náročné výpočty neběží. */
   const [filtryPoHledani, setFiltryPoHledani] = useState<SnapshotFiltryOptimalizatoru | null>(
@@ -1006,7 +1011,8 @@ export function OptimalizatorFormaci() {
       filtryPoHledani.maxRozpocetMilStr !== maxRozpocetMilStr ||
       filtryPoHledani.hracKartaId !== hracKartaId ||
       filtryPoHledani.typBonusuFiltr !== typBonusuFiltr ||
-      !stejneTymyFiltryKapitanskaSouhra(filtryPoHledani.kapitanskaTymy, kapitanskaTymy)
+      !stejneTymyFiltryKapitanskaSouhra(filtryPoHledani.kapitanskaTymy, kapitanskaTymy) ||
+      filtryPoHledani.kapitanskaOperator !== kapitanskaOperator
     );
   }, [
     filtryPoHledani,
@@ -1016,6 +1022,7 @@ export function OptimalizatorFormaci() {
     hracKartaId,
     typBonusuFiltr,
     kapitanskaTymy,
+    kapitanskaOperator,
   ]);
 
   useEffect(() => {
@@ -1028,6 +1035,7 @@ export function OptimalizatorFormaci() {
       setLoPoVzajemne(false);
       setHracKartaId("");
       setKapitanskaTymy([]);
+      setKapitanskaOperator("alespon_jeden");
       setUlozenaSoupiskaMeta(null);
       return;
     }
@@ -1164,6 +1172,10 @@ export function OptimalizatorFormaci() {
 
   const kapitanskaTymyAplikovane = useMemo(
     () => filtryPoHledani?.kapitanskaTymy ?? [],
+    [filtryPoHledani],
+  );
+  const kapitanskaOperatorAplikovany = useMemo(
+    () => filtryPoHledani?.kapitanskaOperator ?? "alespon_jeden",
     [filtryPoHledani],
   );
 
@@ -1321,16 +1333,22 @@ export function OptimalizatorFormaci() {
   );
 
   const utokZobrazenoPoKapitanske = useMemo(
-    () => filtrujUtokPodleTymuKapitanskaSouhra(utokZobrazenoPoHracovi, kapitanskaTymyAplikovane),
-    [utokZobrazenoPoHracovi, kapitanskaTymyAplikovane],
+    () =>
+      filtrujUtokPodleTymuKapitanskaSouhra(
+        utokZobrazenoPoHracovi,
+        kapitanskaTymyAplikovane,
+        kapitanskaOperatorAplikovany,
+      ),
+    [utokZobrazenoPoHracovi, kapitanskaTymyAplikovane, kapitanskaOperatorAplikovany],
   );
   const obranaZobrazenoPoKapitanske = useMemo(
     () =>
       filtrujDvojicePodleTymuKapitanskaSouhra(
         obranaZobrazenoPoHracovi,
         kapitanskaTymyAplikovane,
+        kapitanskaOperatorAplikovany,
       ),
-    [obranaZobrazenoPoHracovi, kapitanskaTymyAplikovane],
+    [obranaZobrazenoPoHracovi, kapitanskaTymyAplikovane, kapitanskaOperatorAplikovany],
   );
   const golmaniZobrazenoPoKapitanske = golmaniZobrazenoPoHracovi;
 
@@ -1893,6 +1911,7 @@ export function OptimalizatorFormaci() {
         hracKartaId,
         typBonusuFiltr,
         kapitanskaTymy: [...kapitanskaTymy],
+        kapitanskaOperator,
         ...turnaj,
       });
     });
@@ -1925,6 +1944,7 @@ export function OptimalizatorFormaci() {
     setMaxRozpocetMilStr("");
     setHracKartaId("");
     setKapitanskaTymy([]);
+    setKapitanskaOperator("alespon_jeden");
     setTypBonusuFiltr("vse");
     setKridlaVzajemna(false);
     setLoPoVzajemne(false);
@@ -2122,41 +2142,71 @@ export function OptimalizatorFormaci() {
                 >
                   HUT Builderu
                 </a>
-                ) jsou uvedené týmy, ze kterých potřebuješ hráče v celé soupisce. Zde vyber tyto týmy — v útoku a
-                obraně uvidíš jen formace, kde je alespoň jeden hráč z vybraných týmů (formace bez nich se neukážou).
+                ) jsou uvedené týmy. Zde je vyber a zvol logiku:{" "}
+                <span className="font-medium text-zinc-300">NEBO</span> = alespoň jeden z týmů ve
+                formaci, <span className="font-medium text-zinc-300">A</span> = musí být zastoupeny
+                všechny vybrané týmy (útok max. 3, obrana max. 2).
               </p>
               {kapitanskaTymy.length > 0 ? (
-                <ul className="mt-3 flex flex-wrap gap-2">
-                  {kapitanskaTymy.map((t) => {
-                    const klic = klicTymFiltruKapitanskaSouhra(t);
-                    return (
-                      <li key={klic}>
-                        <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--hut-border)] bg-[var(--hut-surface)] py-1 pl-1.5 pr-2 text-sm text-zinc-100">
-                          <TymLogoOblast
-                            size={28}
-                            url={urlLogaTymu(t.tym, t.liga)}
-                            nazevTymu={t.tym}
-                          />
-                          <span className="min-w-0 truncate">{t.tym}</span>
-                          <span
-                            className="shrink-0 rounded-md border border-[var(--hut-border)] bg-[var(--hut-bg)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]"
-                            title={LIGA_ZOBRAZENI[t.liga]}
-                          >
-                            {t.liga}
+                <>
+                  <div
+                    className="mt-3 flex flex-wrap gap-2"
+                    role="group"
+                    aria-label="Logika týmů kapitánské souhry"
+                  >
+                    {(
+                      [
+                        ["alespon_jeden", "NEBO — alespoň jeden"],
+                        ["vsechny", "A — všechny týmy"],
+                      ] as const
+                    ).map(([hodnota, label]) => (
+                      <button
+                        key={hodnota}
+                        type="button"
+                        disabled={nacitani}
+                        onClick={() => setKapitanskaOperator(hodnota)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-45 ${
+                          kapitanskaOperator === hodnota
+                            ? "border-[var(--hut-lime)]/55 bg-[var(--hut-lime)]/15 text-[var(--hut-lime)]"
+                            : "border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/60 text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <ul className="mt-3 flex flex-wrap gap-2">
+                    {kapitanskaTymy.map((t) => {
+                      const klic = klicTymFiltruKapitanskaSouhra(t);
+                      return (
+                        <li key={klic}>
+                          <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-[var(--hut-border)] bg-[var(--hut-surface)] py-1 pl-1.5 pr-2 text-sm text-zinc-100">
+                            <TymLogoOblast
+                              size={28}
+                              url={urlLogaTymu(t.tym, t.liga)}
+                              nazevTymu={t.tym}
+                            />
+                            <span className="min-w-0 truncate">{t.tym}</span>
+                            <span
+                              className="shrink-0 rounded-md border border-[var(--hut-border)] bg-[var(--hut-bg)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]"
+                              title={LIGA_ZOBRAZENI[t.liga]}
+                            >
+                              {t.liga}
+                            </span>
+                            <button
+                              type="button"
+                              className="ml-0.5 shrink-0 rounded-full px-1.5 text-[var(--hut-muted)] transition-colors hover:bg-red-950/40 hover:text-red-300"
+                              aria-label={`Odebrat ${t.tym}`}
+                              onClick={() => odeberKapitanskyTym(klic)}
+                            >
+                              ×
+                            </button>
                           </span>
-                          <button
-                            type="button"
-                            className="ml-0.5 shrink-0 rounded-full px-1.5 text-[var(--hut-muted)] transition-colors hover:bg-red-950/40 hover:text-red-300"
-                            aria-label={`Odebrat ${t.tym}`}
-                            onClick={() => odeberKapitanskyTym(klic)}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               ) : (
                 <p className="mt-2 text-xs text-[var(--hut-muted)]/80">
                   Zatím žádný tým — vyhledání níže (např. Penguins, Maple Leafs…).
@@ -2764,7 +2814,7 @@ export function OptimalizatorFormaci() {
                 {hracKartaIdAplikovany && vybranaKartaAplikovana
                   ? ` · hráč ${vybranaKartaAplikovana.jmeno}: útok ${utokZobrazenoPoHracovi.length}, obrana ${obranaZobrazenoPoHracovi.length}, brankáři ${golmaniZobrazenoPoHracovi.length}`
                   : kapitanskaTymyAplikovane.length > 0
-                    ? ` · kapitánská souhra (${kapitanskaTymyAplikovane.map((t) => t.tym).join(", ")}): útok ${utokZobrazenoPoKapitanske.length}, obrana ${obranaZobrazenoPoKapitanske.length}, brankáři ${golmaniZobrazenoPoKapitanske.length}`
+                    ? ` · kapitánská souhra (${kapitanskaOperatorAplikovany === "vsechny" ? "A" : "NEBO"}: ${kapitanskaTymyAplikovane.map((t) => t.tym).join(kapitanskaOperatorAplikovany === "vsechny" ? " + " : ", ")}): útok ${utokZobrazenoPoKapitanske.length}, obrana ${obranaZobrazenoPoKapitanske.length}, brankáři ${golmaniZobrazenoPoKapitanske.length}`
                     : maxRozpocetAplikovany !== null
                     ? ` · max. plat ≤ ${formatovatPlatVMil(maxRozpocetAplikovany)}: útok ${utokZobrazenoPoRozpoctu.length}, obrana ${obranaZobrazenoPoRozpoctu.length}, brankáři ${golmaniZobrazenoPoRozpoctu.length}`
                     : filtryPoHledani.typBonusuFiltr !== "vse"
@@ -2979,8 +3029,9 @@ export function OptimalizatorFormaci() {
             utokZobrazenoPoKapitanske.length === 0 &&
             kapitanskaTymyAplikovane.length > 0 ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
-                Žádná útočná formace nemá hráče ze zvolených týmů kapitánské souhry — přidej karty z těchto týmů do
-                inventáře nebo uvolni OVR.
+                {kapitanskaOperatorAplikovany === "vsechny"
+                  ? "Žádná útočná formace neobsahuje hráče ze všech zvolených týmů kapitánské souhry — přidej karty z těchto týmů, zvol méně týmů, nebo přepni na NEBO."
+                  : "Žádná útočná formace nemá hráče ze zvolených týmů kapitánské souhry — přidej karty z těchto týmů do inventáře nebo uvolni OVR."}
               </p>
             ) : null}
             {utokZobrazenoPoRozpoctu.length > 0 &&
@@ -3065,8 +3116,9 @@ export function OptimalizatorFormaci() {
             obranaZobrazenoPoKapitanske.length === 0 &&
             kapitanskaTymyAplikovane.length > 0 ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">
-                Žádná obranná dvojice nemá hráče ze zvolených týmů kapitánské souhry — přidej karty z těchto týmů do
-                inventáře nebo uvolni OVR.
+                {kapitanskaOperatorAplikovany === "vsechny"
+                  ? "Žádná obranná dvojice neobsahuje hráče ze všech zvolených týmů kapitánské souhry — přidej karty, zvol méně týmů (obrana má jen 2 hráče), nebo přepni na NEBO."
+                  : "Žádná obranná dvojice nemá hráče ze zvolených týmů kapitánské souhry — přidej karty z těchto týmů do inventáře nebo uvolni OVR."}
               </p>
             ) : null}
             {obranaZobrazenoPoRozpoctu.length > 0 &&
