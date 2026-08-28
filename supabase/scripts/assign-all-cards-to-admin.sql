@@ -46,18 +46,19 @@ BEGIN
     );
   GET DIAGNOSTICS smazano_kolize_admin = ROW_COUNT;
 
-  -- Mezi zbývajícími cizími/sirotčími: stejný slug víckrát → nech nejstarší řádek.
+  -- Mezi zbývajícími cizími/sirotčími: stejný slug víckrát → nech první řádek (podle id).
   DELETE FROM public.cards c
   USING (
-    SELECT card_slug, min(id) AS keep_id
-    FROM public.cards
-    WHERE user_id IS DISTINCT FROM admin_id
-    GROUP BY card_slug
-    HAVING count(*) > 1
+    SELECT id AS drop_id
+    FROM (
+      SELECT id,
+        row_number() OVER (PARTITION BY card_slug ORDER BY id) AS rn
+      FROM public.cards
+      WHERE user_id IS DISTINCT FROM admin_id
+    ) ranked
+    WHERE rn > 1
   ) d
-  WHERE c.user_id IS DISTINCT FROM admin_id
-    AND c.card_slug = d.card_slug
-    AND c.id <> d.keep_id;
+  WHERE c.id = d.drop_id;
   GET DIAGNOSTICS smazano_kolize_mezi_cizimi = ROW_COUNT;
 
   UPDATE public.cards
