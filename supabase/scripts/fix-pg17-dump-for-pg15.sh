@@ -6,16 +6,15 @@
 
 set -euo pipefail
 
+# shellcheck source=lib/filter-pg17-dump.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/filter-pg17-dump.sh
+source "$SCRIPT_DIR/lib/filter-pg17-dump.sh"
+
 IN="${1:?Chybí vstupní .sql soubor}"
 OUT="${2:-${IN%.sql}-pg15.sql}"
 
-sed \
-  -e '/^\\restrict/d' \
-  -e '/^\\unrestrict/d' \
-  -e '/^SET transaction_timeout/d' \
-  -e '/^ALTER TABLE.*DISABLE TRIGGER/d' \
-  -e '/^ALTER TABLE.*ENABLE TRIGGER/d' \
-  "$IN" > "$OUT"
+filter_pg17_dump_for_pg15 < "$IN" > "$OUT"
 
 echo "Hotovo: $OUT ($(wc -l < "$OUT") řádků)"
 echo "Import: ./supabase/scripts/import-hut-data-selfhosted.sh $OUT /volume1/docker/supabase-project"

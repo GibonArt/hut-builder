@@ -12,7 +12,9 @@ SUPABASE_PROJECT_DIR="${2:-/volume1/docker/supabase-project}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Relativní cestu k SQL řeš vůči repu nebo cwd, pak absolutní (po cd na supabase-project cat jinak selže).
+# shellcheck source=lib/filter-pg17-dump.sh
+source "$SCRIPT_DIR/lib/filter-pg17-dump.sh"
+
 if [[ ! -f "$SQL_FILE" && -f "$REPO_DIR/$SQL_FILE" ]]; then
   SQL_FILE="$REPO_DIR/$SQL_FILE"
 fi
@@ -35,16 +37,32 @@ cd "$SUPABASE_PROJECT_DIR"
 # shellcheck source=lib/db-psql.sh
 source "$SCRIPT_DIR/lib/db-psql.sh"
 DB_USER="$(resolve_supabase_db_user "$SUPABASE_PROJECT_DIR")"
+DB_CID="$(docker compose ps -q db)"
+
+if [[ -z "$DB_CID" ]]; then
+  echo "Chyba: kontejner db neběží (docker compose ps)." >&2
+  exit 1
+fi
+
 echo "DB uživatel: $DB_USER"
 
 echo "Mažu existující data HUT Builder v public…"
 run_supabase_psql "$SUPABASE_PROJECT_DIR" < "$REPO_DIR/supabase/scripts/truncate-hut-public-data.sql"
 
+IMPORT_TMP="$(mktemp /tmp/hut-builder-import.XXXXXX.sql)"
+trap 'rm -f "$IMPORT_TMP"' EXIT
+
 {
   echo "SET session_replication_role = replica;"
-  cat "$SQL_FILE"
+  filter_pg17_dump_for_pg15 < "$SQL_FILE"
   echo "SET session_replication_role = DEFAULT;"
-} | run_supabase_psql "$SUPABASE_PROJECT_DIR"
+} > "$IMPORT_TMP"
+
+echo "Importuji dump ($(wc -c < "$IMPORT_TMP" | tr -d ' ') B) přes psql -f v kontejneru…"
+docker cp "$IMPORT_TMP" "${DB_CID}:/tmp/hut-builder-import.sql"
+docker compose exec -T db psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 \
+  -f /tmp/hut-builder-import.sql
+docker compose exec -T db rm -f /tmp/hut-builder-import.sql
 
 echo ""
 echo "Import hotovo. Ověř: SELECT count(*) FROM public.cards;"
