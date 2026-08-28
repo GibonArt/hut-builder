@@ -23,6 +23,9 @@ grant select, insert, update, delete on public.hut_typy_karet_dynamic to authent
 -- --- RPC / security definer (volání přes supabase.rpc) ---
 grant execute on function public.je_bonus_kombinace_editor() to authenticated, service_role;
 
+grant execute on function public.list_hut_typy_karet_dynamic() to authenticated, service_role;
+grant execute on function public.sync_hut_typy_karet_dynamic(jsonb) to authenticated, service_role;
+
 grant execute on function public.napoveda_jmena_z_cards() to authenticated, service_role;
 
 grant execute on function public.admin_prehled_uzivatelu_karet() to authenticated, service_role;

@@ -7,6 +7,7 @@ import {
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
 import { HUTBUILDER_COMBO_FINDER_REFERER } from "@/lib/hutbuilderGetLines";
 import { createClient } from "@/lib/supabase/server";
+import { createSupabaseServiceClient } from "@/lib/supabaseServiceClient";
 
 const COMBO_FINDER = "https://nhlhutbuilder.com/combo-finder.php";
 
@@ -21,6 +22,19 @@ export async function POST() {
 
   if (!user?.email || !jeBonusAdmin(user.email)) {
     return NextResponse.json({ error: "Přístup zamítnut." }, { status: 403 });
+  }
+
+  let adminDb;
+  try {
+    adminDb = createSupabaseServiceClient();
+  } catch {
+    return NextResponse.json(
+      {
+        error:
+          "Chybí SUPABASE_SERVICE_ROLE_KEY v .env kontejneru — doplň z supabase-project/.env a restartuj hut.",
+      },
+      { status: 500 },
+    );
   }
 
   let html: string;
@@ -64,7 +78,7 @@ export async function POST() {
     );
   }
 
-  const { data: existujiciRadky, error: chybaExistujicich } = await supabase
+  const { data: existujiciRadky, error: chybaExistujicich } = await adminDb
     .from("hut_typy_karet_dynamic")
     .select("hodnota_filtru");
   if (chybaExistujicich) {
@@ -88,7 +102,7 @@ export async function POST() {
   const aktualizovano = rows.length - novychVDb;
 
   const syncedAt = new Date().toISOString();
-  const { error, schema_varovani } = await upsertDynamickeTypyKaret(supabase, rows, syncedAt);
+  const { error, schema_varovani } = await upsertDynamickeTypyKaret(adminDb, rows, syncedAt);
 
   if (error) {
     return NextResponse.json(
