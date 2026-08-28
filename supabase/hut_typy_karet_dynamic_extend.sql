@@ -52,7 +52,9 @@ as $$
 declare
   n integer := 0;
 begin
-  if not public.je_bonus_kombinace_editor() then
+  -- service_role nemá auth.uid(); editor kontrola je v API route před voláním RPC
+  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
+     and not public.je_bonus_kombinace_editor() then
     raise exception 'Pristup zamitnut';
   end if;
 

@@ -91,12 +91,8 @@ export async function upsertDynamickeTypyKaret(
     return { error: null, schema_varovani: null };
   }
 
-  const rpcMsg = rpc.error.message;
-  if (/Pristup zamitnut/i.test(rpcMsg)) {
-    return { error: rpcMsg, schema_varovani: null };
-  }
-
-  // Jakákoli jiná chyba RPC → přímý upsert (chybějící funkce, schema cache, špatný jsonb, …).
+  // RPC kontroluje je_bonus_kombinace_editor() přes auth.uid() — service role nemá JWT,
+  // proto „Pristup zamitnut“. Přímý upsert se service role obejde RLS.
   return upsertPresTabulku(supabase, rows, syncedAt);
 }
 
