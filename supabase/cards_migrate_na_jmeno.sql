@@ -1,15 +1,26 @@
 -- Migrace existující tabulky `cards`: krestni_jmeno + prijmeni → jmeno
--- Spusť v Supabase SQL Editoru (jednou), pokud už máš starší schéma.
+-- Na čerstvé instalaci (cards_setup.sql už má sloupec jmeno) se přeskočí.
 
 alter table public.cards add column if not exists jmeno text;
 
-update public.cards
-set jmeno = trim(both from concat_ws(' ', nullif(trim(krestni_jmeno), ''), nullif(trim(prijmeni), '')))
-where jmeno is null or trim(jmeno) = '';
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'cards'
+      and column_name = 'krestni_jmeno'
+  ) then
+    update public.cards
+    set jmeno = trim(both from concat_ws(' ', nullif(trim(krestni_jmeno), ''), nullif(trim(prijmeni), '')))
+    where jmeno is null or trim(jmeno) = '';
 
-update public.cards
-set jmeno = coalesce(nullif(trim(prijmeni), ''), 'Neznámý')
-where trim(coalesce(jmeno, '')) = '';
+    update public.cards
+    set jmeno = coalesce(nullif(trim(prijmeni), ''), 'Neznámý')
+    where trim(coalesce(jmeno, '')) = '';
+  end if;
+end $$;
 
 alter table public.cards alter column jmeno set not null;
 

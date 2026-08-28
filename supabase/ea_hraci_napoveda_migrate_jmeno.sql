@@ -1,14 +1,26 @@
--- Migrace ea_hraci_napoveda: krestni_jmeno + prijmeni → jmeno (po úpravě skriptu ea-ratings)
+-- Migrace ea_hraci_napoveda: krestni_jmeno + prijmeni → jmeno
+-- Na čerstvé instalaci (ea_hraci_napoveda.sql už má sloupec jmeno) se přeskočí.
 
 alter table public.ea_hraci_napoveda add column if not exists jmeno text;
 
-update public.ea_hraci_napoveda
-set jmeno = trim(both from concat_ws(' ', nullif(trim(krestni_jmeno), ''), nullif(trim(prijmeni), '')))
-where jmeno is null or trim(jmeno) = '';
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'ea_hraci_napoveda'
+      and column_name = 'krestni_jmeno'
+  ) then
+    update public.ea_hraci_napoveda
+    set jmeno = trim(both from concat_ws(' ', nullif(trim(krestni_jmeno), ''), nullif(trim(prijmeni), '')))
+    where jmeno is null or trim(jmeno) = '';
 
-update public.ea_hraci_napoveda
-set jmeno = 'Neznámý'
-where trim(coalesce(jmeno, '')) = '';
+    update public.ea_hraci_napoveda
+    set jmeno = 'Neznámý'
+    where trim(coalesce(jmeno, '')) = '';
+  end if;
+end $$;
 
 alter table public.ea_hraci_napoveda alter column jmeno set not null;
 
