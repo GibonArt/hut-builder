@@ -1,0 +1,5 @@
+# Jeden e-mail na řádek. Řádky s # jsou komentář.
+# Zkopíruj na emails-ke-smazani.txt a doplň (necommituj).
+
+# ruby-23@seznam.cz
+# lukas.kozela@gmail.com
