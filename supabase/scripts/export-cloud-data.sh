@@ -26,8 +26,10 @@ fi
 
 extract_pg_host() {
   local uri="$1"
-  if [[ "$uri" =~ @([^:/]+) ]]; then
-    printf '%s' "${BASH_REMATCH[1]}"
+  local host
+  host="$(printf '%s' "$uri" | sed -n 's|.*@\([^:/]*\).*|\1|p' | head -1)"
+  if [[ -n "$host" ]]; then
+    printf '%s' "$host"
     return 0
   fi
   return 1
@@ -37,13 +39,15 @@ resolve_ipv4() {
   local host="$1"
   local ip=""
   ip="$(getent ahostsv4 "$host" 2>/dev/null | awk '{print $1; exit}')" || true
-  if [[ -z "$ip" && command -v dig >/dev/null 2>&1 ]]; then
+  if [[ -z "$ip" ]] && command -v dig >/dev/null 2>&1; then
     ip="$(dig +short A "$host" 2>/dev/null | grep -E '^[0-9.]+$' | head -1)" || true
   fi
-  if [[ -z "$ip" && command -v nslookup >/dev/null 2>&1 ]]; then
+  if [[ -z "$ip" ]] && command -v nslookup >/dev/null 2>&1; then
     ip="$(nslookup -type=A "$host" 2>/dev/null | awk '/^Address: / { print $2; exit }' | grep -E '^[0-9.]+$')" || true
   fi
-  [[ -n "$ip" ]] && printf '%s' "$ip"
+  if [[ -n "$ip" ]]; then
+    printf '%s' "$ip"
+  fi
 }
 
 docker_pg_dump() {
