@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Export dat HUT Builder z cloud Supabase (supabase.com) přes pg_dump v Dockeru.
 #
-# CLOUD_URI: export/cloud.env (viz export-cloud.env.example).
-# Na NAS bez IPv6: použij Session pooler (port 5432), NE Direct db.*.supabase.co.
+# Konfigurace: export/cloud.env (viz export-cloud.env.example).
+# Na NAS bez IPv6: Session pooler (port 5432), ne Direct db.*.supabase.co.
 
 set -euo pipefail
 
@@ -10,18 +10,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 EXPORT_DIR="${EXPORT_DIR:-$REPO_DIR/export}"
 CLOUD_URI="${CLOUD_URI:-}"
+CLOUD_HOST="${CLOUD_HOST:-}"
+CLOUD_USER="${CLOUD_USER:-}"
+CLOUD_PASSWORD="${CLOUD_PASSWORD:-}"
+CLOUD_PORT="${CLOUD_PORT:-5432}"
+CLOUD_DB="${CLOUD_DB:-postgres}"
 ENV_FILE="${EXPORT_ENV_FILE:-$REPO_DIR/export/cloud.env}"
 
-if [[ -z "$CLOUD_URI" && -f "$ENV_FILE" ]]; then
+if [[ -f "$ENV_FILE" ]]; then
   # shellcheck source=/dev/null
   set -a
   source "$ENV_FILE"
   set +a
-fi
-
-if [[ -z "$CLOUD_URI" ]]; then
-  echo "Chyba: nastav CLOUD_URI v export/cloud.env — viz export-cloud.env.example" >&2
-  exit 1
 fi
 
 extract_pg_host() {
@@ -53,6 +53,28 @@ extract_project_ref() {
   return 1
 }
 
+resolve_connection() {
+  if [[ -n "$CLOUD_HOST" && -n "$CLOUD_USER" && -n "$CLOUD_PASSWORD" ]]; then
+    PG_CONN_MODE=flags
+    PG_HOST="$CLOUD_HOST"
+    PG_USER="$CLOUD_USER"
+    PG_PASSWORD="$CLOUD_PASSWORD"
+    PG_PORT="$CLOUD_PORT"
+    PG_DB="$CLOUD_DB"
+    return 0
+  fi
+  if [[ -n "$CLOUD_URI" ]]; then
+    PG_CONN_MODE=uri
+    PG_URI="$CLOUD_URI"
+    PG_HOST="$(extract_pg_host "$CLOUD_URI" || true)"
+    return 0
+  fi
+  echo "Chyba: doplň export/cloud.env — viz export-cloud.env.example" >&2
+  echo "  Buď CLOUD_HOST + CLOUD_USER + CLOUD_PASSWORD (heslo se spec. znaky OK v uvozovkách)" >&2
+  echo "  nebo CLOUD_URI s URL-enkódovaným heslem." >&2
+  exit 1
+}
+
 resolve_ipv4() {
   local host="$1"
   local ip=""
@@ -74,21 +96,20 @@ resolve_ipv4() {
 fail_direct_ipv6_only() {
   local host="$1"
   local ref=""
-  ref="$(extract_project_ref "$CLOUD_URI" 2>/dev/null || true)"
+  ref="$(extract_project_ref "${PG_URI:-}" 2>/dev/null || true)"
+  if [[ -z "$ref" && -n "${CLOUD_USER:-}" ]]; then
+    ref="${CLOUD_USER#postgres.}"
+  fi
   echo "" >&2
   echo "Chyba: $host nemá IPv4 (jen IPv6). Synology/NAS se na Direct connection nedostane." >&2
   echo "" >&2
-  echo "Řešení — v export/cloud.env použij Session pooler z Supabase Dashboard:" >&2
-  echo "  Project Settings → Database → Connection string → Session pooler (port 5432)" >&2
-  echo "" >&2
+  echo "V export/cloud.env použij Session pooler (CLOUD_HOST + CLOUD_USER + CLOUD_PASSWORD):" >&2
+  echo "  Dashboard → Database → Connection string → Session pooler" >&2
   if [[ -n "$ref" ]]; then
-    echo "  CLOUD_URI=postgresql://postgres.${ref}:HESLO@aws-0-TVUJ_REGION.pooler.supabase.com:5432/postgres" >&2
-  else
-    echo "  CLOUD_URI=postgresql://postgres.REF:HESLO@aws-0-REGION.pooler.supabase.com:5432/postgres" >&2
+    echo "  CLOUD_HOST=aws-0-TVUJ_REGION.pooler.supabase.com" >&2
+    echo "  CLOUD_USER=postgres.${ref}" >&2
+    echo "  CLOUD_PASSWORD='tvoje heslo'" >&2
   fi
-  echo "" >&2
-  echo "REGION (např. eu-central-1) zkopíruj z Dashboardu — u každého projektu může být jiný." >&2
-  echo "Alternativa: export na Macu (má IPv6) a scp export/*.sql na NAS." >&2
   exit 1
 }
 
@@ -98,29 +119,38 @@ docker_pg_dump() {
   local -a docker_args=(--rm -v "$EXPORT_DIR:/out")
   local host ipv4
 
-  if host="$(extract_pg_host "$CLOUD_URI")"; then
-    case "$host" in
+  if [[ -n "${PG_HOST:-}" ]]; then
+    case "$PG_HOST" in
       db.*.supabase.co)
-        ipv4="$(resolve_ipv4 "$host")"
+        ipv4="$(resolve_ipv4 "$PG_HOST")"
         if [[ -z "$ipv4" ]]; then
-          fail_direct_ipv6_only "$host"
+          fail_direct_ipv6_only "$PG_HOST"
         fi
-        echo "→ Připojení přes IPv4: $host → $ipv4" >&2
-        docker_args+=(--add-host="${host}:${ipv4}")
+        echo "→ Připojení přes IPv4: $PG_HOST → $ipv4" >&2
+        docker_args+=(--add-host="${PG_HOST}:${ipv4}")
         ;;
       *)
-        ipv4="$(resolve_ipv4 "$host")"
+        ipv4="$(resolve_ipv4 "$PG_HOST")"
         if [[ -n "$ipv4" ]]; then
-          echo "→ Pooler/host $host → IPv4 $ipv4" >&2
-          docker_args+=(--add-host="${host}:${ipv4}")
+          echo "→ Pooler/host $PG_HOST → IPv4 $ipv4" >&2
+          docker_args+=(--add-host="${PG_HOST}:${ipv4}")
         fi
         ;;
     esac
   fi
 
-  docker run "${docker_args[@]}" postgres:17 \
-    pg_dump "$CLOUD_URI" "$@" -f "/out/$(basename "$out_file")"
+  if [[ "$PG_CONN_MODE" == flags ]]; then
+    docker_args+=(-e "PGPASSWORD=${PG_PASSWORD}")
+    docker run "${docker_args[@]}" postgres:17 \
+      pg_dump -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" "$@" \
+      -f "/out/$(basename "$out_file")"
+  else
+    docker run "${docker_args[@]}" postgres:17 \
+      pg_dump "$PG_URI" "$@" -f "/out/$(basename "$out_file")"
+  fi
 }
+
+resolve_connection
 
 mkdir -p "$EXPORT_DIR"
 cd "$EXPORT_DIR"
