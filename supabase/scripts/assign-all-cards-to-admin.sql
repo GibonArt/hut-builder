@@ -1,6 +1,9 @@
 -- Přiřadí všechny karty jednomu admin účtu (gibonart@gmail.com).
 -- Pro soukromé nasazení — tool už nebude veřejný.
 --
+-- Unikátní (user_id, card_slug): u duplicit nechá adminovu kartu, cizí stejný slug smaže.
+-- U sirotčích karet se stejným slugem nechá jednu kopii (nejstarší id).
+--
 -- Spusť na NAS:
 --   cd /volume1/docker/supabase-project
 --   sudo docker compose exec -T db psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 \
@@ -19,8 +22,9 @@ GROUP BY u.email;
 DO $$
 DECLARE
   admin_id uuid;
-  pred bigint;
-  po bigint;
+  smazano_kolize_admin bigint;
+  smazano_kolize_mezi_cizimi bigint;
+  prirazeno bigint;
 BEGIN
   SELECT id INTO admin_id
   FROM auth.users
@@ -31,13 +35,40 @@ BEGIN
     RAISE EXCEPTION 'Admin účet gibonart@gmail.com neexistuje v auth.users';
   END IF;
 
-  SELECT count(*) INTO pred FROM public.cards;
+  -- Cizí karta se stejným slugem jako už má admin → smaž (adminova verze zůstane).
+  DELETE FROM public.cards c
+  WHERE c.user_id IS DISTINCT FROM admin_id
+    AND EXISTS (
+      SELECT 1
+      FROM public.cards a
+      WHERE a.user_id = admin_id
+        AND a.card_slug = c.card_slug
+    );
+  GET DIAGNOSTICS smazano_kolize_admin = ROW_COUNT;
 
-  UPDATE public.cards SET user_id = admin_id;
+  -- Mezi zbývajícími cizími/sirotčími: stejný slug víckrát → nech nejstarší řádek.
+  DELETE FROM public.cards c
+  USING (
+    SELECT card_slug, min(id) AS keep_id
+    FROM public.cards
+    WHERE user_id IS DISTINCT FROM admin_id
+    GROUP BY card_slug
+    HAVING count(*) > 1
+  ) d
+  WHERE c.user_id IS DISTINCT FROM admin_id
+    AND c.card_slug = d.card_slug
+    AND c.id <> d.keep_id;
+  GET DIAGNOSTICS smazano_kolize_mezi_cizimi = ROW_COUNT;
 
-  SELECT count(*) INTO po FROM public.cards WHERE user_id = admin_id;
+  UPDATE public.cards
+  SET user_id = admin_id
+  WHERE user_id IS DISTINCT FROM admin_id;
+  GET DIAGNOSTICS prirazeno = ROW_COUNT;
 
-  RAISE NOTICE 'Přiřazeno % karet pod % (%)', po, admin_id, 'gibonart@gmail.com';
+  RAISE NOTICE 'Smazáno (kolize s adminem): %', smazano_kolize_admin;
+  RAISE NOTICE 'Smazáno (duplicitní slug u cizích): %', smazano_kolize_mezi_cizimi;
+  RAISE NOTICE 'Přiřazeno pod admina: %', prirazeno;
+  RAISE NOTICE 'Celkem u admina: %', (SELECT count(*) FROM public.cards WHERE user_id = admin_id);
 END $$;
 
 \echo '=== Po ==='
