@@ -41,21 +41,25 @@ create trigger cards_set_updated_at
 
 alter table public.cards enable row level security;
 
+drop policy if exists "cards_select_own" on public.cards;
 create policy "cards_select_own"
   on public.cards for select
   using (auth.uid() = user_id);
 
 -- Nápověda EA: supabase/ea_hraci_napoveda.sql + napoveda_jmena_z_cards_rpc.sql
 
+drop policy if exists "cards_insert_own" on public.cards;
 create policy "cards_insert_own"
   on public.cards for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "cards_update_own" on public.cards;
 create policy "cards_update_own"
   on public.cards for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "cards_delete_own" on public.cards;
 create policy "cards_delete_own"
   on public.cards for delete
   using (auth.uid() = user_id);

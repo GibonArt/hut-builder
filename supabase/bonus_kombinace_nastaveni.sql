@@ -35,19 +35,23 @@ create trigger bonus_kombinace_set_updated_at
 
 alter table public.bonus_kombinace_nastaveni enable row level security;
 
+drop policy if exists "bonus_kombinace_select_own" on public.bonus_kombinace_nastaveni;
 create policy "bonus_kombinace_select_own"
   on public.bonus_kombinace_nastaveni for select
   using (auth.uid() = user_id);
 
+drop policy if exists "bonus_kombinace_insert_own" on public.bonus_kombinace_nastaveni;
 create policy "bonus_kombinace_insert_own"
   on public.bonus_kombinace_nastaveni for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "bonus_kombinace_update_own" on public.bonus_kombinace_nastaveni;
 create policy "bonus_kombinace_update_own"
   on public.bonus_kombinace_nastaveni for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "bonus_kombinace_delete_own" on public.bonus_kombinace_nastaveni;
 create policy "bonus_kombinace_delete_own"
   on public.bonus_kombinace_nastaveni for delete
   using (auth.uid() = user_id);
