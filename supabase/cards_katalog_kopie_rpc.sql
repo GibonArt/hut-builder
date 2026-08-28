@@ -100,7 +100,7 @@ as $$
     and trim(c.narodnost) = trim(p_narodnost)
     and trim(c.tym) = trim(p_tym)
     and c.liga = p_liga
-    and c.typ_karty = p_typ_karty
+    and public.typ_karty_kanonicky(c.typ_karty) = public.typ_karty_kanonicky(p_typ_karty)
     and c.plat = p_plat
     and (
       (c.ap is null and p_ap is null)
@@ -165,7 +165,7 @@ begin
       and trim(c.narodnost) = trim((v_src).narodnost)
       and trim(c.tym) = trim((v_src).tym)
       and c.liga = (v_src).liga
-      and c.typ_karty = (v_src).typ_karty
+      and public.typ_karty_kanonicky(c.typ_karty) = public.typ_karty_kanonicky((v_src).typ_karty)
       and c.plat = (v_src).plat
       and (
         (c.ap is null and (v_src).ap is null)

@@ -56,7 +56,7 @@ begin
       and trim(c.narodnost) = trim((v_src).narodnost)
       and trim(c.tym) = trim((v_src).tym)
       and c.liga = (v_src).liga
-      and c.typ_karty = (v_src).typ_karty
+      and public.typ_karty_kanonicky(c.typ_karty) = public.typ_karty_kanonicky((v_src).typ_karty)
       and c.plat = (v_src).plat
       and (
         (c.ap is null and (v_src).ap is null)
