@@ -12,6 +12,12 @@ SUPABASE_PROJECT_DIR="${2:-/volume1/docker/supabase-project}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Absolutní cesta — po `cd` do supabase-project by relativní cesta nefungovala.
+case "$AUTH_SQL" in
+  /*) ;;
+  *) AUTH_SQL="$REPO_DIR/$AUTH_SQL" ;;
+esac
+
 if [[ ! -f "$AUTH_SQL" ]]; then
   echo "Chyba: soubor neexistuje: $AUTH_SQL" >&2
   echo "Export: EXPORT_AUTH=1 v export/cloud.env → export-cloud-data.sh → fix-pg17-dump-for-pg15.sh" >&2
