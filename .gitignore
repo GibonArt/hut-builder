@@ -50,4 +50,5 @@ next-env.d.ts
 
 # migrace z cloud Supabase (heslo v CLOUD_URI, dumpy SQL)
 /export/cloud.env
+/export/cloud.password
 /export/*.sql

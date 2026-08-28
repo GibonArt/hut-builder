@@ -2,7 +2,7 @@
 # Export dat HUT Builder z cloud Supabase (supabase.com) přes pg_dump v Dockeru.
 #
 # Konfigurace: export/cloud.env (viz export-cloud.env.example).
-# Na NAS bez IPv6: Session pooler (port 5432), ne Direct db.*.supabase.co.
+# Heslo s @: CLOUD_HOST + CLOUD_USER + CLOUD_PASSWORD (NE CLOUD_URI).
 
 set -euo pipefail
 
@@ -13,6 +13,7 @@ CLOUD_URI="${CLOUD_URI:-}"
 CLOUD_HOST="${CLOUD_HOST:-}"
 CLOUD_USER="${CLOUD_USER:-}"
 CLOUD_PASSWORD="${CLOUD_PASSWORD:-}"
+CLOUD_PASSWORD_FILE="${CLOUD_PASSWORD_FILE:-}"
 CLOUD_PORT="${CLOUD_PORT:-5432}"
 CLOUD_DB="${CLOUD_DB:-postgres}"
 ENV_FILE="${EXPORT_ENV_FILE:-$REPO_DIR/export/cloud.env}"
@@ -22,6 +23,22 @@ if [[ -f "$ENV_FILE" ]]; then
   set -a
   source "$ENV_FILE"
   set +a
+fi
+
+load_password_file() {
+  local path="$1"
+  if [[ ! -f "$path" ]]; then
+    echo "Chyba: CLOUD_PASSWORD_FILE neexistuje: $path" >&2
+    exit 1
+  fi
+  CLOUD_PASSWORD="$(tr -d '\r\n' < "$path")"
+}
+
+if [[ -n "$CLOUD_PASSWORD_FILE" ]]; then
+  case "$CLOUD_PASSWORD_FILE" in
+    /*) load_password_file "$CLOUD_PASSWORD_FILE" ;;
+    *) load_password_file "$REPO_DIR/$CLOUD_PASSWORD_FILE" ;;
+  esac
 fi
 
 extract_pg_host() {
@@ -53,8 +70,18 @@ extract_project_ref() {
   return 1
 }
 
+uri_has_at_in_password() {
+  local uri="$1"
+  local n
+  n="$(printf '%s' "$uri" | tr -cd '@' | wc -c | tr -d ' ')"
+  [[ "${n:-0}" -gt 1 ]]
+}
+
 resolve_connection() {
   if [[ -n "$CLOUD_HOST" && -n "$CLOUD_USER" && -n "$CLOUD_PASSWORD" ]]; then
+    if [[ -n "$CLOUD_URI" ]]; then
+      echo "→ Používám CLOUD_HOST/USER/PASSWORD (CLOUD_URI ignoruji — @ v hesle rozbíjí URI)" >&2
+    fi
     PG_CONN_MODE=flags
     PG_HOST="$CLOUD_HOST"
     PG_USER="$CLOUD_USER"
@@ -63,15 +90,28 @@ resolve_connection() {
     PG_DB="$CLOUD_DB"
     return 0
   fi
+
   if [[ -n "$CLOUD_URI" ]]; then
+    if uri_has_at_in_password "$CLOUD_URI"; then
+      echo "Chyba: heslo v CLOUD_URI obsahuje @ — URI to neumí." >&2
+      echo "" >&2
+      echo "V export/cloud.env smaž CLOUD_URI a použij:" >&2
+      echo "  CLOUD_HOST=aws-0-REGION.pooler.supabase.com" >&2
+      echo "  CLOUD_USER=postgres.TVUJ_REF" >&2
+      echo "  CLOUD_PASSWORD='heslo@s@pec@ial'" >&2
+      echo "" >&2
+      echo "Nebo heslo do souboru (bez uvozovek):" >&2
+      echo "  echo -n 'heslo@s@pec@ial' > export/cloud.password" >&2
+      echo "  CLOUD_PASSWORD_FILE=export/cloud.password" >&2
+      exit 1
+    fi
     PG_CONN_MODE=uri
     PG_URI="$CLOUD_URI"
     PG_HOST="$(extract_pg_host "$CLOUD_URI" || true)"
     return 0
   fi
+
   echo "Chyba: doplň export/cloud.env — viz export-cloud.env.example" >&2
-  echo "  Buď CLOUD_HOST + CLOUD_USER + CLOUD_PASSWORD (heslo se spec. znaky OK v uvozovkách)" >&2
-  echo "  nebo CLOUD_URI s URL-enkódovaným heslem." >&2
   exit 1
 }
 
@@ -102,22 +142,23 @@ fail_direct_ipv6_only() {
   fi
   echo "" >&2
   echo "Chyba: $host nemá IPv4 (jen IPv6). Synology/NAS se na Direct connection nedostane." >&2
-  echo "" >&2
-  echo "V export/cloud.env použij Session pooler (CLOUD_HOST + CLOUD_USER + CLOUD_PASSWORD):" >&2
-  echo "  Dashboard → Database → Connection string → Session pooler" >&2
-  if [[ -n "$ref" ]]; then
-    echo "  CLOUD_HOST=aws-0-TVUJ_REGION.pooler.supabase.com" >&2
-    echo "  CLOUD_USER=postgres.${ref}" >&2
-    echo "  CLOUD_PASSWORD='tvoje heslo'" >&2
-  fi
+  echo "V export/cloud.env použij Session pooler — viz export-cloud.env.example" >&2
   exit 1
+}
+
+write_docker_pgpass_env() {
+  local tmp
+  tmp="$(mktemp "${TMPDIR:-/tmp}/hut-export-pgpass.XXXXXX")"
+  chmod 600 "$tmp"
+  printf 'PGPASSWORD=%s\n' "$PG_PASSWORD" > "$tmp"
+  printf '%s' "$tmp"
 }
 
 docker_pg_dump() {
   local out_file="$1"
   shift
   local -a docker_args=(--rm -v "$EXPORT_DIR:/out")
-  local host ipv4
+  local host ipv4 pgpass_env=""
 
   if [[ -n "${PG_HOST:-}" ]]; then
     case "$PG_HOST" in
@@ -140,10 +181,12 @@ docker_pg_dump() {
   fi
 
   if [[ "$PG_CONN_MODE" == flags ]]; then
-    docker_args+=(-e "PGPASSWORD=${PG_PASSWORD}")
+    pgpass_env="$(write_docker_pgpass_env)"
+    docker_args+=(--env-file "$pgpass_env")
     docker run "${docker_args[@]}" postgres:17 \
       pg_dump -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" "$@" \
       -f "/out/$(basename "$out_file")"
+    rm -f "$pgpass_env"
   else
     docker run "${docker_args[@]}" postgres:17 \
       pg_dump "$PG_URI" "$@" -f "/out/$(basename "$out_file")"
