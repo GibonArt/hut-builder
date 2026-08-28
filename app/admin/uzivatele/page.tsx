@@ -34,5 +34,5 @@ export default async function AdminUzivatelePage() {
     }));
   }
 
-  return <AdminPrehledUzivatelu radky={radky} chyba={chyba} />;
+  return <AdminPrehledUzivatelu radky={radky} chyba={chyba} currentUserId={user.id} />;
 }
