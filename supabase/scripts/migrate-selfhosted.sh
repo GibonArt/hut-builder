@@ -55,17 +55,22 @@ if ! SUPABASE_PROJECT_DIR="$(resolve_compose_dir "$SUPABASE_PROJECT_DIR")"; then
   exit 1
 fi
 
+# shellcheck source=lib/db-psql.sh
+source "$SCRIPT_DIR/lib/db-psql.sh"
+
 run_sql() {
   local file="$1"
   echo ""
   echo "==> $(basename "$file")"
-  docker compose exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$file"
+  run_supabase_psql "$SUPABASE_PROJECT_DIR" < "$file"
 }
 
 cd "$SUPABASE_PROJECT_DIR"
 
+DB_USER="$(resolve_supabase_db_user "$SUPABASE_PROJECT_DIR")"
 echo "Supabase: $SUPABASE_PROJECT_DIR"
 echo "HUT Builder SQL: $REPO_DIR/supabase"
+echo "DB uživatel: $DB_USER"
 
 if [[ "$RESET" -eq 1 ]]; then
   echo ""

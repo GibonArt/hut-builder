@@ -24,15 +24,19 @@ fi
 
 cd "$SUPABASE_PROJECT_DIR"
 
+# shellcheck source=lib/db-psql.sh
+source "$SCRIPT_DIR/lib/db-psql.sh"
+DB_USER="$(resolve_supabase_db_user "$SUPABASE_PROJECT_DIR")"
+echo "DB uživatel: $DB_USER"
+
 echo "Mažu existující data HUT Builder v public…"
-docker compose exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
-  < "$REPO_DIR/supabase/scripts/truncate-hut-public-data.sql"
+run_supabase_psql "$SUPABASE_PROJECT_DIR" < "$REPO_DIR/supabase/scripts/truncate-hut-public-data.sql"
 
 {
   echo "SET session_replication_role = replica;"
   cat "$SQL_FILE"
   echo "SET session_replication_role = DEFAULT;"
-} | docker compose exec -T db psql -U postgres -d postgres -v ON_ERROR_STOP=1
+} | run_supabase_psql "$SUPABASE_PROJECT_DIR"
 
 echo ""
 echo "Import hotovo. Ověř: SELECT count(*) FROM public.cards;"

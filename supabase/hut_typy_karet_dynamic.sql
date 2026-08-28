@@ -3,8 +3,11 @@
 -- Čtení: authenticated. Zápis: stejní editoři jako `bonus_kombinace_global` (`je_bonus_kombinace_editor`).
 --
 -- Spustitelné samostatně. Funkce editora: bonus_kombinace_global.sql (migrate-selfhosted ji spustí dříve).
+-- Při opakované migraci tabulku znovu vytvoří (data doplní sync z Hut Builderu nebo import z cloudu).
 
-create table if not exists public.hut_typy_karet_dynamic (
+drop table if exists public.hut_typy_karet_dynamic cascade;
+
+create table public.hut_typy_karet_dynamic (
   hodnota_filtru text not null,
   jmeno_cs text not null,
   combo_soubor text not null,
