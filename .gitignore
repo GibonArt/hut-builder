@@ -47,3 +47,7 @@ next-env.d.ts
 
 # export předgenerovaných lajn z npm run hutbuilder:kombinace
 /data/hutbuilder-combos/
+
+# migrace z cloud Supabase (heslo v CLOUD_URI, dumpy SQL)
+/export/cloud.env
+/export/*.sql

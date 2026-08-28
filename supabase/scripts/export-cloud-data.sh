@@ -17,11 +17,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 EXPORT_DIR="${EXPORT_DIR:-$REPO_DIR/export}"
 CLOUD_URI="${CLOUD_URI:-}"
+ENV_FILE="${EXPORT_ENV_FILE:-$REPO_DIR/export/cloud.env}"
+
+if [[ -z "$CLOUD_URI" && -f "$ENV_FILE" ]]; then
+  # shellcheck source=/dev/null
+  set -a
+  source "$ENV_FILE"
+  set +a
+fi
 
 if [[ -z "$CLOUD_URI" ]]; then
   echo "Chyba: nastav CLOUD_URI (Direct connection z supabase.com → Database)." >&2
-  echo "Příklad:" >&2
-  echo "  export CLOUD_URI='postgresql://postgres.xxx:heslo@db.xxx.supabase.co:5432/postgres'" >&2
+  echo "" >&2
+  echo "Možnost A — soubor (doporučeno na NAS):" >&2
+  echo "  cp supabase/scripts/export-cloud.env.example export/cloud.env" >&2
+  echo "  nano export/cloud.env   # doplň CLOUD_URI" >&2
+  echo "  sudo ./supabase/scripts/export-cloud-data.sh" >&2
+  echo "" >&2
+  echo "Možnost B — jednorázově v příkazu (sudo nepředá export z shellu!):" >&2
+  echo "  sudo CLOUD_URI='postgresql://postgres.xxx:heslo@db.xxx.supabase.co:5432/postgres' \\" >&2
+  echo "    ./supabase/scripts/export-cloud-data.sh" >&2
   exit 1
 fi
 
