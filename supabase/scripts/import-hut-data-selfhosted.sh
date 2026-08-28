@@ -12,6 +12,14 @@ SUPABASE_PROJECT_DIR="${2:-/volume1/docker/supabase-project}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Relativní cestu k SQL řeš vůči repu nebo cwd, pak absolutní (po cd na supabase-project cat jinak selže).
+if [[ ! -f "$SQL_FILE" && -f "$REPO_DIR/$SQL_FILE" ]]; then
+  SQL_FILE="$REPO_DIR/$SQL_FILE"
+fi
+if [[ -f "$SQL_FILE" && "$SQL_FILE" != /* ]]; then
+  SQL_FILE="$(cd "$(dirname "$SQL_FILE")" && pwd)/$(basename "$SQL_FILE")"
+fi
+
 if [[ ! -f "$SQL_FILE" ]]; then
   echo "Chyba: soubor neexistuje: $SQL_FILE" >&2
   exit 1
