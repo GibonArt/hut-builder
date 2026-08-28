@@ -78,7 +78,7 @@ SQL_FILES=(
   cards_migrate_na_jmeno.sql
   cards_pozice_rk_na_pk.sql
   cards_prodano.sql
-  cards_ea_katalog.sql
+  # cards_ea_katalog.sql — zastaralé (placeholder UUID); místo toho ea_hraci_napoveda.sql
   cards_typ_karty_kanonicky.sql
   ea_hraci_napoveda.sql
   ea_hraci_napoveda_x_factors.sql
