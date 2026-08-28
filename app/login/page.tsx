@@ -39,6 +39,12 @@ export default function LoginPage() {
     if (q.get("error") === "odkaz") {
       setError("Odkaz z e-mailu vypršel nebo je neplatný. Zkus obnovu znovu.");
     }
+    if (q.get("private") === "1") {
+      setError(
+        "HUT je soukromý — přístup má jen administrátor. Tvůj turnaj účet v DB zůstává, jen sem se nepřihlásíš.",
+      );
+      void createClient().auth.signOut();
+    }
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {

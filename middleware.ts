@@ -1,6 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
+import {
+  hutJeSoukromyAdminOnly,
+  hutJeVerejnaAuthCesta,
+} from "@/lib/hutPrivateAccess";
 
 function supabasePublicKey(): string {
   return (
@@ -41,22 +45,45 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
+  const soukromy = hutJeSoukromyAdminOnly();
   const isAdminRoute =
     path.startsWith("/admin") || path.startsWith("/api/admin");
 
-  if (isAdminRoute) {
-    if (!user) {
+  if (soukromy && path === "/register") {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "private=1";
+    return NextResponse.redirect(loginUrl);
+  }
+
+  const vyzadujeAdmina =
+    isAdminRoute || (soukromy && !hutJeVerejnaAuthCesta(path));
+
+  if (!vyzadujeAdmina) {
+    return supabaseResponse;
+  }
+
+  if (!user) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.searchParams.set("next", `${path}${request.nextUrl.search}`);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (!jeBonusAdmin(user.email)) {
+    if (path.startsWith("/api/")) {
+      return NextResponse.json({ error: "Přístup zamítnut." }, { status: 403 });
+    }
+    if (soukromy) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = "/login";
-      loginUrl.searchParams.set("next", `${path}${request.nextUrl.search}`);
+      loginUrl.search = "private=1";
       return NextResponse.redirect(loginUrl);
     }
-    if (!jeBonusAdmin(user.email)) {
-      const home = request.nextUrl.clone();
-      home.pathname = "/";
-      home.search = "";
-      return NextResponse.redirect(home);
-    }
+    const home = request.nextUrl.clone();
+    home.pathname = "/";
+    home.search = "";
+    return NextResponse.redirect(home);
   }
 
   return supabaseResponse;
