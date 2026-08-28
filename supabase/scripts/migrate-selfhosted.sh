@@ -100,6 +100,7 @@ SQL_FILES=(
   napoveda_jmena_z_cards_rpc.sql
   admin_prehled_uzivatelu_karet.sql
   data_api_grants_doplneni.sql
+  fix_selfhosted_hut_grants.sql
 )
 
 for sql in "${SQL_FILES[@]}"; do
