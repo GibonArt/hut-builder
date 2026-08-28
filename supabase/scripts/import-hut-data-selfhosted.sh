@@ -46,21 +46,19 @@ fi
 
 echo "DB uživatel: $DB_USER"
 
-echo "Mažu existující data HUT Builder v public…"
-run_supabase_psql "$SUPABASE_PROJECT_DIR" < "$REPO_DIR/supabase/scripts/truncate-hut-public-data.sql"
-
 IMPORT_TMP="$(mktemp /tmp/hut-builder-import.XXXXXX.sql)"
 trap 'rm -f "$IMPORT_TMP"' EXIT
 
 {
   echo "SET session_replication_role = replica;"
+  cat "$REPO_DIR/supabase/scripts/truncate-hut-public-data.sql"
   filter_pg17_dump_for_pg15 < "$SQL_FILE"
   echo "SET session_replication_role = DEFAULT;"
 } > "$IMPORT_TMP"
 
-echo "Importuji dump ($(wc -c < "$IMPORT_TMP" | tr -d ' ') B) přes psql -f v kontejneru…"
+echo "Importuji dump ($(wc -c < "$IMPORT_TMP" | tr -d ' ') B) — truncate + data v jedné transakci…"
 docker cp "$IMPORT_TMP" "${DB_CID}:/tmp/hut-builder-import.sql"
-docker compose exec -T db psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 \
+docker compose exec -T db psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 --single-transaction \
   -f /tmp/hut-builder-import.sql
 docker compose exec -T db rm -f /tmp/hut-builder-import.sql
 
