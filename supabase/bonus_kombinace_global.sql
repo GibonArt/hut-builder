@@ -23,6 +23,9 @@ create table if not exists public.bonus_kombinace_global (
   primary key (typ_kombinace)
 );
 
+-- Na sdíleném supabase-project může funkce existovat pod jiným ownerem (cloud / Studio).
+drop function if exists public.je_bonus_kombinace_editor() cascade;
+
 create or replace function public.je_bonus_kombinace_editor()
 returns boolean
 language sql
