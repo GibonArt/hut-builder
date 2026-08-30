@@ -215,3 +215,5 @@ grant execute on function public.cards_kopiruj_kartu_do_inventare(uuid, text) to
 
 comment on function public.cards_kopiruj_kartu_do_inventare is
   'Vloží kopii karty jiného uživatele do inventáře přihlášeného účtu (nový card_slug).';
+
+notify pgrst, 'reload schema';

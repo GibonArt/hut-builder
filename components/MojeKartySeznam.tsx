@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, startTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -17,6 +17,11 @@ import { HUT_POZICE, HUT_POZICE_ZKRATKA } from "@/lib/hutPozice";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { HutShell } from "@/components/HutShell";
 import { InventarKartaPolozka } from "@/components/InventarKartaPolozka";
+import {
+  MojeKartySeznamHlava,
+  MojeKartySeznamRadek,
+} from "@/components/MojeKartySeznamRadek";
+import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import { useTypyKaret } from "@/components/TypyKaretProvider";
 import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
@@ -26,6 +31,7 @@ import {
   parseOvrVolitelne,
 } from "@/lib/optimalizatorFormaci";
 import { useRazeniKaret } from "@/lib/useRazeniKaret";
+import { useZobrazeniKaret } from "@/lib/useZobrazeniKaret";
 import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 
 type FiltrPozice = Pozice | "vse";
@@ -53,8 +59,14 @@ export function MojeKartySeznam() {
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
   const [razeniKaret, nastavRazeniKaret] = useRazeniKaret();
+  const [zobrazeni, nastavZobrazeni] = useZobrazeniKaret();
   const [mazuId, setMazuId] = useState<string | null>(null);
   const [meniProdanoId, setMeniProdanoId] = useState<string | null>(null);
+  /** Karty označené prodáno zůstanou vidět, dokud uživatel nezmění filtr Prodáno. */
+  const [drzenoPoProdano, setDrzenoPoProdano] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const filtrProdanoPredchozi = useRef<FiltrProdano>(filtrProdano);
 
   const { typyKaret, aliasMapZBaze } = useTypyKaret();
   const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
@@ -98,6 +110,13 @@ export function MojeKartySeznam() {
     };
   }, [user?.id, supabase]);
 
+  useEffect(() => {
+    if (filtrProdanoPredchozi.current !== filtrProdano) {
+      filtrProdanoPredchozi.current = filtrProdano;
+      setDrzenoPoProdano(new Set());
+    }
+  }, [filtrProdano]);
+
   const minOvr = useMemo(() => parseOvrVolitelne(minOvrStr), [minOvrStr]);
   const maxOvr = useMemo(() => parseOvrVolitelne(maxOvrStr), [maxOvrStr]);
   const chybaOvrRozsah =
@@ -114,13 +133,15 @@ export function MojeKartySeznam() {
       rows = rows.filter((k) => k.pozice === filtrPozice);
     }
     if (filtrProdano === "neprodane") {
-      rows = rows.filter((k) => k.prodano !== true);
+      rows = rows.filter(
+        (k) => k.prodano !== true || drzenoPoProdano.has(k.id),
+      );
     } else if (filtrProdano === "prodane") {
       rows = rows.filter((k) => k.prodano === true);
     }
     rows = filtrujKartyPodleOvr(rows, minOvr, maxOvr);
     return rows;
-  }, [karty, filtrPozice, filtrProdano, minOvr, maxOvr]);
+  }, [karty, filtrPozice, filtrProdano, minOvr, maxOvr, drzenoPoProdano]);
 
   const filtrovaneSerazene = useMemo(
     () => seraditKarty(filtrovane, razeniKaret),
@@ -180,6 +201,12 @@ export function MojeKartySeznam() {
         return;
       }
       setKarty((prev) => prev.filter((k) => k.id !== idKarty));
+      setDrzenoPoProdano((prev) => {
+        if (!prev.has(idKarty)) return prev;
+        const next = new Set(prev);
+        next.delete(idKarty);
+        return next;
+      });
       toast.success("Karta byla smazána.");
     },
     [user?.id, supabase],
@@ -199,6 +226,17 @@ export function MojeKartySeznam() {
       setKarty((prev) =>
         prev.map((c) => (c.id === k.id ? aktualizovana : c)),
       );
+      if (prodano && filtrProdano === "neprodane") {
+        setDrzenoPoProdano((prev) => new Set(prev).add(k.id));
+      }
+      if (!prodano) {
+        setDrzenoPoProdano((prev) => {
+          if (!prev.has(k.id)) return prev;
+          const next = new Set(prev);
+          next.delete(k.id);
+          return next;
+        });
+      }
 
       const { error } = await aktualizujKartu(
         supabase,
@@ -214,12 +252,20 @@ export function MojeKartySeznam() {
         setKarty((prev) =>
           prev.map((c) => (c.id === k.id ? k : c)),
         );
+        if (prodano && filtrProdano === "neprodane") {
+          setDrzenoPoProdano((prev) => {
+            if (!prev.has(k.id)) return prev;
+            const next = new Set(prev);
+            next.delete(k.id);
+            return next;
+          });
+        }
         setChyba(ceskaZpravaAuthNeboDb(error.message));
         return;
       }
       toast.success(prodano ? "Karta označena jako prodaná." : "Karta znovu aktivní v optimalizátoru.");
     },
-    [user?.id, supabase, typKartyMetaOpts, karty],
+    [user?.id, supabase, typKartyMetaOpts, karty, filtrProdano],
   );
 
   const formZakazany = !user || authLoading || mazuId !== null || meniProdanoId !== null;
@@ -251,6 +297,35 @@ export function MojeKartySeznam() {
         ) : null}
 
         <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2">
+          <div
+            className="flex min-w-0 flex-wrap items-center gap-2"
+            role="group"
+            aria-label="Zobrazení karet"
+          >
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+              Zobrazení
+            </span>
+            {(
+              [
+                ["mrizka", "Mřížka"] as const,
+                ["seznam", "Seznam"] as const,
+              ] satisfies readonly (readonly ["mrizka" | "seznam", string])[]
+            ).map(([hodnota, label]) => (
+              <button
+                key={hodnota}
+                type="button"
+                onClick={() => nastavZobrazeni(hodnota)}
+                className={[
+                  "touch-manipulation rounded-full border px-3 py-2 text-xs font-medium transition-colors sm:py-1.5",
+                  zobrazeni === hodnota
+                    ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                    : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                ].join(" ")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div
             className="flex min-w-0 flex-wrap items-center gap-2"
             role="group"
@@ -454,23 +529,46 @@ export function MojeKartySeznam() {
               "Žádná karta pro zvolenou kombinaci filtrů (OVR, pozice, prodáno)."
             )}
           </div>
+        ) : zobrazeni === "seznam" ? (
+          <TypKartyMetaOptsProvider value={typKartyMetaOpts}>
+            <div className="mt-8 overflow-x-auto rounded-xl border border-[var(--hut-border)] bg-[var(--hut-surface)]/52">
+              <MojeKartySeznamHlava />
+              <ul className="divide-y divide-[var(--hut-border)]/40">
+                {filtrovaneSerazene.map((k) => (
+                  <MojeKartySeznamRadek
+                    key={k.id}
+                    karta={k}
+                    onEditovat={editovat}
+                    onDuplikovat={duplikovat}
+                    onSmazat={smazat}
+                    onProdanoChange={zmenProdano}
+                    meniProdanoId={meniProdanoId}
+                    mazuId={mazuId}
+                    formZakazany={formZakazany}
+                  />
+                ))}
+              </ul>
+            </div>
+          </TypKartyMetaOptsProvider>
         ) : (
-          <ul className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 md:gap-3">
-            {filtrovaneSerazene.map((k) => (
-              <InventarKartaPolozka
-                key={k.id}
-                mrizkaCtvrtiny
-                karta={k}
-                narodnostiVolby={narodnostiVolby}
-                onEditovat={editovat}
-                onDuplikovat={duplikovat}
-                onSmazat={smazat}
-                onProdanoChange={zmenProdano}
-                meniProdanoId={meniProdanoId}
-                formZakazany={formZakazany}
-              />
-            ))}
-          </ul>
+          <TypKartyMetaOptsProvider value={typKartyMetaOpts}>
+            <ul className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 md:gap-3">
+              {filtrovaneSerazene.map((k) => (
+                <InventarKartaPolozka
+                  key={k.id}
+                  mrizkaCtvrtiny
+                  karta={k}
+                  narodnostiVolby={narodnostiVolby}
+                  onEditovat={editovat}
+                  onDuplikovat={duplikovat}
+                  onSmazat={smazat}
+                  onProdanoChange={zmenProdano}
+                  meniProdanoId={meniProdanoId}
+                  formZakazany={formZakazany}
+                />
+              ))}
+            </ul>
+          </TypKartyMetaOptsProvider>
         )}
       </div>
       <FloatingZpetNahoru />

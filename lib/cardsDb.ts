@@ -11,6 +11,12 @@ import {
 const RUKY: Ruka[] = ["LR", "PR"];
 const LIGA_SET = new Set<Liga>(LIGY_V_PORADI);
 
+/** PostgREST / Supabase API vrací max. tolik řádků na jeden dotaz (výchozí 1000). */
+const CARDS_SELECT_PAGE_SIZE = 1000;
+
+const CARDS_SELECT_COLUMNS =
+  "card_slug, jmeno, ovr, pozice, preferovana_ruka, narodnost, tym, liga, typ_karty, plat, ap, atributy, prodano";
+
 export type CardRow = {
   card_slug: string;
   jmeno: string;
@@ -247,21 +253,33 @@ export async function nactiKartyUzivatele(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<{ data: HutCard[]; error: Error | null }> {
-  const { data, error } = await supabase
-    .from("cards")
-    .select(
-      "card_slug, jmeno, ovr, pozice, preferovana_ruka, narodnost, tym, liga, typ_karty, plat, ap, atributy, prodano",
-    )
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true });
+  const karty: HutCard[] = [];
+  let offset = 0;
 
-  if (error) {
-    return { data: [], error: new Error(error.message) };
+  while (true) {
+    const { data, error } = await supabase
+      .from("cards")
+      .select(CARDS_SELECT_COLUMNS)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .range(offset, offset + CARDS_SELECT_PAGE_SIZE - 1);
+
+    if (error) {
+      return { data: [], error: new Error(error.message) };
+    }
+
+    const rows = (data ?? []) as CardRow[];
+    for (const row of rows) {
+      const k = rowToHutCard(row);
+      if (k) karty.push(k);
+    }
+
+    if (rows.length < CARDS_SELECT_PAGE_SIZE) {
+      break;
+    }
+    offset += CARDS_SELECT_PAGE_SIZE;
   }
-  const rows = (data ?? []) as CardRow[];
-  const karty = rows
-    .map(rowToHutCard)
-    .filter((c): c is HutCard => c !== null);
+
   return { data: karty, error: null };
 }
 
