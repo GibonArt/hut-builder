@@ -25,12 +25,13 @@ import { TypKartyMetaOptsProvider } from "@/components/TypKartyMetaOptsContext";
 import { useTypyKaret } from "@/components/TypyKaretProvider";
 import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
-import { seraditKarty, type RazeniKaret } from "@/lib/hutRazeniKaret";
+import { seraditKarty, seraditKartySeznam, type RazeniKaret, type RazeniKaretSeznam } from "@/lib/hutRazeniKaret";
 import {
   filtrujKartyPodleOvr,
   parseOvrVolitelne,
 } from "@/lib/optimalizatorFormaci";
 import { useRazeniKaret } from "@/lib/useRazeniKaret";
+import { useRazeniKaretSeznam } from "@/lib/useRazeniKaretSeznam";
 import { useZobrazeniKaret } from "@/lib/useZobrazeniKaret";
 import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 
@@ -59,6 +60,7 @@ export function MojeKartySeznam() {
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
   const [razeniKaret, nastavRazeniKaret] = useRazeniKaret();
+  const [razeniSeznam, nastavRazeniSeznam] = useRazeniKaretSeznam();
   const [zobrazeni, nastavZobrazeni] = useZobrazeniKaret();
   const [mazuId, setMazuId] = useState<string | null>(null);
   const [meniProdanoId, setMeniProdanoId] = useState<string | null>(null);
@@ -143,10 +145,12 @@ export function MojeKartySeznam() {
     return rows;
   }, [karty, filtrPozice, filtrProdano, minOvr, maxOvr, drzenoPoProdano]);
 
-  const filtrovaneSerazene = useMemo(
-    () => seraditKarty(filtrovane, razeniKaret),
-    [filtrovane, razeniKaret],
-  );
+  const filtrovaneSerazene = useMemo(() => {
+    if (zobrazeni === "seznam") {
+      return seraditKartySeznam(filtrovane, razeniSeznam);
+    }
+    return seraditKarty(filtrovane, razeniKaret);
+  }, [filtrovane, razeniKaret, razeniSeznam, zobrazeni]);
 
   const editovat = useCallback(
     (k: HutCard) => {
@@ -334,27 +338,50 @@ export function MojeKartySeznam() {
             <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
               Řazení
             </span>
-            {(
-              [
-                ["pridani", "Podle přidání"] as const,
-                ["ovr-asc", "OVR ↑ nejnižší"] as const,
-                ["ovr-desc", "OVR ↓ nejvyšší"] as const,
-              ] satisfies readonly (readonly [RazeniKaret, string])[]
-            ).map(([hodnota, label]) => (
-              <button
-                key={hodnota}
-                type="button"
-                onClick={() => nastavRazeniKaret(hodnota)}
-              className={[
-                "touch-manipulation rounded-full border px-3 py-2 text-xs font-medium transition-colors sm:py-1.5",
-                razeniKaret === hodnota
-                    ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
-                    : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
-                ].join(" ")}
-              >
-                {label}
-              </button>
-            ))}
+            {zobrazeni === "seznam"
+              ? (
+                  [
+                    ["ovr-desc", "OVR ↓"] as const,
+                    ["ovr-asc", "OVR ↑"] as const,
+                    ["jmeno-asc", "Jméno A–Z"] as const,
+                    ["jmeno-desc", "Jméno Z–A"] as const,
+                  ] satisfies readonly (readonly [RazeniKaretSeznam, string])[]
+                ).map(([hodnota, label]) => (
+                  <button
+                    key={hodnota}
+                    type="button"
+                    onClick={() => nastavRazeniSeznam(hodnota)}
+                    className={[
+                      "touch-manipulation rounded-full border px-3 py-2 text-xs font-medium transition-colors sm:py-1.5",
+                      razeniSeznam === hodnota
+                        ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                        : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))
+              : (
+                  [
+                    ["pridani", "Podle přidání"] as const,
+                    ["ovr-asc", "OVR ↑ nejnižší"] as const,
+                    ["ovr-desc", "OVR ↓ nejvyšší"] as const,
+                  ] satisfies readonly (readonly [RazeniKaret, string])[]
+                ).map(([hodnota, label]) => (
+                  <button
+                    key={hodnota}
+                    type="button"
+                    onClick={() => nastavRazeniKaret(hodnota)}
+                    className={[
+                      "touch-manipulation rounded-full border px-3 py-2 text-xs font-medium transition-colors sm:py-1.5",
+                      razeniKaret === hodnota
+                        ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
+                        : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
           </div>
           <div
             className="flex min-w-0 flex-wrap items-center gap-2"
