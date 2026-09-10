@@ -2,6 +2,8 @@ import {
   TYPY_BONUSU_KOMBINACE,
   type TypBonusuKombinace,
 } from "@/lib/bonusKombinaceDb";
+import type { Sezona } from "@/lib/sezona";
+import { SEZONA_VYCHOZI } from "@/lib/sezona";
 
 export const SOUPISKA_POZADOVANE = {
   utok: 4,
@@ -63,16 +65,25 @@ export type UlozenaSoupiskaNamedV2 = {
   nahled: NahledSoupisky;
 };
 
-function draftKey(userId: string): string {
+function draftKey(userId: string, sezona: Sezona): string {
+  return `hut-opt-soupiska-draft-v1-${sezona}-${userId}`;
+}
+
+function listKey(userId: string, sezona: Sezona): string {
+  return `hut-opt-soupisky-v2-${sezona}-${userId}`;
+}
+
+/** Bez sezóny — jen migrace NHL26 draftu. */
+function legacyKey(userId: string): string {
+  return `hut-opt-soupiska-v1-${userId}`;
+}
+
+function legacyDraftKeyNhl26(userId: string): string {
   return `hut-opt-soupiska-draft-v1-${userId}`;
 }
 
-function listKey(userId: string): string {
+function legacyListKeyNhl26(userId: string): string {
   return `hut-opt-soupisky-v2-${userId}`;
-}
-
-function legacyKey(userId: string): string {
-  return `hut-opt-soupiska-v1-${userId}`;
 }
 
 export function prazdneVyberySoupisky(): VyberySoupiskyPodleTypu {
@@ -114,11 +125,17 @@ export function obnovVyberyZNactenych(
 }
 
 /** Koncept rozpracované soupisky (auto-uložení po Hledat). */
-export function nactiDraftSoupisku(userId: string): UlozenaSoupiskaOptV1 | null {
+export function nactiDraftSoupisku(
+  userId: string,
+  sezona: Sezona = SEZONA_VYCHOZI,
+): UlozenaSoupiskaOptV1 | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(draftKey(userId));
-    if (!raw) return nactiLegacySoupisku(userId);
+    const raw = window.localStorage.getItem(draftKey(userId, sezona));
+    if (!raw) {
+      if (sezona === "nhl26") return nactiLegacySoupisku(userId);
+      return null;
+    }
     const parsed = JSON.parse(raw) as UlozenaSoupiskaOptV1;
     if (parsed?.v !== 1 || typeof parsed.ulozeno !== "string") return null;
     return parsed;
@@ -129,7 +146,9 @@ export function nactiDraftSoupisku(userId: string): UlozenaSoupiskaOptV1 | null 
 
 function nactiLegacySoupisku(userId: string): UlozenaSoupiskaOptV1 | null {
   try {
-    const raw = window.localStorage.getItem(legacyKey(userId));
+    const raw =
+      window.localStorage.getItem(legacyDraftKeyNhl26(userId)) ||
+      window.localStorage.getItem(legacyKey(userId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as UlozenaSoupiskaOptV1;
     if (parsed?.v !== 1 || typeof parsed.ulozeno !== "string") return null;
@@ -140,13 +159,17 @@ function nactiLegacySoupisku(userId: string): UlozenaSoupiskaOptV1 | null {
 }
 
 /** @deprecated alias pro draft */
-export function nactiUlozenouSoupisku(userId: string): UlozenaSoupiskaOptV1 | null {
-  return nactiDraftSoupisku(userId);
+export function nactiUlozenouSoupisku(
+  userId: string,
+  sezona: Sezona = SEZONA_VYCHOZI,
+): UlozenaSoupiskaOptV1 | null {
+  return nactiDraftSoupisku(userId, sezona);
 }
 
 export function ulozDraftSoupisku(
   userId: string,
   data: Omit<UlozenaSoupiskaOptV1, "v" | "ulozeno">,
+  sezona: Sezona = SEZONA_VYCHOZI,
 ): void {
   if (typeof window === "undefined") return;
   const payload: UlozenaSoupiskaOptV1 = {
@@ -154,26 +177,36 @@ export function ulozDraftSoupisku(
     ulozeno: new Date().toISOString(),
     ...data,
   };
-  window.localStorage.setItem(draftKey(userId), JSON.stringify(payload));
+  window.localStorage.setItem(draftKey(userId, sezona), JSON.stringify(payload));
 }
 
 /** @deprecated alias pro draft */
 export function ulozSoupiskuOpt(
   userId: string,
   data: Omit<UlozenaSoupiskaOptV1, "v" | "ulozeno">,
+  sezona: Sezona = SEZONA_VYCHOZI,
 ): void {
-  ulozDraftSoupisku(userId, data);
+  ulozDraftSoupisku(userId, data, sezona);
 }
 
-export function smazDraftSoupisku(userId: string): void {
+export function smazDraftSoupisku(
+  userId: string,
+  sezona: Sezona = SEZONA_VYCHOZI,
+): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(draftKey(userId));
-  window.localStorage.removeItem(legacyKey(userId));
+  window.localStorage.removeItem(draftKey(userId, sezona));
+  if (sezona === "nhl26") {
+    window.localStorage.removeItem(legacyDraftKeyNhl26(userId));
+    window.localStorage.removeItem(legacyKey(userId));
+  }
 }
 
 /** @deprecated */
-export function smazUlozenouSoupisku(userId: string): void {
-  smazDraftSoupisku(userId);
+export function smazUlozenouSoupisku(
+  userId: string,
+  sezona: Sezona = SEZONA_VYCHOZI,
+): void {
+  smazDraftSoupisku(userId, sezona);
 }
 
 function parseSeznamV2(raw: string): UlozenaSoupiskaNamedV2[] {
@@ -189,10 +222,16 @@ function parseSeznamV2(raw: string): UlozenaSoupiskaNamedV2[] {
   );
 }
 
-export function nactiPojmenovaneSoupisky(userId: string): UlozenaSoupiskaNamedV2[] {
+export function nactiPojmenovaneSoupisky(
+  userId: string,
+  sezona: Sezona = SEZONA_VYCHOZI,
+): UlozenaSoupiskaNamedV2[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(listKey(userId));
+    let raw = window.localStorage.getItem(listKey(userId, sezona));
+    if (!raw && sezona === "nhl26") {
+      raw = window.localStorage.getItem(legacyListKeyNhl26(userId));
+    }
     if (!raw) return [];
     return parseSeznamV2(raw).sort((a, b) => b.ulozeno.localeCompare(a.ulozeno));
   } catch {
@@ -203,8 +242,9 @@ export function nactiPojmenovaneSoupisky(userId: string): UlozenaSoupiskaNamedV2
 export function ulozPojmenovanouSoupisku(
   userId: string,
   entry: Omit<UlozenaSoupiskaNamedV2, "v" | "id" | "ulozeno"> & { id?: string },
+  sezona: Sezona = SEZONA_VYCHOZI,
 ): UlozenaSoupiskaNamedV2 {
-  const seznam = nactiPojmenovaneSoupisky(userId);
+  const seznam = nactiPojmenovaneSoupisky(userId, sezona);
   const nova: UlozenaSoupiskaNamedV2 = {
     v: 2,
     id: entry.id ?? crypto.randomUUID(),
@@ -219,13 +259,17 @@ export function ulozPojmenovanouSoupisku(
   const idx = seznam.findIndex((s) => s.id === nova.id);
   const next = idx >= 0 ? seznam.map((s, i) => (i === idx ? nova : s)) : [nova, ...seznam];
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(listKey(userId), JSON.stringify(next));
+    window.localStorage.setItem(listKey(userId, sezona), JSON.stringify(next));
   }
   return nova;
 }
 
-export function smazPojmenovanouSoupisku(userId: string, id: string): void {
+export function smazPojmenovanouSoupisku(
+  userId: string,
+  id: string,
+  sezona: Sezona = SEZONA_VYCHOZI,
+): void {
   if (typeof window === "undefined") return;
-  const next = nactiPojmenovaneSoupisky(userId).filter((s) => s.id !== id);
-  window.localStorage.setItem(listKey(userId), JSON.stringify(next));
+  const next = nactiPojmenovaneSoupisky(userId, sezona).filter((s) => s.id !== id);
+  window.localStorage.setItem(listKey(userId, sezona), JSON.stringify(next));
 }

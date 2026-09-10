@@ -5,7 +5,8 @@ import {
   type HutbuilderLineType,
 } from "@/lib/hutbuilderGetLines";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
-import { createClient } from "@/lib/supabase/server";
+import { sezonaZSearchParams } from "@/lib/sezona";
+import { createAuthClient } from "@/lib/supabase/server";
 
 function jeLineType(s: string | null): s is HutbuilderLineType {
   return s === "forwards" || s === "defense" || s === "goalie";
@@ -13,7 +14,7 @@ function jeLineType(s: string | null): s is HutbuilderLineType {
 
 /** Proxy jedné stránky `get_lines.php` (admin). Klient volá ve smyčce kvůli limitům serverless. */
 export async function GET(req: Request) {
-  const supabase = await createClient();
+  const supabase = await createAuthClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -23,6 +24,7 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
+  const sezona = sezonaZSearchParams(url.searchParams);
   const lineTypeRaw = url.searchParams.get("lineType");
   const page = Math.max(1, Math.floor(Number(url.searchParams.get("page")) || 1));
   const timeoutMs = Math.min(
@@ -54,6 +56,7 @@ export async function GET(req: Request) {
   try {
     const data = await fetchHutbuilderLinesPage(lineTypeRaw, page, timeoutMs, {
       optimizeFor,
+      sezona,
     });
     if (data != null && typeof data === "object" && "error" in data && (data as { error?: boolean }).error) {
       const msg = (data as { message?: string }).message ?? "Chyba Hut Builder API";

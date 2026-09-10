@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { useSezona } from "@/components/SezonaProvider";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
 import {
   HUT_PENDING_HOME_SECTION_KEY,
@@ -19,7 +20,7 @@ const NAV_INVENTAR = {
 };
 
 const NAV_BONUSY = {
-  href: "/nastaveni-bonusu" as const,
+  path: "/nastaveni-bonusu" as const,
   label: "Nastavení bonusů",
   hint: "Kombinace synergií",
 };
@@ -70,6 +71,7 @@ export function HutShell({
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading, signOut } = useAuth();
+  const { sezona, label: sezonaLabel, cesta, nhl27DbChybi } = useSezona();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const zavritMobilniMenu = useCallback(() => setMobileNavOpen(false), []);
@@ -109,9 +111,10 @@ export function HutShell({
     return () => window.clearTimeout(id);
   }, [mobileNavOpen]);
 
-  const naDomovske = pathname === "/";
-  const naMojeKarty = pathname === "/moje-karty";
-  const naNastaveniBonusu = pathname === "/nastaveni-bonusu";
+  /** Domovská stránka sezóny `/nhl26` nebo `/nhl27` (inventář + optimalizátor). */
+  const naDomovske = pathname === cesta() || pathname === `/${sezona}`;
+  const naMojeKarty = pathname === cesta("/moje-karty");
+  const naNastaveniBonusu = pathname === cesta("/nastaveni-bonusu");
   const naNastaveniUctu = pathname === "/nastaveni-uctu";
   const naAdminUzivatele = pathname === "/admin/uzivatele";
   const zobrazitOdkazBonusy = Boolean(user && jeBonusAdmin(user.email));
@@ -196,6 +199,13 @@ export function HutShell({
         >
           <Link
             href="/"
+            onClick={zavritMobilniMenu}
+            className="mb-2 block rounded-xl px-3 py-2 text-left text-xs font-medium text-[var(--hut-lime)] transition-colors hover:bg-[var(--hut-surface-raised)]/60"
+          >
+            ← Rozcestník · {sezonaLabel}
+          </Link>
+          <Link
+            href={cesta()}
             onClick={(e) => {
               zavritMobilniMenu();
               if (naDomovske && onHomeSectionChange) {
@@ -224,7 +234,7 @@ export function HutShell({
           </Link>
 
           <Link
-            href="/moje-karty"
+            href={cesta("/moje-karty")}
             onClick={zavritMobilniMenu}
             className={[
               "group rounded-xl px-3 py-3 text-left transition-colors",
@@ -272,7 +282,7 @@ export function HutShell({
           {!loading && zobrazitOdkazBonusy ? (
             <>
               <Link
-                href={NAV_BONUSY.href}
+                href={cesta(NAV_BONUSY.path)}
                 onClick={zavritMobilniMenu}
                 className={[
                   "group rounded-xl px-3 py-3 text-left transition-colors",
@@ -325,7 +335,7 @@ export function HutShell({
                 } catch {
                   /* private mode atd. */
                 }
-                router.push("/");
+                router.push(cesta());
                 return;
               }
               onHomeSectionChange?.(NAV_OPTIMALIZATOR.id);
@@ -448,6 +458,16 @@ export function HutShell({
           style={mainStyle}
         >
           <div className={`min-h-full w-full ${mainInnerClassName}`}>
+            {nhl27DbChybi ? (
+              <div
+                role="status"
+                className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+              >
+                NHL 27 databáze není nastavená (`NEXT_PUBLIC_SUPABASE_NHL27_URL`).
+                Dokud chybí, appka může padat na Auth / NHL26. Viz{" "}
+                <span className="font-medium">docs/NHL27-SETUP.md</span>.
+              </div>
+            ) : null}
             {children}
           </div>
         </main>

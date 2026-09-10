@@ -3,25 +3,31 @@
  * Stejná logika jako POST /api/admin/sync-typy-karet (bez prohlížeče).
  *
  * Vyžaduje v .env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * NHL27: NEXT_PUBLIC_SUPABASE_NHL27_URL, SUPABASE_NHL27_SERVICE_ROLE_KEY
  *
  * npm run sync:typy-karet
+ * npm run sync:typy-karet -- --sezona=nhl27
  */
 import { upsertDynamickeTypyKaret } from "@/lib/hutdbTypKaretDynamicDb";
 import {
   dynamicRadkyZComboFinderHtml,
   noveTypyOprotiStatickemuKatalogu,
 } from "@/lib/hutdbTypKaretSync";
-import { HUTBUILDER_COMBO_FINDER_REFERER } from "@/lib/hutbuilderGetLines";
+import { hutbuilderConfigProSezonu } from "@/lib/hutbuilderSezonaConfig";
+import { labelSezony, parseSezonaZArgv } from "@/lib/sezona";
 import { createSupabaseServiceClient } from "@/lib/supabaseServiceClient";
-
-const COMBO_FINDER = "https://nhlhutbuilder.com/combo-finder.php";
+import { dataSupabaseEnv } from "@/lib/supabase/env";
 
 async function main() {
-  process.stderr.write("Stahuji combo-finder.php…\n");
-  const res = await fetch(COMBO_FINDER, {
+  const sezona = parseSezonaZArgv(process.argv.slice(2));
+  const cfg = hutbuilderConfigProSezonu(sezona);
+  process.stderr.write(
+    `Sezóna ${labelSezony(sezona)} — stahuji ${cfg.comboFinderUrl}…\n`,
+  );
+  const res = await fetch(cfg.comboFinderUrl, {
     headers: {
       "User-Agent": "HUT-App/1.0 (NAS sync card types; combo-finder)",
-      Referer: HUTBUILDER_COMBO_FINDER_REFERER,
+      Referer: cfg.comboFinderReferer,
       Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
     },
     redirect: "follow",
@@ -42,7 +48,15 @@ async function main() {
     process.exit(1);
   }
 
-  const supabase = createSupabaseServiceClient();
+  const supabase = createSupabaseServiceClient(sezona);
+  const env = dataSupabaseEnv(sezona);
+  try {
+    const u = new URL(env.url);
+    process.stderr.write(`Supabase: ${u.protocol}//${u.hostname}\n`);
+  } catch {
+    /* ignore */
+  }
+
   const { data: existujiciRadky, error: chybaExistujicich } = await supabase
     .from("hut_typy_karet_dynamic")
     .select("hodnota_filtru");
@@ -75,7 +89,7 @@ async function main() {
 
   const nove = noveTypyOprotiStatickemuKatalogu(rows);
   process.stderr.write(
-    `\nHotovo: ${rows.length} typů, nových v DB: ${novychVDb}, aktualizováno: ${rows.length - novychVDb}\n`,
+    `\nHotovo (${sezona}): ${rows.length} typů, nových v DB: ${novychVDb}, aktualizováno: ${rows.length - novychVDb}\n`,
   );
   if (nove.length > 0) {
     process.stderr.write(

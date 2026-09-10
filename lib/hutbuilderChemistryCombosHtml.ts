@@ -5,17 +5,21 @@ import {
   type TypBonusuKombinace,
 } from "@/lib/bonusKombinaceDb";
 import { najdiMetaTypuKarty } from "@/lib/hutdbTypKaret";
+import { hutbuilderConfigProSezonu } from "@/lib/hutbuilderSezonaConfig";
 import { narodnostKodZHutbuilderJmena } from "@/lib/narodnosti";
+import { SEZONA_VYCHOZI, type Sezona } from "@/lib/sezona";
 import { najdiTymPodlePresnehoNazvu } from "@/lib/tymyPodleLigy";
 import type { TypKombinaceBonusu } from "@/types";
 
 /** Wildcard slot na Chemistry Combos = libovolný typ karty (Hut Builder „wild card“). */
 export const HUTBUILDER_WILDCARD_TYP_KARTY = "*";
 
+/** @deprecated Preferuj hutbuilderConfigProSezonu(sezona).chemistryCombosUrl */
 export const HUTBUILDER_CHEMISTRY_COMBOS_URL =
-  "https://nhlhutbuilder.com/chemistry-combos.php";
+  hutbuilderConfigProSezonu(SEZONA_VYCHOZI).chemistryCombosUrl;
+/** @deprecated Preferuj hutbuilderConfigProSezonu(sezona).chemistryCombosReferer */
 export const HUTBUILDER_CHEMISTRY_COMBOS_REFERER =
-  "https://nhlhutbuilder.com/chemistry-combos.php";
+  hutbuilderConfigProSezonu(SEZONA_VYCHOZI).chemistryCombosReferer;
 
 type SelectorDruh = "team" | "nationality" | "card";
 
@@ -187,18 +191,22 @@ export function radkyZChemistryCombosHtml(html: string): ChemistryCombosParseVys
   };
 }
 
-export async function stahniChemistryCombosHtml(timeoutMs = 55_000): Promise<string> {
+export async function stahniChemistryCombosHtml(
+  timeoutMs = 55_000,
+  sezona: Sezona = SEZONA_VYCHOZI,
+): Promise<string> {
+  const cfg = hutbuilderConfigProSezonu(sezona);
   const signal =
     typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
       ? AbortSignal.timeout(Math.max(8000, timeoutMs))
       : undefined;
 
-  const res = await fetch(HUTBUILDER_CHEMISTRY_COMBOS_URL, {
+  const res = await fetch(cfg.chemistryCombosUrl, {
     ...(signal ? { signal } : {}),
     headers: {
       "User-Agent":
         "HUT-App/1.0 (chemistry combos sync; same page as nhlhutbuilder.com)",
-      Referer: HUTBUILDER_CHEMISTRY_COMBOS_REFERER,
+      Referer: cfg.chemistryCombosReferer,
       Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
     },
     redirect: "follow",
@@ -213,13 +221,14 @@ export async function stahniChemistryCombosHtml(timeoutMs = 55_000): Promise<str
 
 export async function stahniKombinaceZChemistryCombos(
   timeoutMs = 55_000,
-): Promise<ChemistryCombosParseVysledek & { stazeno_v: string }> {
-  const html = await stahniChemistryCombosHtml(timeoutMs);
+  sezona: Sezona = SEZONA_VYCHOZI,
+): Promise<ChemistryCombosParseVysledek & { stazeno_v: string; sezona: Sezona }> {
+  const html = await stahniChemistryCombosHtml(timeoutMs, sezona);
   const parsed = radkyZChemistryCombosHtml(html);
   if (parsed.utocna.length === 0 && parsed.obranna.length === 0) {
     throw new Error(
       "V HTML Chemistry Combos se nepodařilo najít žádné řádky (změnil se markup?).",
     );
   }
-  return { ...parsed, stazeno_v: new Date().toISOString() };
+  return { ...parsed, stazeno_v: new Date().toISOString(), sezona };
 }

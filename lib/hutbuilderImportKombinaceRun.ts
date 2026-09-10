@@ -50,6 +50,7 @@ export type StahniKombinaceOpts = {
   shouldAbort?: () => boolean;
   /** true = přes Next.js proxy; výchozí false = přímý fetch z NAS/CLI. */
   presProxy?: boolean;
+  sezona?: import("@/lib/sezona").Sezona;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -100,6 +101,7 @@ export async function stahniKombinaceZHutbuilder(
           optimizeFor: pr.optimizeFor,
           retries: 4,
           presProxy,
+          sezona: opts?.sezona,
         });
         stazenychStranek += 1;
 

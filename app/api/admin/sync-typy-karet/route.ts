@@ -5,17 +5,17 @@ import {
   noveTypyOprotiStatickemuKatalogu,
 } from "@/lib/hutdbTypKaretSync";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
-import { HUTBUILDER_COMBO_FINDER_REFERER } from "@/lib/hutbuilderGetLines";
-import { createClient } from "@/lib/supabase/server";
+import { hutbuilderConfigProSezonu } from "@/lib/hutbuilderSezonaConfig";
+import { sezonaZSearchParams } from "@/lib/sezona";
+import { createAuthClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabaseServiceClient";
-
-const COMBO_FINDER = "https://nhlhutbuilder.com/combo-finder.php";
 
 /**
  * Stáhne combo-finder HTML, vyparsuje typy karet a upsertne je do `hut_typy_karet_dynamic`.
+ * Query: `?sezona=nhl26|nhl27`
  */
-export async function POST() {
-  const supabase = await createClient();
+export async function POST(req: Request) {
+  const supabase = await createAuthClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -24,14 +24,19 @@ export async function POST() {
     return NextResponse.json({ error: "Přístup zamítnut." }, { status: 403 });
   }
 
+  const sezona = sezonaZSearchParams(new URL(req.url).searchParams);
+  const cfg = hutbuilderConfigProSezonu(sezona);
+
   let adminDb;
   try {
-    adminDb = createSupabaseServiceClient();
+    adminDb = createSupabaseServiceClient(sezona);
   } catch {
     return NextResponse.json(
       {
         error:
-          "Chybí SUPABASE_SERVICE_ROLE_KEY v .env kontejneru — doplň z supabase-project/.env a restartuj hut.",
+          sezona === "nhl27"
+            ? "Chybí SUPABASE_NHL27_SERVICE_ROLE_KEY (nebo fallback SUPABASE_SERVICE_ROLE_KEY) a NEXT_PUBLIC_SUPABASE_NHL27_URL."
+            : "Chybí SUPABASE_SERVICE_ROLE_KEY v .env kontejneru — doplň z supabase-project/.env a restartuj hut.",
       },
       { status: 500 },
     );
@@ -39,11 +44,11 @@ export async function POST() {
 
   let html: string;
   try {
-    const res = await fetch(COMBO_FINDER, {
+    const res = await fetch(cfg.comboFinderUrl, {
       headers: {
         "User-Agent":
           "HUT-App/1.0 (admin sync card types; same page as combo-finder)",
-        Referer: HUTBUILDER_COMBO_FINDER_REFERER,
+        Referer: cfg.comboFinderReferer,
         Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
       },
       redirect: "follow",
@@ -117,6 +122,8 @@ export async function POST() {
 
   return NextResponse.json({
     ok: true,
+    sezona,
+    zdroj: cfg.comboFinderUrl,
     /** Počet unikátních typů vyparsovaných z HTML (řádků k upsertu). */
     pocet: rows.length,
     /** Řádky s `hodnota_filtru`, které v DB před syncem nebyly → INSERT při upsertu. */

@@ -11,8 +11,8 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
+import { useSezona } from "@/components/SezonaProvider";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
-import { createClient } from "@/lib/supabase/client";
 import { nactiKartyUzivatele } from "@/lib/cardsDb";
 import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 import {
@@ -913,7 +913,7 @@ const polozkaFormaceClass =
 
 export function OptimalizatorFormaci() {
   const { user, session, loading: authLoading } = useAuth();
-  const supabase = useMemo(() => createClient(), []);
+  const { supabase, cesta, hutbuilder, sezona } = useSezona();
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
   const { typyKaret, aliasMapZBaze } = useTypyKaret();
   const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
@@ -1039,8 +1039,8 @@ export function OptimalizatorFormaci() {
       setUlozenaSoupiskaMeta(null);
       return;
     }
-    setUlozenaSoupiskaMeta(nactiDraftSoupisku(user.id));
-  }, [user?.id]);
+    setUlozenaSoupiskaMeta(nactiDraftSoupisku(user.id, sezona));
+  }, [user?.id, sezona]);
 
   const kartyProVyberHrace = useMemo(() => {
     return karty
@@ -1290,8 +1290,8 @@ export function OptimalizatorFormaci() {
       setUlozeneSoupisky([]);
       return;
     }
-    setUlozeneSoupisky(nactiPojmenovaneSoupisky(user.id));
-  }, [user?.id, ulozenaSoupiskaMeta]);
+    setUlozeneSoupisky(nactiPojmenovaneSoupisky(user.id, sezona));
+  }, [user?.id, sezona, ulozenaSoupiskaMeta]);
 
   const utokZobrazeno = useMemo(
     () => filtrujVysledkyPodleTypuBonusu(vysledkyUtokBezDup, typBonusuAplikovany),
@@ -1621,11 +1621,12 @@ export function OptimalizatorFormaci() {
       golmani: vyberyGolmani,
       platCelkem: soupiska.platCelkem,
       nahled,
-    });
-    setUlozeneSoupisky(nactiPojmenovaneSoupisky(user.id));
+    }, sezona);
+    setUlozeneSoupisky(nactiPojmenovaneSoupisky(user.id, sezona));
     toast.success(`Soupiska „${trimmed}“ uložena.`);
   }, [
     user?.id,
+    sezona,
     kompletniSoupiska,
     vyberyUtok,
     vyberyObrana,
@@ -1686,12 +1687,12 @@ export function OptimalizatorFormaci() {
   const smazatPojmenovanouSoupisku = useCallback(
     (id: string) => {
       if (!user?.id) return;
-      smazPojmenovanouSoupisku(user.id, id);
-      setUlozeneSoupisky(nactiPojmenovaneSoupisky(user.id));
+      smazPojmenovanouSoupisku(user.id, id, sezona);
+      setUlozeneSoupisky(nactiPojmenovaneSoupisky(user.id, sezona));
       if (rozbalenaUlozenaId === id) setRozbalenaUlozenaId(null);
       toast.success("Uložená soupiska smazána.");
     },
-    [user?.id, rozbalenaUlozenaId],
+    [user?.id, sezona, rozbalenaUlozenaId],
   );
 
   useEffect(() => {
@@ -1742,7 +1743,7 @@ export function OptimalizatorFormaci() {
     ) {
       return;
     }
-    const ulozena = nactiDraftSoupisku(user.id);
+    const ulozena = nactiDraftSoupisku(user.id, sezona);
     obnovenoPoHledatRef.current = true;
     if (!ulozena || pocetRadkuSoupisky(ulozena.utok) + pocetRadkuSoupisky(ulozena.obrana) + pocetRadkuSoupisky(ulozena.golmani) === 0) {
       return;
@@ -1768,9 +1769,9 @@ export function OptimalizatorFormaci() {
       obrana: vyberyObrana,
       golmani: vyberyGolmani,
       platCelkem: soupiska.platCelkem,
-    });
-    setUlozenaSoupiskaMeta(nactiDraftSoupisku(user.id));
-  }, [user?.id, filtryPoHledani, vyberyUtok, vyberyObrana, vyberyGolmani, soupiska.platCelkem]);
+    }, sezona);
+    setUlozenaSoupiskaMeta(nactiDraftSoupisku(user.id, sezona));
+  }, [user?.id, sezona, filtryPoHledani, vyberyUtok, vyberyObrana, vyberyGolmani, soupiska.platCelkem]);
 
   const pridatUtok = (v: UtocnaFormaceVysledek) => {
     const klic = klicUtocnaFormace(v);
@@ -2000,7 +2001,7 @@ export function OptimalizatorFormaci() {
           <p>
             Nemáš žádné karty v inventáři — optimalizátor potřebuje alespoň jednu kartu z{" "}
             <Link
-              href="/"
+              href={cesta()}
               className="font-medium text-[var(--hut-lime)] underline underline-offset-2 hover:text-[var(--hut-lime-dim)]"
             >
               Můj Inventář
@@ -2135,7 +2136,7 @@ export function OptimalizatorFormaci() {
               <p className="text-xs leading-relaxed text-[var(--hut-muted)]/95">
                 Na kapitánské kartě v HUT (stejně jako v{" "}
                 <a
-                  href="https://nhlhutbuilder.com/NHL26/builder.php"
+                  href={hutbuilder.builderUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[var(--hut-lime)] underline-offset-2 hover:underline"

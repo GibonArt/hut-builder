@@ -29,7 +29,7 @@ import {
   smazKartuPodleSlug,
   vlozKartu,
 } from "@/lib/cardsDb";
-import { createClient } from "@/lib/supabase/client";
+import { useSezona } from "@/components/SezonaProvider";
 import { vsechnyNarodnostiCS } from "@/lib/narodnosti";
 import { parsePlatVstupVMilionech } from "@/lib/platMiliony";
 import {
@@ -111,7 +111,7 @@ export function MujInventar() {
   /** Po úspěšném uložení přesměrovat (např. z úpravy odkazem ze stránky Moje karty). */
   const navratPoUlozeniPath = useRef<string | null>(null);
   const { user, loading: authLoading } = useAuth();
-  const supabase = useMemo(() => createClient(), []);
+  const { supabase, cesta } = useSezona();
 
   const [karty, setKarty] = useState<HutCard[]>([]);
   /** Výchozí true — dokud neproběhne první fetch, je `karty` prázdné a nesmí se zpracovat `?edit=` dřív (jinak se formulář nevyplní). */
@@ -438,7 +438,7 @@ export function MujInventar() {
     if (editZQueryZpracovan.current === slug) return;
     editZQueryZpracovan.current = slug;
     navratPoUlozeniPath.current =
-      searchParams.get("from") === "moje-karty" ? "/moje-karty" : null;
+      searchParams.get("from") === "moje-karty" ? cesta("/moje-karty") : null;
     naplnFormZKarty(k, "editovat");
     router.replace("/", { scroll: false });
   }, [searchParams, user?.id, kartyLoading, karty, naplnFormZKarty, router]);
@@ -463,7 +463,7 @@ export function MujInventar() {
     if (duplicitaZQueryZpracovan.current === dup) return;
     duplicitaZQueryZpracovan.current = dup;
     navratPoUlozeniPath.current =
-      searchParams.get("from") === "moje-karty" ? "/moje-karty" : null;
+      searchParams.get("from") === "moje-karty" ? cesta("/moje-karty") : null;
     naplnFormZKarty(k, "kopie");
     router.replace("/", { scroll: false });
     toast.info("Zkopírované údaje — ulož jako novou kartu (uprav OVR/jméno, pokud koliduje).");
@@ -1152,7 +1152,7 @@ export function MujInventar() {
               <h3 className="text-lg font-medium text-white">Moje karty</h3>
               {user && !kartyLoading && karty.length > 0 ? (
                 <Link
-                  href="/moje-karty"
+                  href={cesta("/moje-karty")}
                   className="text-sm font-medium text-[var(--hut-lime)] underline-offset-2 hover:underline"
                 >
                   Všechny karty

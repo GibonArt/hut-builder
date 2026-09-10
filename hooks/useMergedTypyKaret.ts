@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { createClient } from "@/lib/supabase/client";
+import { useSezona } from "@/components/SezonaProvider";
 import { nactiDynamickeTypyKaret } from "@/lib/hutdbTypKaretDynamicDb";
 import type { HutDbTypKarty } from "@/lib/hutdbTypKaret";
 import { hutdbTypyKaretVTriPoradi } from "@/lib/hutdbTypKaret";
@@ -17,7 +17,7 @@ function seradTypyKaret(rows: readonly HutDbTypKarty[]): HutDbTypKarty[] {
 
 export function useMergedTypyKaret() {
   const { user, session, loading: authLoading } = useAuth();
-  const supabase = useMemo(() => createClient(), []);
+  const { supabase } = useSezona();
   const staticRadky = useMemo<HutDbTypKarty[]>(() => hutdbTypyKaretVTriPoradi(), []);
 
   const [typyKaret, setTypyKaret] = useState<HutDbTypKarty[]>(staticRadky);

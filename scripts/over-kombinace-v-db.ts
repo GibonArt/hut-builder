@@ -8,6 +8,9 @@ import {
   nactiBonusKombinaceSdilene,
   type RadekBonusKombinaceUi,
 } from "@/lib/bonusKombinaceDb";
+import { hutbuilderConfigProSezonu } from "@/lib/hutbuilderSezonaConfig";
+import { labelSezony, parseSezonaZArgv } from "@/lib/sezona";
+import { dataSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServiceClient } from "@/lib/supabaseServiceClient";
 
 function maskUrl(url: string): string {
@@ -56,13 +59,21 @@ function ukazka(radky: RadekBonusKombinaceUi[], n = 3): void {
 }
 
 async function main() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+  const sezona = parseSezonaZArgv(process.argv.slice(2));
+  const url = dataSupabaseEnv(sezona).url;
   if (!url) {
-    throw new Error("Chybí NEXT_PUBLIC_SUPABASE_URL v .env");
+    throw new Error(
+      sezona === "nhl27"
+        ? "Chybí NEXT_PUBLIC_SUPABASE_NHL27_URL (nebo fallback NEXT_PUBLIC_SUPABASE_URL) v .env"
+        : "Chybí NEXT_PUBLIC_SUPABASE_URL v .env",
+    );
   }
-  process.stdout.write(`Supabase: ${maskUrl(url)}\n\n`);
+  const hb = hutbuilderConfigProSezonu(sezona);
+  process.stdout.write(`Sezóna: ${labelSezony(sezona)}\n`);
+  process.stdout.write(`Supabase: ${maskUrl(url)}\n`);
+  process.stdout.write(`Chemistry Combos: ${hb.chemistryCombosUrl}\n\n`);
 
-  const supabase = createSupabaseServiceClient();
+  const supabase = createSupabaseServiceClient(sezona);
   const { data, error } = await supabase
     .from("bonus_kombinace_global")
     .select("typ_kombinace, radky, updated_at");
@@ -110,8 +121,8 @@ async function main() {
   if (utocna.length < 200) {
     process.stdout.write(
       "⚠ Málo útočných kombinací — spusť import Chemistry Combos:\n" +
-        "  ./scripts/nas/02-import-kombinace.sh\n" +
-        "  (očekává se ~280 útok / ~230 obrana z nhlhutbuilder.com/chemistry-combos.php)\n\n",
+        `  ./scripts/nas/02-import-kombinace.sh --sezona=${sezona}\n` +
+        `  (zdroj: ${hb.chemistryCombosUrl})\n\n`,
     );
   }
 

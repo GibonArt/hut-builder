@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSezona } from "@/components/SezonaProvider";
 import {
   kartaNaNapoveduZInventare,
   nactiNapoveduHracu,
@@ -92,7 +92,7 @@ export function JmenoKartyNapoveda({
 }: Props) {
   const generatedId = useId();
   const inputId = idProp ?? generatedId;
-  const supabase = useMemo(() => createClient(), []);
+  const { supabase } = useSezona();
   const rootRef = useRef<HTMLDivElement>(null);
 
   const [hraci, setHraci] = useState<EaNhl26Hrac[]>([]);

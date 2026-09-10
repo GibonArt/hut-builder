@@ -50,7 +50,7 @@ export function TypyKaretProvider({ children }: { children: ReactNode }) {
 export function useTypyKaret(): TypyKaretContextValue {
   const ctx = useContext(TypyKaretContext);
   if (!ctx) {
-    throw new Error("useTypyKaret requires TypyKaretProvider in app/layout.tsx.");
+    throw new Error("useTypyKaret requires TypyKaretProvider (layout sezóny /nhl26 nebo /nhl27).");
   }
   return ctx;
 }

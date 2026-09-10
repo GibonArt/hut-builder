@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSezona } from "@/components/SezonaProvider";
 import {
   ceskaZpravaKopieKarty,
   katalogRadkaKHutCard,
@@ -43,7 +43,7 @@ export function KatalogHromadnyImport({
   onKartyPridany,
 }: Props) {
   const typKartyMetaOpts = useTypKartyMetaOpts();
-  const supabase = useMemo(() => createClient(), []);
+  const { supabase } = useSezona();
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
   const baseId = useId();
   const [otevreno, setOtevreno] = useState(false);

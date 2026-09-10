@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/components/AuthProvider";
-import { TypyKaretProvider } from "@/components/TypyKaretProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HUT Builder | NHL 26",
-  description: "Nástroj pro inventář, bonusy a optimalizaci formací v Ultimate Team.",
+  title: "HUT Builder | NHL 26 / 27",
+  description: "Nástroj pro inventář, bonusy a optimalizaci formací v Ultimate Team (NHL 26 a NHL 27).",
   appleWebApp: {
     capable: true,
     title: "HUT Builder",
@@ -52,10 +51,8 @@ export default function RootLayout({
           Přeskočit na obsah
         </a>
         <AuthProvider>
-          <TypyKaretProvider>
-            {children}
-            <Toaster theme="dark" position="top-center" richColors closeButton />
-          </TypyKaretProvider>
+          {children}
+          <Toaster theme="dark" position="top-center" richColors closeButton />
         </AuthProvider>
       </body>
     </html>

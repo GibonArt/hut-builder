@@ -10,6 +10,7 @@
  * npm run import:hutbuilder-kombinace
  * npm run import:hutbuilder-kombinace -- --nahradit
  * npm run import:hutbuilder-kombinace -- --zdroj=combo-finder
+ * npm run import:hutbuilder-kombinace -- --sezona=nhl27
  * npm run import:hutbuilder-kombinace -- --jen-stahnout --out=data/hutbuilder-import-cache.json
  */
 import { writeFileSync, mkdirSync } from "fs";
@@ -23,6 +24,9 @@ import {
 } from "@/lib/bonusKombinaceDb";
 import { stahniKombinaceZChemistryCombos } from "@/lib/hutbuilderChemistryCombosHtml";
 import { stahniKombinaceZHutbuilder, VYCHOZI_PRUCHODY_IMPORTU } from "@/lib/hutbuilderImportKombinaceRun";
+import { hutbuilderConfigProSezonu } from "@/lib/hutbuilderSezonaConfig";
+import { labelSezony, parseSezonaZArgv } from "@/lib/sezona";
+import { dataSupabaseEnv } from "@/lib/supabase/env";
 import {
   createSupabaseServiceClient,
   editorUserIdZSupabase,
@@ -37,6 +41,7 @@ function parseArgs(argv: string[]) {
   let outPath = "";
   let delayMs = 280;
   let timeoutMs = 240_000;
+  const sezona = parseSezonaZArgv(argv);
   for (const a of argv) {
     if (a === "--jen-stahnout") jenStahnout = true;
     else if (a === "--nahradit") nahradit = true;
@@ -50,23 +55,25 @@ function parseArgs(argv: string[]) {
     }
   }
   if (zdroj === "chemistry") nahradit = true;
-  return { jenStahnout, nahradit, zdroj, outPath, delayMs, timeoutMs };
+  return { jenStahnout, nahradit, zdroj, outPath, delayMs, timeoutMs, sezona };
 }
 
 async function main() {
-  const { jenStahnout, nahradit, zdroj, outPath, delayMs, timeoutMs } = parseArgs(
+  const { jenStahnout, nahradit, zdroj, outPath, delayMs, timeoutMs, sezona } = parseArgs(
     process.argv.slice(2),
   );
+  const hb = hutbuilderConfigProSezonu(sezona);
 
   const onLog = (msg: string) => process.stderr.write(`${msg}\n`);
+  onLog(`Sezóna: ${labelSezony(sezona)} (${sezona})`);
 
   let noveUt: RadekBonusKombinaceUi[] = [];
   let noveOb: RadekBonusKombinaceUi[] = [];
-  let meta: Record<string, unknown> = { zdroj };
+  let meta: Record<string, unknown> = { zdroj, sezona };
 
   if (zdroj === "chemistry") {
-    onLog("Stahuji Chemistry Combos z nhlhutbuilder.com…");
-    const parsed = await stahniKombinaceZChemistryCombos(55_000);
+    onLog(`Stahuji Chemistry Combos: ${hb.chemistryCombosUrl}`);
+    const parsed = await stahniKombinaceZChemistryCombos(55_000, sezona);
     noveUt = parsed.utocna;
     noveOb = parsed.obranna;
     meta = {
@@ -86,6 +93,7 @@ async function main() {
       delayMs,
       onLog,
       presProxy: false,
+      sezona,
       pruchody: VYCHOZI_PRUCHODY_IMPORTU.map((p) => ({ ...p, timeoutMs })),
     });
     noveUt = stazeno.noveUt;
@@ -132,8 +140,8 @@ async function main() {
     return;
   }
 
-  const supabase = createSupabaseServiceClient();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+  const supabase = createSupabaseServiceClient(sezona);
+  const supabaseUrl = dataSupabaseEnv(sezona).url;
   if (supabaseUrl) {
     try {
       const u = new URL(supabaseUrl);

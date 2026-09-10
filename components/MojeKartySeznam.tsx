@@ -6,12 +6,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { HutCard, Pozice } from "@/types";
 import { useAuth } from "@/components/AuthProvider";
+import { useSezona } from "@/components/SezonaProvider";
 import {
   aktualizujKartu,
   nactiKartyUzivatele,
   smazKartuPodleSlug,
 } from "@/lib/cardsDb";
-import { createClient } from "@/lib/supabase/client";
 import { vsechnyNarodnostiCS } from "@/lib/narodnosti";
 import { HUT_POZICE, HUT_POZICE_ZKRATKA } from "@/lib/hutPozice";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
@@ -50,7 +50,7 @@ function textPocetKaret(n: number): string {
 export function MojeKartySeznam() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const supabase = useMemo(() => createClient(), []);
+  const { supabase, cesta } = useSezona();
 
   const [karty, setKarty] = useState<HutCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -155,19 +155,19 @@ export function MojeKartySeznam() {
   const editovat = useCallback(
     (k: HutCard) => {
       router.push(
-        `/?edit=${encodeURIComponent(k.id)}&from=moje-karty`,
+        `${cesta()}?edit=${encodeURIComponent(k.id)}&from=moje-karty`,
       );
     },
-    [router],
+    [router, cesta],
   );
 
   const duplikovat = useCallback(
     (k: HutCard) => {
       router.push(
-        `/?duplicate=${encodeURIComponent(k.id)}&from=moje-karty`,
+        `${cesta()}?duplicate=${encodeURIComponent(k.id)}&from=moje-karty`,
       );
     },
-    [router],
+    [router, cesta],
   );
 
   const exportovatJson = useCallback(() => {
@@ -545,7 +545,7 @@ export function MojeKartySeznam() {
                 <p>Zatím žádné karty.</p>
                 <p className="mt-4">
                   <Link
-                    href="/"
+                    href={cesta()}
                     className="font-medium text-[var(--hut-lime)] underline underline-offset-2 decoration-[var(--hut-lime)]/35 hover:text-[var(--hut-lime-dim)]"
                   >
                     Přejít do Můj Inventář a přidat první kartu

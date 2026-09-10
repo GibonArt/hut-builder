@@ -40,7 +40,7 @@ import {
   type RadekBonusKombinaceUi,
   type TypBonusuKombinace,
 } from "@/lib/bonusKombinaceDb";
-import { createClient } from "@/lib/supabase/client";
+import { useSezona } from "@/components/SezonaProvider";
 import {
   LIGA_ZOBRAZENI,
   LIGY_V_PORADI,
@@ -461,7 +461,7 @@ function SloupecBonusu({
 
 export function NastaveniBonusu() {
   const { user, loading } = useAuth();
-  const supabase = useMemo(() => createClient(), []);
+  const { supabase, cesta, hutbuilder, label: sezonaLabel, sezona } = useSezona();
   const narodnostiVolby = useMemo(() => vsechnyNarodnostiCS(), []);
   const { typyKaret: hutdbTypyKaret, aliasMapZBaze, refreshDynamic } = useTypyKaret();
   const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
@@ -611,7 +611,7 @@ export function NastaveniBonusu() {
     setSyncTypyVysledek(null);
     setUlozChyba(null);
     try {
-      const res = await fetch("/api/admin/sync-typy-karet", {
+      const res = await fetch(`/api/admin/sync-typy-karet?sezona=${encodeURIComponent(sezona)}`, {
         method: "POST",
         credentials: "same-origin",
       });
@@ -663,7 +663,7 @@ export function NastaveniBonusu() {
     } finally {
       setSyncTypyBezi(false);
     }
-  }, [refreshDynamic]);
+  }, [refreshDynamic, sezona]);
 
   const zrusImportHutbuilder = useCallback(() => {
     importHbAbortRef.current?.abort();
@@ -673,7 +673,7 @@ export function NastaveniBonusu() {
     if (!user?.id) return;
     const ok = window.confirm(
       "Stáhnout kompletní katalog z NHL HUT Builder — stránka Chemistry Combos?\n\n" +
-        "• Stejné kombinace jako na nhlhutbuilder.com/chemistry-combos.php\n" +
+        "• Stejné kombinace jako na " + hutbuilder.chemistryCombosUrl + "\n" +
         "• Útok (3 sloty) + obrana (2 sloty); wild card = libovolný typ karty\n" +
         "• Hut Builder SAL → PLAT, AP → BS, OVR → CLK\n" +
         "• Stávající sdílené řádky se přepíšou (ne sloučí).",
@@ -691,7 +691,7 @@ export function NastaveniBonusu() {
     setUlozenoOk(false);
 
     try {
-      const res = await fetch("/api/admin/hutbuilder-chemistry-combos", {
+      const res = await fetch(`/api/admin/hutbuilder-chemistry-combos?sezona=${encodeURIComponent(sezona)}`, {
         signal: sig,
         cache: "no-store",
       });
@@ -749,7 +749,7 @@ export function NastaveniBonusu() {
       setImportHbBezi(false);
       importHbAbortRef.current = null;
     }
-  }, [user?.id, persistPayload]);
+  }, [user?.id, persistPayload, sezona, hutbuilder]);
 
   const ulozKombinaci = useCallback(async () => {
     if (!user?.id) return;
@@ -1027,7 +1027,7 @@ export function NastaveniBonusu() {
       <h2 className="text-xl font-semibold text-white">Přístup zamítnut</h2>
       <p className="mt-3 text-sm leading-relaxed text-[var(--hut-muted)]">
         Tato stránka je vyhrazena pro správce. Přihlas se účtem s oprávněním nebo pokračuj v{" "}
-        <Link href="/" className="font-medium text-[var(--hut-lime)] underline-offset-2 hover:underline">
+        <Link href={cesta()} className="font-medium text-[var(--hut-lime)] underline-offset-2 hover:underline">
           Můj inventář
         </Link>
         .
@@ -1074,7 +1074,7 @@ export function NastaveniBonusu() {
                 1 — Typy karet (Supabase)
               </h3>
               <p className="mt-2 text-xs leading-relaxed text-[var(--hut-muted)] sm:text-sm">
-                Stáhne výčet sad z NHL HUT Builder (Combo Finder) a uloží ho do tabulky{" "}
+                Stáhne výčet sad z NHL HUT Builder (Combo Finder, {sezonaLabel}) a uloží ho do tabulky{" "}
                 <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
                   hut_typy_karet_dynamic
                 </code>
@@ -1124,7 +1124,17 @@ export function NastaveniBonusu() {
               </h3>
               <p className="mt-2 text-xs leading-relaxed text-[var(--hut-muted)] sm:text-sm">
                 Stáhne kompletní katalog ze stránky{" "}
-                <span className="font-medium text-zinc-400">Chemistry Combos</span> na nhlhutbuilder.com — stejné
+                <span className="font-medium text-zinc-400">Chemistry Combos ({sezonaLabel})</span>
+                {" "}(
+                <a
+                  href={hutbuilder.chemistryCombosUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[var(--hut-lime)] underline-offset-2 hover:underline"
+                >
+                  {hutbuilder.chemistryCombosUrl.replace(/^https?:\/\//, "")}
+                </a>
+                ). Stejné
                 řádky jako v jejich tabulce Forwards / Defense. Útok má 3 sloty (tým, národnost, typ karty), obrana 2;
                 wild card = libovolný typ karty. SAL → PLAT, AP → BS, OVR → CLK. Stávající sdílené řádky se{" "}
                 <span className="font-medium text-zinc-400">přepíšou</span> (ne sloučí).

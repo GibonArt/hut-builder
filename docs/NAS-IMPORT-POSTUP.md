@@ -49,11 +49,18 @@ cd /volume1/docker/hut-builder
 | 0 (volitelné) | `./scripts/nas/00-deploy-app.sh` | `git pull` + rebuild kontejneru aplikace |
 | 1 | `./scripts/nas/01-sync-typy-karet.sh` | Typy karet → `hut_typy_karet_dynamic` |
 | 2 | `./scripts/nas/02-import-kombinace.sh` | Kombinace → `bonus_kombinace_global` (dlouhé) |
+| 3 | `./scripts/nas/03-over-kombinace.sh` | Kontrola počtů v DB |
+
+**NHL27** (oddělená DB + Hut Builder `/NHL27/`): přidej `--sezona=nhl27` ke krokům 1–3. Bez flagu = `nhl26`. Setup DB: `docs/NHL27-SETUP.md`.
 
 **Vše najednou:**
 
 ```bash
 ./scripts/nas/spust-import.sh
+# NHL27:
+./scripts/nas/01-sync-typy-karet.sh --sezona=nhl27
+./scripts/nas/02-import-kombinace.sh --sezona=nhl27
+./scripts/nas/03-over-kombinace.sh --sezona=nhl27
 ```
 
 Log jde na stderr (`forwards — žebříček — stránka 3…`).
@@ -69,6 +76,9 @@ npm ci
 # do .env doplň SUPABASE_SERVICE_ROLE_KEY
 npm run sync:typy-karet
 npm run import:hutbuilder-kombinace
+# NHL27:
+npm run sync:typy-karet -- --sezona=nhl27
+npm run import:hutbuilder-kombinace -- --sezona=nhl27
 ```
 
 Jen stáhnout bez zápisu do Supabase (záloha JSON):

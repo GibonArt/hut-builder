@@ -2,9 +2,15 @@
  * NHL HUT Builder — jedna stránka výsledků Combo Finderu (stejné parametry jako na webu).
  */
 
-export const HUTBUILDER_GET_LINES = "https://nhlhutbuilder.com/php/get_lines.php";
-export const HUTBUILDER_COMBO_FINDER_REFERER =
-  "https://nhlhutbuilder.com/combo-finder.php";
+import { hutbuilderConfigProSezonu } from "@/lib/hutbuilderSezonaConfig";
+import { SEZONA_VYCHOZI, type Sezona } from "@/lib/sezona";
+
+const cfgDefault = hutbuilderConfigProSezonu(SEZONA_VYCHOZI);
+
+/** @deprecated Preferuj hutbuilderConfigProSezonu(sezona).getLinesUrl */
+export const HUTBUILDER_GET_LINES = cfgDefault.getLinesUrl;
+/** @deprecated Preferuj hutbuilderConfigProSezonu(sezona).comboFinderReferer */
+export const HUTBUILDER_COMBO_FINDER_REFERER = cfgDefault.comboFinderReferer;
 
 /** Bezpečný strop jedné stránky přes naši API (Synology/nginx reverse proxy bývá ~60 s). */
 export const HUTBUILDER_PROXY_SAFE_TIMEOUT_MS = 52_000;
@@ -29,6 +35,8 @@ export type HutbuilderGetLinesOpts = {
    * false = přímý fetch z CLI (NAS skript) — delší timeout na pokus.
    */
   presProxy?: boolean;
+  /** Sezóna pro URL / Referer (výchozí nhl26). */
+  sezona?: Sezona;
 };
 
 export function buildGetLinesSearchParams(
@@ -75,6 +83,7 @@ async function fetchHutbuilderLinesPageOnce(
   opts?: HutbuilderGetLinesOpts | null,
 ): Promise<unknown> {
   const qs = buildGetLinesSearchParams(lineType, page, opts).toString();
+  const cfg = hutbuilderConfigProSezonu(opts?.sezona ?? SEZONA_VYCHOZI);
   const signal =
     typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
       ? AbortSignal.timeout(Math.max(5000, attemptTimeoutMs))
@@ -82,12 +91,12 @@ async function fetchHutbuilderLinesPageOnce(
 
   let res: Response;
   try {
-    res = await fetch(`${HUTBUILDER_GET_LINES}?${qs}`, {
+    res = await fetch(`${cfg.getLinesUrl}?${qs}`, {
       ...(signal ? { signal } : {}),
       headers: {
         "User-Agent":
           "HUT-App/1.0 (bonus sync; same JSON as combo-finder; admin-only route)",
-        Referer: HUTBUILDER_COMBO_FINDER_REFERER,
+        Referer: cfg.comboFinderReferer,
         Accept: "application/json, text/plain, */*",
       },
       redirect: "follow",
