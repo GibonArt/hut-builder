@@ -8,9 +8,12 @@ resolve_supabase_db_user() {
     printf '%s' "$SUPABASE_DB_USER"
     return 0
   fi
+  # stdin musí jít na /dev/null — jinak při `run_supabase_psql < file.sql`
+  # tato kontrola „sežere“ celý SQL soubor a hlavní psql dostane prázdný vstup.
   if (
     cd "$project_dir"
-    docker compose exec -T db psql -U supabase_admin -d postgres -tAc "select 1" >/dev/null 2>&1
+    docker compose exec -T db psql -U supabase_admin -d postgres -tAc "select 1" \
+      </dev/null >/dev/null 2>&1
   ); then
     printf '%s' "supabase_admin"
   else
