@@ -91,6 +91,7 @@ SQL_FILES=(
   ea_ratings_setup.sql
   bonus_kombinace_nastaveni.sql
   bonus_kombinace_global.sql
+  fix_je_bonus_editor_jwt_email.sql
   migrate_bonus_typ_sal_ap_to_plat_bs.sql
   hut_typy_karet_dynamic.sql
   hut_typy_karet_dynamic_extend.sql

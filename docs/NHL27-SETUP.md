@@ -13,7 +13,8 @@ Aby `auth.uid()` v RLS NHL27 fungovalo s tokenem z Auth NHL26:
 
 1. V NHL26 GoTrue / JWT nastavení zjisti `JWT_SECRET` (self-hosted: `supabase-project/.env` → `JWT_SECRET`).
 2. Nastav **stejný** secret u NHL27 PostgREST / GoTrue (u cloudových dvou projektů JWT obvykle nesdílíš — self-hosted je cíl).
-3. Ověř: po loginu v appce otevři `/nhl27` a načti prázdný inventář (SELECT přes RLS, ne 401).
+3. Spusť `supabase/fix_je_bonus_editor_jwt_email.sql` na NHL27 — editor RLS musí číst e-mail z JWT (lokální `auth.users` na NHL27 je prázdné).
+4. Ověř: po loginu v appce otevři `/nhl27` a načti prázdný inventář (SELECT přes RLS, ne 401).
 
 Fallback (fáze 2, pokud JWT sharing nejde): zápisy NHL27 jen přes server API + `service_role` s `user_id` ze session. Preferuj JWT sharing.
 
@@ -27,6 +28,7 @@ Spusť v SQL Editoru NHL27 (nebo `psql`) — **bez** datové migrace z NHL26:
 | 2 | `supabase/cards_prodano.sql` | Sloupec prodáno (pokud není v setup) |
 | 3 | Související RPC dle potřeby: `cards_katalog_kopie_rpc.sql`, `cards_duplikat_obsah_rpc.sql`, `cards_najdi_obnova.sql`, `napoveda_jmena_z_cards_rpc.sql` | |
 | 4 | `supabase/bonus_kombinace_global.sql` | Sdílené kombinace |
+| 4b | `supabase/fix_je_bonus_editor_jwt_email.sql` | Editor RLS přes JWT e-mail (povinné při Auth NHL26 + data NHL27) |
 | 5 | `supabase/bonus_kombinace_nastaveni.sql` | Uživatelská nastavení bonusů |
 | 6 | `supabase/hut_typy_karet_dynamic.sql` | Dynamické typy karet |
 | 7 | `supabase/hut_typy_karet_dynamic_extend.sql` | `popis_cs`, aliases |

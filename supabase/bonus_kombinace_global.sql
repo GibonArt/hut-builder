@@ -19,7 +19,8 @@ create table if not exists public.bonus_kombinace_global (
     check (typ_kombinace in ('utocna', 'obranna')),
   radky jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),
-  updated_by uuid null references auth.users (id) on delete set null,
+  -- UUID editora (může být z Auth jiného stacku — bez FK na auth.users).
+  updated_by uuid null,
   primary key (typ_kombinace)
 );
 
@@ -33,15 +34,19 @@ stable
 security definer
 set search_path = public
 as $$
-  select coalesce(
+  -- Preferuj e-mail z JWT (sdílené Auth NHL26 → data NHL27 bez lokálního auth.users).
+  -- Fallback: lokální auth.users (klasický single-stack).
+  select lower(trim(coalesce(
+    nullif(auth.jwt() ->> 'email', ''),
+    nullif(auth.jwt() -> 'user_metadata' ->> 'email', ''),
     (
-      select lower(trim(u.email::text)) in (
-        'gibonart@gmail.com'
-      )
+      select u.email::text
       from auth.users u
       where u.id = auth.uid()
-    ),
-    false
+      limit 1
+    )
+  ))) in (
+    'gibonart@gmail.com'
   );
 $$;
 
@@ -60,6 +65,10 @@ grant select, insert, update, delete on public.bonus_kombinace_global to authent
 grant select, insert, update, delete on public.bonus_kombinace_global to service_role;
 
 alter table public.bonus_kombinace_global enable row level security;
+
+-- updated_by může být UUID z Auth NHL26, které v NHL27 auth.users není — bez FK.
+alter table public.bonus_kombinace_global
+  drop constraint if exists bonus_kombinace_global_updated_by_fkey;
 
 drop policy if exists "bonus_global_select_authenticated" on public.bonus_kombinace_global;
 create policy "bonus_global_select_authenticated"
