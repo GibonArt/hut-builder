@@ -59,9 +59,12 @@ export async function POST(req: Request) {
     );
   }
 
+  // NHL27 nemá lokální auth.users — FK updated_by by spadl; audit UUID jen na NHL26.
+  const editorId = sezona === "nhl27" ? null : user.id;
+
   const u = await ulozBonusKombinaciSdilenou(
     adminDb,
-    user.id,
+    editorId,
     "utocna",
     deduped.utocna,
   );
@@ -70,7 +73,7 @@ export async function POST(req: Request) {
   }
   const o = await ulozBonusKombinaciSdilenou(
     adminDb,
-    user.id,
+    editorId,
     "obranna",
     deduped.obranna,
   );
