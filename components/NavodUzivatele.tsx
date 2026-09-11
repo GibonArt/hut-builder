@@ -99,10 +99,9 @@ export function NavodUzivatele() {
           <h2 className={h2Class}>3. Můj inventář</h2>
           <h3 className={h3Class}>Přidání karty</h3>
           <ol className="mt-2 list-inside list-decimal space-y-1.5 text-sm leading-relaxed text-[var(--hut-muted)]">
-            <li>Vyplň formulář <strong className="text-zinc-300">Přidat kartu</strong> (kromě X-Faktorů je vše povinné).</li>
+            <li>Vyplň formulář <strong className="text-zinc-300">Přidat kartu</strong> (všechna pole jsou povinná).</li>
             <li>U <strong className="text-zinc-300">Jména</strong> piš a vyber z nápovědy — EA doplní tým a pozici, komunitní karta doplní údaje z databáze (vždy zkontroluj OVR a plat).</li>
             <li>Doplň OVR, pozici, ruku, plat v milionech (např. 1,5), národnost, typ karty, ligu a tým.</li>
-            <li>Volitelně až 3 X-Faktory.</li>
             <li>Klikni <strong className="text-zinc-300">Přidat kartu</strong> (zkratka Ctrl+Enter / ⌘+Enter).</li>
           </ol>
           <h3 className={h3Class}>Hromadný import</h3>

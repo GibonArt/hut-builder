@@ -16,12 +16,9 @@ import {
   type Liga,
   type Pozice,
   type Ruka,
-  type XFactorUroven,
-  type XFactorZaznam,
 } from "@/types";
 import { useAuth } from "@/components/AuthProvider";
 import {
-  aktualizujJenAtributyKarty,
   CHYBA_DUPLICITNI_OBSAH_KARTY,
   nactiKartyUzivatele,
   shodnaKartaJizVInventari,
@@ -55,15 +52,6 @@ import {
   najdiLiguATymPodleEa,
   type EaNhl26Hrac,
 } from "@/lib/eaNhl26Ratings";
-import {
-  OPTION_VLASTNI,
-  X_FACTORY_KATALOG,
-  klicProSelect,
-  obnovIkonyXeFactoryZKatalogu,
-  polozkaPodleKlice,
-} from "@/lib/xFactoryKatalog";
-import { iconUrlProEaShody } from "@/lib/xFactorIconsEa";
-import { XFactorVyber } from "@/components/XFactorVyber";
 import { HUT_POZICE, HUT_POZICE_LABEL } from "@/lib/hutPozice";
 import { nahledCtyriKaret, type RazeniKaret } from "@/lib/hutRazeniKaret";
 import { useRazeniKaret } from "@/lib/useRazeniKaret";
@@ -86,14 +74,6 @@ const selectClass =
 /** Stejná výška řádku jako výběry s `triggerHeight="formular"`. */
 const selectClassDropdown =
   "box-border h-12 min-h-12 w-full max-w-full cursor-pointer rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-3 text-base leading-normal text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:h-11 sm:min-h-11 sm:text-sm";
-
-function triPrazdneXFactory(): XFactorZaznam[] {
-  return [
-    { id: "", label: "" },
-    { id: "", label: "" },
-    { id: "", label: "" },
-  ];
-}
 
 const labelClass = "mb-1 block text-xs font-medium text-[var(--hut-muted)]";
 
@@ -134,7 +114,6 @@ export function MujInventar() {
   const [liga, setLiga] = useState<Liga>("NHL");
   const [typKarty, setTypKarty] = useState("");
   const [plat, setPlat] = useState("");
-  const [xFactory, setXFactory] = useState<XFactorZaznam[]>(triPrazdneXFactory);
   /** `card_slug` řádku v DB; při úpravě se může po uložení změnit (jméno/OVR). */
   const [editujiSlug, setEditujiSlug] = useState<string | null>(null);
   /** Jen při úpravě karty — prodané karty nejdou do optimalizátoru, zůstávají v DB. */
@@ -148,14 +127,6 @@ export function MujInventar() {
   const typKartyMetaOpts = useMemo<NajdiMetaTypuKartyOpts>(
     () => ({ radky: hutdbTypyKaret, aliasMapZBaze }),
     [hutdbTypyKaret, aliasMapZBaze],
-  );
-
-  const xFactoryKatalogSerazeny = useMemo(
-    () =>
-      [...X_FACTORY_KATALOG].sort((a, b) =>
-        a.labelEn.localeCompare(b.labelEn, "en"),
-      ),
-    [],
   );
 
   const priVyberuEaHrace = useCallback(
@@ -192,15 +163,6 @@ export function MujInventar() {
           narodnostiVolby.find((n) => n.label === existujici.narodnost.trim())
             ?.code ?? "";
         setNarodnostKod(kod);
-        const xf =
-          existujici.xFactory?.length
-            ? obnovIkonyXeFactoryZKatalogu(existujici.xFactory) ?? []
-            : [];
-        setXFactory([
-          xf[0] ?? { id: "", label: "" },
-          xf[1] ?? { id: "", label: "" },
-          xf[2] ?? { id: "", label: "" },
-        ]);
         setUpozorneniKartovaNapoveda(true);
         return;
       }
@@ -223,7 +185,6 @@ export function MujInventar() {
       setPlat("");
       setNarodnostKod("");
       setTypKarty("");
-      setXFactory(triPrazdneXFactory());
 
       if (h.hutPozice && h.hutLiga) {
         setPozice(h.hutPozice);
@@ -251,14 +212,6 @@ export function MujInventar() {
       }
       if (h.napovedaTypKarty) {
         setTypKarty(h.napovedaTypKarty);
-      }
-      if (h.napovedaXFactory?.length) {
-        const xf = obnovIkonyXeFactoryZKatalogu(h.napovedaXFactory) ?? [];
-        setXFactory([
-          xf[0] ?? { id: "", label: "" },
-          xf[1] ?? { id: "", label: "" },
-          xf[2] ?? { id: "", label: "" },
-        ]);
       }
 
       setUpozorneniKartovaNapoveda(true);
@@ -300,47 +253,6 @@ export function MujInventar() {
     };
   }, [user?.id, supabase]);
 
-  /**
-   * Jednou po načtení inventáře zapisuje přepočtené X-F ikony jen do sloupce `atributy`.
-   * Nesmí záviset na `karty` v deps — při každé úpravě karty by jinak běžel znovu a
-   * `aktualizujKartu` se starým snapshotem přepsalo OVR/jiná pole (race s uložením).
-   */
-  useEffect(() => {
-    if (!user?.id || kartyLoading) return;
-    if (typeof window === "undefined") return;
-    const ssKey = `hut-xf-ikony-db-2026-04-${user.id}`;
-    if (sessionStorage.getItem(ssKey)) return;
-
-    const sXF = karty.filter((c) => (c.xFactory?.length ?? 0) > 0);
-    if (sXF.length === 0) {
-      sessionStorage.setItem(ssKey, "1");
-      return;
-    }
-
-    let zruseno = false;
-    void (async () => {
-      for (const karta of sXF) {
-        if (zruseno) return;
-        const { error } = await aktualizujJenAtributyKarty(
-          supabase,
-          user.id,
-          karta.id,
-          karta,
-        );
-        if (error) {
-          console.error("[hut] synchronizace X-F ikon do DB:", karta.id, error.message);
-          return;
-        }
-      }
-      if (!zruseno) sessionStorage.setItem(ssKey, "1");
-    })();
-
-    return () => {
-      zruseno = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- jen snapshot po fetchi; `karty` nesmí spouštět opakovaně
-  }, [user?.id, kartyLoading, supabase]);
-
   const [razeniKaret, nastavRazeniKaret] = useRazeniKaret();
 
   const kartyKNahledu = useMemo(
@@ -358,7 +270,6 @@ export function MujInventar() {
     setLiga("NHL");
     setTypKarty("");
     setPlat("");
-    setXFactory(triPrazdneXFactory());
     setEditujiSlug(null);
     setFormError(null);
     setUpozorneniKartovaNapoveda(false);
@@ -392,12 +303,6 @@ export function MujInventar() {
           ? mil.toLocaleString("cs-CZ", { maximumFractionDigits: 2 })
           : "",
       );
-      const xf = obnovIkonyXeFactoryZKatalogu(k.xFactory) ?? [];
-      setXFactory([
-        xf[0] ?? { id: "", label: "" },
-        xf[1] ?? { id: "", label: "" },
-        xf[2] ?? { id: "", label: "" },
-      ]);
       setEditujiSlug(rezim === "editovat" ? k.id : null);
       setProdano(rezim === "editovat" && k.prodano === true);
       setFormError(null);
@@ -495,46 +400,6 @@ export function MujInventar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const zmenXFactoryVyber = useCallback(
-    (index: number, value: string) => {
-      setXFactory((prev) => {
-        const next = [...prev];
-        while (next.length < 3) next.push({ id: "", label: "" });
-        next.length = 3;
-        const cur = next[index]!;
-        if (value === "") {
-          next[index] = { id: "", label: "" };
-          return next;
-        }
-        if (value === OPTION_VLASTNI) {
-          next[index] = {
-            id: "vlastni",
-            label: cur.label.trim() ? cur.label : "",
-            imageUrl: cur.imageUrl,
-            typeLabel: cur.typeLabel,
-            typeIconUrl: cur.typeIconUrl,
-            ...(cur.xfUroven ? { xfUroven: cur.xfUroven } : {}),
-          };
-          return next;
-        }
-        const p = polozkaPodleKlice(value);
-        if (p) {
-          const zlato: XFactorUroven = "gold";
-          next[index] = {
-            id: p.klic,
-            label: p.labelEn,
-            imageUrl: iconUrlProEaShody(p.eaShody, p.klic),
-            typeLabel: cur.typeLabel,
-            typeIconUrl: cur.typeIconUrl,
-            xfUroven: zlato,
-          };
-        }
-        return next;
-      });
-    },
-    [],
-  );
-
   const sestavKartuZFormulare = useCallback(():
     | { ok: false; chyba: string }
     | { ok: true; nova: HutCard; finalId: string } => {
@@ -592,18 +457,6 @@ export function MujInventar() {
     const typKartyUlozit =
       najdiMetaTypuKarty(typKarty, typKartyMetaOpts)?.hodnotaFiltru ?? typKarty.trim();
 
-    const xfUlozit = xFactory
-      .filter((x) => x.label.trim())
-      .slice(0, 3)
-      .map((x) => ({
-        id: (x.id || x.label).trim(),
-        label: x.label.trim(),
-        ...(x.imageUrl ? { imageUrl: x.imageUrl } : {}),
-        ...(x.typeLabel ? { typeLabel: x.typeLabel } : {}),
-        ...(x.typeIconUrl ? { typeIconUrl: x.typeIconUrl } : {}),
-        ...(x.xfUroven ? { xfUroven: x.xfUroven } : {}),
-      }));
-
     const nova: HutCard = {
       id: finalId,
       jmeno: jmeno.trim(),
@@ -616,7 +469,6 @@ export function MujInventar() {
       typKarty: typKartyUlozit,
       plat: platNum,
     };
-    if (xfUlozit.length) nova.xFactory = xfUlozit;
     if (editujiSlug) {
       nova.prodano = prodano;
       const zdrojova = karty.find((c) => c.id === editujiSlug);
@@ -643,7 +495,6 @@ export function MujInventar() {
     liga,
     tym,
     typKarty,
-    xFactory,
     narodnostiVolby,
     editujiSlug,
     prodano,
@@ -731,7 +582,7 @@ export function MujInventar() {
         errUloz.message.includes("stejnými údaji")
       ) {
         setFormError(
-          "Kartu se shodnými údaji už v inventáři máš — uprav stávající záznam, nebo změň třeba OVR, tým nebo X-Faktor.",
+          "Kartu se shodnými údaji už v inventáři máš — uprav stávající záznam, nebo změň třeba OVR, tým nebo typ karty.",
         );
         return;
       }
@@ -808,7 +659,7 @@ export function MujInventar() {
           {editujiSlug ? "Upravit kartu" : "Přidat kartu"}
         </h3>
         <p className="mt-0.5 text-xs text-[var(--hut-muted)]">
-          Kromě X-Faktorů jsou všechna pole povinná (<OznaPovinne />).{" "}
+          Všechna pole jsou povinná (<OznaPovinne />).{" "}
           <span className="hidden sm:inline">
             Zkratka: Ctrl+Enter (Mac ⌘+Enter) = uložit.
           </span>
@@ -945,8 +796,8 @@ export function MujInventar() {
             >
               Údaje byly doplněny z <strong className="font-semibold text-white">poslední uložené karty</strong> se
               stejným jménem a týmem v databázi. Před uložením je{" "}
-              <strong className="font-semibold text-white">zkontroluj</strong> — může jít o jinou variantu (OVR, typ,
-              X-Faktory…).
+              <strong className="font-semibold text-white">zkontroluj</strong> — může jít o jinou variantu (OVR, typ
+              karty…).
             </p>
           ) : null}
 
@@ -1043,62 +894,6 @@ export function MujInventar() {
               />
             </div>
           </div>
-
-          <fieldset className="sm:col-span-2 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-3 sm:p-3.5">
-            <legend className="px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--hut-lime)]">
-              X-Faktory
-            </legend>
-            <p className="mb-2 text-xs text-[var(--hut-muted)]">
-              Tři sloty (jako ve hře). Názvy anglicky jako u EA; ikony jsou v rozbalovací nabídce.
-            </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {[0, 1, 2].map((i) => {
-                const xf = xFactory[i] ?? { id: "", label: "" };
-                const sel = klicProSelect(xf);
-                const vlastni = sel === OPTION_VLASTNI;
-                return (
-                  <div key={`xf-slot-${i}`} className="min-w-0 flex flex-col gap-1">
-                    <span className={labelClass}>X-Factor {i + 1}</span>
-                    <XFactorVyber
-                      id={`inv-xf-${i}`}
-                      value={sel}
-                      onChange={(v) => zmenXFactoryVyber(i, v)}
-                      polozky={xFactoryKatalogSerazeny}
-                      urovenNaTlacitku={xf.xfUroven}
-                      disabled={formZakazany}
-                      className="relative min-w-0"
-                      triggerClassName={`${selectClassDropdown} flex w-full min-w-0 items-center justify-start gap-2 text-left`}
-                    />
-                    {vlastni ? (
-                      <input
-                        type="text"
-                        aria-label={`Vlastní název X-Faktoru ${i + 1}`}
-                        className={inputClass}
-                        value={xf.label}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setXFactory((prev) => {
-                            const next = [...prev];
-                            while (next.length < 3) next.push({ id: "", label: "" });
-                            next.length = 3;
-                            const cur = next[i];
-                            if (!cur) return prev;
-                            next[i] = {
-                              ...cur,
-                              id: "vlastni",
-                              label: v,
-                            };
-                            return next;
-                          });
-                        }}
-                        placeholder="Custom ability name"
-                      />
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </fieldset>
 
           {editujiSlug ? (
             <div className="sm:col-span-2 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/35 px-3 py-2.5 sm:px-3.5">
