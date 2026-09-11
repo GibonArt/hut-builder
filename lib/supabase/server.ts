@@ -5,7 +5,7 @@ import type { Sezona } from "@/lib/sezona";
 import {
   assertSupabaseEnv,
   authSupabaseEnv,
-  dataSupabaseEnv,
+  dataSupabaseEnvServer,
 } from "@/lib/supabase/env";
 
 /** Auth / session cookies — vždy primární projekt. */
@@ -46,7 +46,7 @@ export async function createDataClient(sezona: Sezona): Promise<SupabaseClient> 
     return auth;
   }
 
-  const env = dataSupabaseEnv(sezona);
+  const env = dataSupabaseEnvServer(sezona);
   assertSupabaseEnv(env, `data ${sezona}`);
 
   const client = createJsClient(env.url, env.publicKey, {

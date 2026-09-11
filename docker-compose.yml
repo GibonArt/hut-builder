@@ -31,3 +31,9 @@ services:
       - "${HUT_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
+    # Když hut kontejner nedosáhne na veřejnou HTTPS doménu Supabase (hairpin),
+    # namapuj hostname na LAN IP NAS (nebo host-gateway):
+    # extra_hosts:
+    #   - "supabase.kc36gaming.gibonart.cz:192.168.1.111"
+    #   - "supabase27.kc36gaming.gibonart.cz:192.168.1.111"
+    # Lepší: SUPABASE_URL / SUPABASE_NHL27_URL v .env na interní Kong (viz .env.example).

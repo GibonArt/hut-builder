@@ -1,21 +1,26 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Sezona } from "@/lib/sezona";
 import { SEZONA_VYCHOZI } from "@/lib/sezona";
-import { authSupabaseEnv, dataSupabaseEnv, serviceRoleKeyProSezonu } from "@/lib/supabase/env";
+import {
+  authSupabaseEnv,
+  dataSupabaseEnvServer,
+  serviceRoleKeyProSezonu,
+} from "@/lib/supabase/env";
 
 /**
  * Supabase klient se service role — jen pro důvěryhodné skripty na NAS / lokálně.
  * Nikdy necommituj service role klíče a nepoužívej v prohlížeči.
+ * Používá serverovou URL (`SUPABASE_NHL27_URL` / `SUPABASE_URL`), ne hairpin na veřejnou HTTPS.
  */
 export function createSupabaseServiceClient(
   sezona: Sezona = SEZONA_VYCHOZI,
 ): SupabaseClient {
-  const env = dataSupabaseEnv(sezona);
+  const env = dataSupabaseEnvServer(sezona);
   const key = serviceRoleKeyProSezonu(sezona);
   if (!env.url || !key) {
     throw new Error(
       sezona === "nhl27"
-        ? "Chybí NEXT_PUBLIC_SUPABASE_NHL27_URL (nebo fallback URL) nebo SUPABASE_NHL27_SERVICE_ROLE_KEY / SUPABASE_SERVICE_ROLE_KEY."
+        ? "Chybí SUPABASE_NHL27_URL / NEXT_PUBLIC_SUPABASE_NHL27_URL nebo SUPABASE_NHL27_SERVICE_ROLE_KEY."
         : "Chybí NEXT_PUBLIC_SUPABASE_URL nebo SUPABASE_SERVICE_ROLE_KEY v prostředí / .env.",
     );
   }
