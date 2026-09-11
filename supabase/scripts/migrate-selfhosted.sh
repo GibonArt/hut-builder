@@ -80,6 +80,7 @@ fi
 
 SQL_FILES=(
   cards_setup.sql
+  fix_cards_user_id_bez_fk_auth.sql
   cards_migrate_na_jmeno.sql
   cards_pozice_rk_na_pk.sql
   cards_prodano.sql
