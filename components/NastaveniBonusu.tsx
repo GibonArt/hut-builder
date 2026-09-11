@@ -34,7 +34,6 @@ import {
   parametryBonusuShodne,
   radkaZKopii,
   TYPY_BONUSU_KOMBINACE,
-  ulozBonusKombinaciSdilenou,
   type BonusKombinaceParametr,
   type BonusKombinaceParametrTyp,
   type RadekBonusKombinaceUi,
@@ -586,23 +585,27 @@ export function NastaveniBonusu() {
     async (next: Payload): Promise<{ error: string | null; ulozeno: Payload }> => {
       const deduped = deduplikujPayloadBonusu(next);
       if (!user?.id) return { error: "Nejsi přihlášen.", ulozeno: deduped };
-      const u = await ulozBonusKombinaciSdilenou(
-        supabase,
-        user.id,
-        "utocna",
-        deduped.utocna,
+
+      // Service role API — prohlížeč → NHL27 jinak často jako anon (Auth je NHL26).
+      const res = await fetch(
+        `/api/admin/uloz-bonus-kombinace?sezona=${encodeURIComponent(sezona)}`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            utocna: deduped.utocna,
+            obranna: deduped.obranna,
+          }),
+        },
       );
-      if (u.error) return { error: u.error.message, ulozeno: deduped };
-      const o = await ulozBonusKombinaciSdilenou(
-        supabase,
-        user.id,
-        "obranna",
-        deduped.obranna,
-      );
-      if (o.error) return { error: o.error.message, ulozeno: deduped };
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        return { error: j.error ?? `HTTP ${res.status}`, ulozeno: deduped };
+      }
       return { error: null, ulozeno: deduped };
     },
-    [supabase, user?.id],
+    [sezona, user?.id],
   );
 
   const synchronizujTypyKaretZHutbuilder = useCallback(async () => {

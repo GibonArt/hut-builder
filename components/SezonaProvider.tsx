@@ -43,42 +43,22 @@ export function SezonaProvider({
   const [dataClient, setDataClient] = useState<SupabaseClient>(() =>
     createDataClient(sezona),
   );
+  /** Po auth změně přegeneruj data klienta (accessToken callback čte aktuální session). */
+  const [authTick, setAuthTick] = useState(0);
+
+  useEffect(() => {
+    setDataClient(createDataClient(sezona));
+  }, [sezona, authTick]);
 
   useEffect(() => {
     const auth = createAuthClient();
-    const data = createDataClient(sezona);
-    setDataClient(data);
-
-    const syncSession = async () => {
-      const { data: sess } = await auth.auth.getSession();
-      if (sess.session) {
-        await data.auth.setSession({
-          access_token: sess.session.access_token,
-          refresh_token: sess.session.refresh_token,
-        });
-      } else {
-        await data.auth.signOut();
-      }
-    };
-
-    void syncSession();
     const {
       data: { subscription },
-    } = auth.auth.onAuthStateChange((_event, session) => {
-      void (async () => {
-        if (session) {
-          await data.auth.setSession({
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-          });
-        } else {
-          await data.auth.signOut();
-        }
-      })();
+    } = auth.auth.onAuthStateChange(() => {
+      setAuthTick((n) => n + 1);
     });
-
     return () => subscription.unsubscribe();
-  }, [sezona]);
+  }, []);
 
   const value = useMemo<SezonaContextValue>(
     () => ({

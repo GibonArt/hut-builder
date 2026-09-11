@@ -19,7 +19,8 @@ export function createAuthClient(): SupabaseClient {
 /**
  * Datový klient pro sezónu.
  * NHL26 = stejný projekt jako Auth (singleton).
- * NHL27 = druhý klient — `isSingleton: false`, jinak by SSR vrátil cached Auth/NHL26 klienta.
+ * NHL27 = druhý PostgREST — JWT bere z Auth klienta (`accessToken`),
+ * ne přes `setSession` na NHL27 GoTrue (tam uživatel neexistuje → anon → RLS).
  */
 export function createDataClient(sezona: Sezona): SupabaseClient {
   if (sezona === "nhl26") {
@@ -30,12 +31,17 @@ export function createDataClient(sezona: Sezona): SupabaseClient {
   assertSupabaseEnv(env, `data ${sezona}`);
   return createBrowserClient(env.url, env.publicKey, {
     isSingleton: false,
+    accessToken: async () => {
+      const auth = createAuthClient();
+      const { data } = await auth.auth.getSession();
+      return data.session?.access_token ?? null;
+    },
     auth: {
-      storageKey: `hut-data-${sezona}`,
-      // Session kopíruje SezonaProvider z Auth; refresh řeší Auth klient.
+      // Session drží jen Auth klient; data klient jen přeposílá access token.
+      persistSession: false,
       autoRefreshToken: false,
-      persistSession: true,
       detectSessionInUrl: false,
+      storageKey: `hut-data-${sezona}`,
     },
   });
 }
