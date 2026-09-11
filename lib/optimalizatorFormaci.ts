@@ -1,6 +1,7 @@
 import type { HutCard, Liga } from "@/types";
 import {
   klicLogickeKombinace,
+  TYPY_BONUSU_KOMBINACE,
   type BonusKombinaceParametr,
   type RadekBonusKombinaceUi,
 } from "@/lib/bonusKombinaceDb";
@@ -416,8 +417,142 @@ export type SpoctiObranneDvojiceOpts = {
   loPoVzajemne?: boolean;
 };
 
+/** Neuspořádaná trojice karet (stejná lajna bez ohledu na LK/C/PK). */
+export function klicNeusporadaneTrojiceIde(
+  aId: string,
+  bId: string,
+  cId: string,
+): string {
+  return [aId, bId, cId].slice().sort().join("|");
+}
+
+/** Neuspořádaná dvojice karet. */
+export function klicNeusporadaneDvojiceIde(aId: string, bId: string): string {
+  return [aId, bId].slice().sort().join("|");
+}
+
+/** Stejní hráči podle jména (bez ohledu na typ karty / sloty). */
+export function klicNeusporadaneTrojiceJmen(
+  a: Pick<HutCard, "jmeno">,
+  b: Pick<HutCard, "jmeno">,
+  c: Pick<HutCard, "jmeno">,
+): string {
+  return [a, b, c]
+    .map((k) => normalizujJmenoKarty(k.jmeno))
+    .sort()
+    .join("|");
+}
+
+export function klicNeusporadaneDvojiceJmen(
+  a: Pick<HutCard, "jmeno">,
+  b: Pick<HutCard, "jmeno">,
+): string {
+  return [a, b]
+    .map((k) => normalizujJmenoKarty(k.jmeno))
+    .sort()
+    .join("|");
+}
+
+/**
+ * Preferuj přiřazení hráčů na „jejich“ sloty (C na C, LK na LK, …),
+ * ať při konsolidaci permutací nezbude náhodné prohození křídel.
+ */
+export function skorePrirazeniSlotuUtok(
+  kLK: HutCard,
+  kC: HutCard,
+  kPK: HutCard,
+): number {
+  let s = 0;
+  if (kLK.pozice === "LK") s += 4;
+  else if (kLK.pozice === "C") s += 2;
+  else if (kLK.pozice === "PK") s += 1;
+  if (kC.pozice === "C") s += 4;
+  if (kPK.pozice === "PK") s += 4;
+  else if (kPK.pozice === "C") s += 2;
+  else if (kPK.pozice === "LK") s += 1;
+  return s;
+}
+
+export function skorePrirazeniSlotuObrana(kLO: HutCard, kPO: HutCard): number {
+  let s = 0;
+  if (kLO.pozice === "LO") s += 2;
+  if (kPO.pozice === "PO") s += 2;
+  return s;
+}
+
+function skoreSestavyUtokProZobrazeni(v: UtocnaFormaceVysledek): number {
+  return (
+    skorePrirazeniSlotuUtok(v.lk, v.c, v.pk) * 1_000 +
+    v.lk.ovr +
+    v.c.ovr +
+    v.pk.ovr
+  );
+}
+
+function skoreSestavyDvojiceProZobrazeni(v: DvojiceVysledek): number {
+  return skorePrirazeniSlotuObrana(v.a, v.b) * 1_000 + v.a.ovr + v.b.ovr;
+}
+
+/** Nižší = lepší pro zástupný řádek (PLAT před CLK před BS, pak vyšší hodnota). */
+function prioritaKombinaceProHlavicku(r: RadekBonusKombinaceUi): number {
+  const typIdx = TYPY_BONUSU_KOMBINACE.indexOf(r.bonusTyp);
+  const typRad = typIdx >= 0 ? typIdx : TYPY_BONUSU_KOMBINACE.length;
+  const h =
+    r.bonusHodnota != null && Number.isFinite(r.bonusHodnota) ? r.bonusHodnota : 0;
+  return typRad * 1_000_000 - h;
+}
+
+function jeLepsizastupnyUtok(
+  kandidat: UtocnaFormaceVysledek,
+  dosud: UtocnaFormaceVysledek,
+): boolean {
+  const prioK = prioritaKombinaceProHlavicku(kandidat.kombinace);
+  const prioD = prioritaKombinaceProHlavicku(dosud.kombinace);
+  if (prioK !== prioD) return prioK < prioD;
+  return skoreSestavyUtokProZobrazeni(kandidat) > skoreSestavyUtokProZobrazeni(dosud);
+}
+
+function jeLepsizastupnaDvojice(
+  kandidat: DvojiceVysledek,
+  dosud: DvojiceVysledek,
+): boolean {
+  const prioK = prioritaKombinaceProHlavicku(kandidat.kombinace);
+  const prioD = prioritaKombinaceProHlavicku(dosud.kombinace);
+  if (prioK !== prioD) return prioK < prioD;
+  return skoreSestavyDvojiceProZobrazeni(kandidat) > skoreSestavyDvojiceProZobrazeni(dosud);
+}
+
+/**
+ * Jedna neuspořádaná sestava jmen hráčů = jeden řádek (bonusy se sčítají v UI).
+ * Volat až po filtru typu bonusu.
+ */
+export function konsolidujUtokNaJednuTrojici(
+  radky: readonly UtocnaFormaceVysledek[],
+): UtocnaFormaceVysledek[] {
+  const best = new Map<string, UtocnaFormaceVysledek>();
+  for (const v of radky) {
+    const k = klicNeusporadaneTrojiceJmen(v.lk, v.c, v.pk);
+    const prev = best.get(k);
+    if (!prev || jeLepsizastupnyUtok(v, prev)) best.set(k, v);
+  }
+  return [...best.values()];
+}
+
+export function konsolidujDvojiceNaJednuSestavu(
+  radky: readonly DvojiceVysledek[],
+): DvojiceVysledek[] {
+  const best = new Map<string, DvojiceVysledek>();
+  for (const v of radky) {
+    const k = klicNeusporadaneDvojiceJmen(v.a, v.b);
+    const prev = best.get(k);
+    if (!prev || jeLepsizastupnaDvojice(v, prev)) best.set(k, v);
+  }
+  return [...best.values()];
+}
+
 /**
  * Útočné trojice LK + C + PK; každý ze tří symbolů kombinace připadne některé pozici (libovolné pořadí).
+ * Stejná neuspořádaná trojice + stejná kombinace jen jednou (preferuje přirozené sloty).
  */
 export function spoctiUtocneFormace(
   karty: readonly HutCard[],
@@ -433,8 +568,7 @@ export function spoctiUtocneFormace(
   const c = karty.filter((k) => k.pozice === "C");
   const pk = kridlaVzajemna ? kridla : karty.filter((k) => k.pozice === "PK");
   const narodnostKodMap = vytvorNarodnostKodMap(narodnostiVolby);
-  const out: UtocnaFormaceVysledek[] = [];
-  const videnyRadek = new Set<string>();
+  const best = new Map<string, { v: UtocnaFormaceVysledek; skore: number }>();
 
   for (const r of radkyKombinaci) {
     const kR = klicLogickeKombinace(r);
@@ -454,19 +588,24 @@ export function spoctiUtocneFormace(
         for (const { k: kPK, m: mPK } of pkK) {
           if (kPK.id === kLK.id || kPK.id === kC.id) continue;
           if (!trojiceMaskyOk(mLK, mC, mPK)) continue;
-          const klic = `${kR}|${kLK.id}|${kC.id}|${kPK.id}`;
-          if (videnyRadek.has(klic)) continue;
-          videnyRadek.add(klic);
-          out.push({ kombinace: r, lk: kLK, c: kC, pk: kPK });
+          const klic = `${kR}|${klicNeusporadaneTrojiceIde(kLK.id, kC.id, kPK.id)}`;
+          const skore = skorePrirazeniSlotuUtok(kLK, kC, kPK);
+          const prev = best.get(klic);
+          if (prev && prev.skore >= skore) continue;
+          best.set(klic, {
+            v: { kombinace: r, lk: kLK, c: kC, pk: kPK },
+            skore,
+          });
         }
       }
     }
   }
-  return out;
+  return [...best.values()].map((x) => x.v);
 }
 
 /**
  * Obranné dvojice LO + PO; oba symboly kombinace přiřaditelné k LO/PO v libovolném pořadí.
+ * Stejná neuspořádaná dvojice + stejná kombinace jen jednou (preferuje LO/PO podle pozice karty).
  */
 export function spoctiObranneDvojice(
   karty: readonly HutCard[],
@@ -479,8 +618,7 @@ export function spoctiObranneDvojice(
   const lo = loPoVzajemne ? loNeboPo : karty.filter((k) => k.pozice === "LO");
   const po = loPoVzajemne ? loNeboPo : karty.filter((k) => k.pozice === "PO");
   const narodnostKodMap = vytvorNarodnostKodMap(narodnostiVolby);
-  const out: DvojiceVysledek[] = [];
-  const videnyRadek = new Set<string>();
+  const best = new Map<string, { v: DvojiceVysledek; skore: number }>();
 
   for (const r of radkyKombinaci) {
     const kR = klicLogickeKombinace(r);
@@ -495,14 +633,15 @@ export function spoctiObranneDvojice(
       for (const { k: kPO, m: mPO } of poK) {
         if (kLO.id === kPO.id) continue;
         if (!dvojiceMaskyOk(mLO, mPO)) continue;
-        const klic = `${kR}|${kLO.id}|${kPO.id}`;
-        if (videnyRadek.has(klic)) continue;
-        videnyRadek.add(klic);
-        out.push({ kombinace: r, a: kLO, b: kPO });
+        const klic = `${kR}|${klicNeusporadaneDvojiceIde(kLO.id, kPO.id)}`;
+        const skore = skorePrirazeniSlotuObrana(kLO, kPO);
+        const prev = best.get(klic);
+        if (prev && prev.skore >= skore) continue;
+        best.set(klic, { v: { kombinace: r, a: kLO, b: kPO }, skore });
       }
     }
   }
-  return out;
+  return [...best.values()].map((x) => x.v);
 }
 
 /**
