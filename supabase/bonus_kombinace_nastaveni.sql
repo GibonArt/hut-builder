@@ -10,7 +10,7 @@
 -- Starší uložené řádky { narodnost_kod, liga, tym, typ_karty } aplikace při načtení převede na p1–p3.
 
 create table if not exists public.bonus_kombinace_nastaveni (
-  user_id uuid not null references auth.users (id) on delete cascade,
+  user_id uuid not null,
   typ_kombinace text not null check (typ_kombinace in ('utocna', 'obranna')),
   radky jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),

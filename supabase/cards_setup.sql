@@ -4,7 +4,8 @@
 -- Tabulka karet (vlastník = přihlášený uživatel; nápověda jmen napříč uživateli přes RPC napoveda_jmena_z_cards)
 create table if not exists public.cards (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users (id) on delete cascade,
+  -- UUID z Auth (může být z jiného stacku — bez FK na lokální auth.users).
+  user_id uuid not null,
   card_slug text not null,
   jmeno text not null,
   ovr smallint not null check (ovr >= 0 and ovr <= 99),

@@ -25,6 +25,7 @@ Spusť v SQL Editoru NHL27 (nebo `psql`) — **bez** datové migrace z NHL26:
 | Pořadí | Soubor | Účel |
 |--------|--------|------|
 | 1 | `supabase/cards_setup.sql` | Tabulka karet + RLS |
+| 1b | `supabase/fix_cards_user_id_bez_fk_auth.sql` | Bez FK na auth.users (Auth NHL26) |
 | 2 | `supabase/cards_prodano.sql` | Sloupec prodáno (pokud není v setup) |
 | 3 | Související RPC dle potřeby: `cards_katalog_kopie_rpc.sql`, `cards_duplikat_obsah_rpc.sql`, `cards_najdi_obnova.sql`, `napoveda_jmena_z_cards_rpc.sql` | |
 | 4 | `supabase/bonus_kombinace_global.sql` | Sdílené kombinace |

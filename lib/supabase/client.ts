@@ -1,7 +1,7 @@
 "use client";
 
 import { createBrowserClient } from "@supabase/ssr";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Sezona } from "@/lib/sezona";
 import {
   assertSupabaseEnv,
@@ -16,11 +16,18 @@ export function createAuthClient(): SupabaseClient {
   return createBrowserClient(env.url, env.publicKey);
 }
 
+async function accessTokenZAuth(): Promise<string | null> {
+  const auth = createAuthClient();
+  const { data } = await auth.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
 /**
  * Datový klient pro sezónu.
  * NHL26 = stejný projekt jako Auth (singleton).
- * NHL27 = druhý PostgREST — JWT bere z Auth klienta (`accessToken`),
- * ne přes `setSession` na NHL27 GoTrue (tam uživatel neexistuje → anon → RLS).
+ * NHL27 = čistý `createClient` (ne `@supabase/ssr`) — `createBrowserClient`
+ * přepisuje auth options a `setSession` na NHL27 GoTrue session zničí.
+ * JWT vždy z Auth klienta přes `accessToken`.
  */
 export function createDataClient(sezona: Sezona): SupabaseClient {
   if (sezona === "nhl26") {
@@ -29,19 +36,12 @@ export function createDataClient(sezona: Sezona): SupabaseClient {
 
   const env = dataSupabaseEnv(sezona);
   assertSupabaseEnv(env, `data ${sezona}`);
-  return createBrowserClient(env.url, env.publicKey, {
-    isSingleton: false,
-    accessToken: async () => {
-      const auth = createAuthClient();
-      const { data } = await auth.auth.getSession();
-      return data.session?.access_token ?? null;
-    },
+  return createClient(env.url, env.publicKey, {
+    accessToken: accessTokenZAuth,
     auth: {
-      // Session drží jen Auth klient; data klient jen přeposílá access token.
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
-      storageKey: `hut-data-${sezona}`,
     },
   });
 }
