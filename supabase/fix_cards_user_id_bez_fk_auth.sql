@@ -1,5 +1,5 @@
--- Sdílené Auth (NHL26) + data DB (NHL27): user_id v cards nesmí FK na lokální auth.users
--- (NHL27 auth.users je prázdné → INSERT karty padá i když JWT/RLS sedí).
+-- Sdílené Auth (NHL26) + data DB (NHL27): UUID z Auth nesmí FK na lokální auth.users
+-- (NHL27 auth.users je prázdné).
 --
 -- Spusť na NHL27:
 --   cd /volume1/docker/supabase-nhl27
@@ -9,8 +9,10 @@
 alter table public.cards
   drop constraint if exists cards_user_id_fkey;
 
--- Per-user bonus nastavení (pokud tabulka existuje)
 alter table public.bonus_kombinace_nastaveni
   drop constraint if exists bonus_kombinace_nastaveni_user_id_fkey;
+
+alter table public.bonus_kombinace_global
+  drop constraint if exists bonus_kombinace_global_updated_by_fkey;
 
 notify pgrst, 'reload schema';
