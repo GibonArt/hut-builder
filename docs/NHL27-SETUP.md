@@ -49,13 +49,14 @@ NEXT_PUBLIC_SUPABASE_URL=…
 NEXT_PUBLIC_SUPABASE_ANON_KEY=…
 SUPABASE_SERVICE_ROLE_KEY=…
 
-# NHL27 data
-NEXT_PUBLIC_SUPABASE_NHL27_URL=…
+# NHL27 data (veřejná HTTPS — bez interní IP; hairpin řeší docker-compose extra_hosts)
+NEXT_PUBLIC_SUPABASE_NHL27_URL=https://supabase27.kc36gaming.gibonart.cz
 NEXT_PUBLIC_SUPABASE_NHL27_ANON_KEY=…   # nebo PUBLISHABLE
 SUPABASE_NHL27_SERVICE_ROLE_KEY=…
+SUPABASE_NHL27_URL=https://supabase27.kc36gaming.gibonart.cz
 ```
 
-Po přidání `NEXT_PUBLIC_SUPABASE_NHL27_*` **rebuild** image (`docker compose build`).
+Po změně `NEXT_PUBLIC_*` **rebuild** image. Po změně jen `SUPABASE_NHL27_URL` stačí `docker compose up -d` (restart).
 
 ## 5. První sync / import (NAS)
 
