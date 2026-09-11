@@ -215,7 +215,7 @@ export function MojeKartySeznam() {
       });
       toast.success("Karta byla smazána.");
     },
-    [user?.id, supabase],
+    [user?.id, sezona],
   );
 
   const zmenProdano = useCallback(
@@ -269,7 +269,7 @@ export function MojeKartySeznam() {
       }
       toast.success(prodano ? "Karta označena jako prodaná." : "Karta znovu aktivní v optimalizátoru.");
     },
-    [user?.id, supabase, typKartyMetaOpts, karty, filtrProdano],
+    [user?.id, sezona, filtrProdano],
   );
 
   const formZakazany = !user || authLoading || mazuId !== null || meniProdanoId !== null;
