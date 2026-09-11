@@ -1,6 +1,8 @@
 /**
- * Krok 1 — synchronizace typů karet z Combo Finderu do Supabase.
+ * Krok 1 — synchronizace typů karet z Hut Builderu do Supabase.
  * Stejná logika jako POST /api/admin/sync-typy-karet (bez prohlížeče).
+ *
+ * Combo Finder (loga) + Chemistry Combos (kompletní seznam typů).
  *
  * Vyžaduje v .env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * NHL27: NEXT_PUBLIC_SUPABASE_NHL27_URL, SUPABASE_NHL27_SERVICE_ROLE_KEY
@@ -10,7 +12,7 @@
  */
 import { upsertDynamickeTypyKaret } from "@/lib/hutdbTypKaretDynamicDb";
 import {
-  dynamicRadkyZComboFinderHtml,
+  dynamicRadkyZHutbuilderTypuKaret,
   noveTypyOprotiStatickemuKatalogu,
 } from "@/lib/hutdbTypKaretSync";
 import { hutbuilderConfigProSezonu } from "@/lib/hutbuilderSezonaConfig";
@@ -18,16 +20,11 @@ import { labelSezony, parseSezonaZArgv } from "@/lib/sezona";
 import { createSupabaseServiceClient } from "@/lib/supabaseServiceClient";
 import { dataSupabaseEnv } from "@/lib/supabase/env";
 
-async function main() {
-  const sezona = parseSezonaZArgv(process.argv.slice(2));
-  const cfg = hutbuilderConfigProSezonu(sezona);
-  process.stderr.write(
-    `Sezóna ${labelSezony(sezona)} — stahuji ${cfg.comboFinderUrl}…\n`,
-  );
-  const res = await fetch(cfg.comboFinderUrl, {
+async function stahni(url: string, referer: string): Promise<string> {
+  const res = await fetch(url, {
     headers: {
-      "User-Agent": "HUT-App/1.0 (NAS sync card types; combo-finder)",
-      Referer: cfg.comboFinderReferer,
+      "User-Agent": "HUT-App/1.0 (NAS sync card types)",
+      Referer: referer,
       Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
     },
     redirect: "follow",
@@ -38,11 +35,32 @@ async function main() {
         : undefined,
   });
   if (!res.ok) {
-    console.error(`Hut Builder HTTP ${res.status}`);
-    process.exit(1);
+    throw new Error(`Hut Builder HTTP ${res.status} (${url})`);
   }
-  const html = await res.text();
-  const rows = dynamicRadkyZComboFinderHtml(html);
+  return res.text();
+}
+
+async function main() {
+  const sezona = parseSezonaZArgv(process.argv.slice(2));
+  const cfg = hutbuilderConfigProSezonu(sezona);
+  process.stderr.write(
+    `Sezóna ${labelSezony(sezona)} — stahuji Combo Finder + Chemistry Combos…\n`,
+  );
+
+  const [comboHtml, chemHtml] = await Promise.all([
+    stahni(cfg.comboFinderUrl, cfg.comboFinderReferer),
+    stahni(cfg.chemistryCombosUrl, cfg.chemistryCombosReferer).catch((e) => {
+      process.stderr.write(
+        `Varování: Chemistry Combos nedostupné (${String(e)}); použiji jen Combo Finder.\n`,
+      );
+      return null as string | null;
+    }),
+  ]);
+
+  const rows = dynamicRadkyZHutbuilderTypuKaret({
+    comboFinderHtml: comboHtml,
+    chemistryHtml: chemHtml,
+  });
   if (rows.length === 0) {
     console.error("V HTML se nepodařilo najít žádný typ karet.");
     process.exit(1);
@@ -90,6 +108,9 @@ async function main() {
   const nove = noveTypyOprotiStatickemuKatalogu(rows);
   process.stderr.write(
     `\nHotovo (${sezona}): ${rows.length} typů, nových v DB: ${novychVDb}, aktualizováno: ${rows.length - novychVDb}\n`,
+  );
+  process.stderr.write(
+    `Typy: ${rows.map((r) => r.jmeno_cs).join(", ")}\n`,
   );
   if (nove.length > 0) {
     process.stderr.write(

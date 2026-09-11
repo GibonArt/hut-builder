@@ -39,22 +39,20 @@ function cfg(
     getLinesUrl: `${HUTBUILDER_ORIGIN}/php/get_lines.php`,
     cardLogosBase: `${HUTBUILDER_ORIGIN}/images/card_logos`,
     xfactorIconsBase: `${HUTBUILDER_ORIGIN}/images/xfactor_icons/`,
-    builderUrl:
-      sezona === "nhl27"
-        ? `${HUTBUILDER_ORIGIN}/NHL27/builder.php`
-        : `${HUTBUILDER_ORIGIN}/NHL26/builder.php`,
+    builderUrl: `${base}/builder.php`.replace(/([^:]\/)\/+/g, "$1"),
   };
 }
 
 /**
- * Hut Builder URL per sezóna.
- * NHL26: stávající root stránky (chemistry-combos.php), které appka už používá.
- * NHL27: pod /NHL27/ (ověřeno: chemistry-combos.php vrací 200).
+ * Hut Builder URL per sezóna (září 2026):
+ * NHL27 = aktuální root https://nhlhutbuilder.com/
+ * NHL26 = archiv pod /NHL26/
+ * (alias /NHL27/ stále funguje, root je kanonický)
  * get_lines.php zůstává na rootu (sdílený endpoint); referer sezóny v hlavičkách.
  */
 const CONFIG: Record<Sezona, HutbuilderSezonaConfig> = {
-  nhl26: cfg("nhl26", "", "chemistry-combos.php"),
-  nhl27: cfg("nhl27", "/NHL27", "chemistry-combos.php"),
+  nhl26: cfg("nhl26", "/NHL26", "chemistry-combos.php"),
+  nhl27: cfg("nhl27", "", "chemistry-combos.php"),
 };
 
 export function hutbuilderConfigProSezonu(sezona: Sezona): HutbuilderSezonaConfig {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { upsertDynamickeTypyKaret } from "@/lib/hutdbTypKaretDynamicDb";
 import {
-  dynamicRadkyZComboFinderHtml,
+  dynamicRadkyZHutbuilderTypuKaret,
   noveTypyOprotiStatickemuKatalogu,
 } from "@/lib/hutdbTypKaretSync";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
@@ -10,8 +10,40 @@ import { sezonaZSearchParams } from "@/lib/sezona";
 import { createAuthClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabaseServiceClient";
 
+async function stahniHutbuilderHtml(
+  url: string,
+  referer: string,
+): Promise<{ ok: true; html: string } | { ok: false; status?: number; error: string }> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "HUT-App/1.0 (admin sync card types; same page as hutbuilder)",
+        Referer: referer,
+        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      },
+      redirect: "follow",
+      cache: "no-store",
+      signal:
+        typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+          ? AbortSignal.timeout(55_000)
+          : undefined,
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        error: `Hut Builder HTTP ${res.status} (${url})`,
+      };
+    }
+    return { ok: true, html: await res.text() };
+  } catch (e) {
+    return { ok: false, error: String(e instanceof Error ? e.message : e) };
+  }
+}
+
 /**
- * Stáhne combo-finder HTML, vyparsuje typy karet a upsertne je do `hut_typy_karet_dynamic`.
+ * Stáhne Combo Finder + Chemistry Combos, sloučí typy karet a upsertne do `hut_typy_karet_dynamic`.
  * Query: `?sezona=nhl26|nhl27`
  */
 export async function POST(req: Request) {
@@ -42,37 +74,20 @@ export async function POST(req: Request) {
     );
   }
 
-  let html: string;
-  try {
-    const res = await fetch(cfg.comboFinderUrl, {
-      headers: {
-        "User-Agent":
-          "HUT-App/1.0 (admin sync card types; same page as combo-finder)",
-        Referer: cfg.comboFinderReferer,
-        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-      },
-      redirect: "follow",
-      cache: "no-store",
-      signal:
-        typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
-          ? AbortSignal.timeout(55_000)
-          : undefined,
-    });
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: `Hut Builder HTTP ${res.status}` },
-        { status: 502 },
-      );
-    }
-    html = await res.text();
-  } catch (e) {
-    return NextResponse.json(
-      { error: String(e instanceof Error ? e.message : e) },
-      { status: 502 },
-    );
+  const [comboRes, chemRes] = await Promise.all([
+    stahniHutbuilderHtml(cfg.comboFinderUrl, cfg.comboFinderReferer),
+    stahniHutbuilderHtml(cfg.chemistryCombosUrl, cfg.chemistryCombosReferer),
+  ]);
+
+  if (!comboRes.ok) {
+    return NextResponse.json({ error: comboRes.error }, { status: 502 });
   }
 
-  const rows = dynamicRadkyZComboFinderHtml(html);
+  const chemistryHtml = chemRes.ok ? chemRes.html : null;
+  const rows = dynamicRadkyZHutbuilderTypuKaret({
+    comboFinderHtml: comboRes.html,
+    chemistryHtml,
+  });
   if (rows.length === 0) {
     return NextResponse.json(
       {
@@ -124,6 +139,8 @@ export async function POST(req: Request) {
     ok: true,
     sezona,
     zdroj: cfg.comboFinderUrl,
+    zdroje: [cfg.comboFinderUrl, ...(chemistryHtml ? [cfg.chemistryCombosUrl] : [])],
+    chemistry_ok: Boolean(chemistryHtml),
     /** Počet unikátních typů vyparsovaných z HTML (řádků k upsertu). */
     pocet: rows.length,
     /** Řádky s `hodnota_filtru`, které v DB před syncem nebyly → INSERT při upsertu. */

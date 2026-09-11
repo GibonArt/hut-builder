@@ -62,8 +62,8 @@ Po přidání `NEXT_PUBLIC_SUPABASE_NHL27_*` **rebuild** image (`docker compose 
 ./scripts/nas/03-over-kombinace.sh --sezona=nhl27
 ```
 
-Zdroj kombinací: `https://nhlhutbuilder.com/NHL27/chemistry-combos.php`  
-Typy karet: `https://nhlhutbuilder.com/NHL27/combo-finder.php`
+Zdroj kombinací: `https://nhlhutbuilder.com/chemistry-combos.php` (aktuální root = NHL 27; archiv NHL 26 pod `/NHL26/`)  
+Typy karet: Combo Finder + Chemistry Combos na stejném rootu (`combo-finder.php` má loga, chemistry má kompletní seznam typů)
 
 Default bez `--sezona` = `nhl26` (beze změny chování).
 

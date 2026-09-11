@@ -17,6 +17,7 @@ function noveIdRadku(): string {
 
 export {
   dynamicRadkyZComboFinderHtml,
+  dynamicRadkyZHutbuilderTypuKaret,
   parseCardTypesFromHutbuilderComboFinderHtml,
 } from "@/lib/hutdbTypKaretSync";
 

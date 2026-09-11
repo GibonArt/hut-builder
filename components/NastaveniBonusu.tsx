@@ -637,7 +637,7 @@ export function NastaveniBonusu() {
           : "";
       const schemaWarn = j.schema_varovani?.trim();
       setSyncTypyVysledek(
-        `Z Combo Finderu: ${pocet} typů. V databázi nových řádků: ${novych}, aktualizovaných: ${upd}.${noveText}${
+        `Z Hut Builderu: ${pocet} typů. V databázi nových řádků: ${novych}, aktualizovaných: ${upd}.${noveText}${
           schemaWarn ? ` ${schemaWarn}` : ""
         }`,
       );
