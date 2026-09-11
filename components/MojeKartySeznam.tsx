@@ -8,10 +8,12 @@ import type { HutCard, Pozice } from "@/types";
 import { useAuth } from "@/components/AuthProvider";
 import { useSezona } from "@/components/SezonaProvider";
 import {
-  aktualizujKartu,
   nactiKartyUzivatele,
-  smazKartuPodleSlug,
 } from "@/lib/cardsDb";
+import {
+  aktualizujKartuPresApi,
+  smazKartuPresApi,
+} from "@/lib/cardsMutateClient";
 import { vsechnyNarodnostiCS } from "@/lib/narodnosti";
 import { HUT_POZICE, HUT_POZICE_ZKRATKA } from "@/lib/hutPozice";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
@@ -50,7 +52,7 @@ function textPocetKaret(n: number): string {
 export function MojeKartySeznam() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { supabase, cesta } = useSezona();
+  const { supabase, cesta, sezona } = useSezona();
 
   const [karty, setKarty] = useState<HutCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -198,7 +200,7 @@ export function MojeKartySeznam() {
         return;
       }
       setMazuId(idKarty);
-      const { error } = await smazKartuPodleSlug(supabase, user.id, idKarty);
+      const { error } = await smazKartuPresApi(sezona, idKarty);
       setMazuId(null);
       if (error) {
         setChyba(ceskaZpravaAuthNeboDb(error.message));
@@ -242,13 +244,11 @@ export function MojeKartySeznam() {
         });
       }
 
-      const { error } = await aktualizujKartu(
-        supabase,
-        user.id,
+      const { error } = await aktualizujKartuPresApi(
+        sezona,
         k.id,
         aktualizovana,
         k,
-        { typKartyMeta: typKartyMetaOpts, inventarFallback: karty },
       );
 
       setMeniProdanoId(null);

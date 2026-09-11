@@ -22,13 +22,15 @@ import {
 import { useAuth } from "@/components/AuthProvider";
 import {
   aktualizujJenAtributyKarty,
-  aktualizujKartu,
   CHYBA_DUPLICITNI_OBSAH_KARTY,
   nactiKartyUzivatele,
   shodnaKartaJizVInventari,
-  smazKartuPodleSlug,
-  vlozKartu,
 } from "@/lib/cardsDb";
+import {
+  aktualizujKartuPresApi,
+  smazKartuPresApi,
+  vlozKartuPresApi,
+} from "@/lib/cardsMutateClient";
 import { useSezona } from "@/components/SezonaProvider";
 import { vsechnyNarodnostiCS } from "@/lib/narodnosti";
 import { parsePlatVstupVMilionech } from "@/lib/platMiliony";
@@ -111,7 +113,7 @@ export function MujInventar() {
   /** Po úspěšném uložení přesměrovat (např. z úpravy odkazem ze stránky Moje karty). */
   const navratPoUlozeniPath = useRef<string | null>(null);
   const { user, loading: authLoading } = useAuth();
-  const { supabase, cesta } = useSezona();
+  const { supabase, cesta, sezona } = useSezona();
 
   const [karty, setKarty] = useState<HutCard[]>([]);
   /** Výchozí true — dokud neproběhne první fetch, je `karty` prázdné a nesmí se zpracovat `?edit=` dřív (jinak se formulář nevyplní). */
@@ -675,13 +677,11 @@ export function MujInventar() {
     if (editujiSlug) {
       const puvodni = karty.find((c) => c.id === editujiSlug);
       const errUloz = (
-        await aktualizujKartu(
-          supabase,
-          user.id,
+        await aktualizujKartuPresApi(
+          sezona,
           editujiSlug,
           nova,
           puvodni ?? null,
-          { typKartyMeta: typKartyMetaOpts, inventarFallback: karty },
         )
       ).error;
       setUkladamKartu(false);
@@ -712,9 +712,8 @@ export function MujInventar() {
     }
 
     const errUloz = (
-      await vlozKartu(supabase, user.id, nova, {
+      await vlozKartuPresApi(sezona, nova, {
         typKartyMeta: typKartyMetaOpts,
-        inventarFallback: karty,
       })
     ).error;
     setUkladamKartu(false);
@@ -754,7 +753,7 @@ export function MujInventar() {
     ) {
       return;
     }
-    const { error: errSmaz } = await smazKartuPodleSlug(supabase, user.id, idKarty);
+    const { error: errSmaz } = await smazKartuPresApi(sezona, idKarty);
     if (errSmaz) {
       setKartyChyba(ceskaZpravaAuthNeboDb(errSmaz.message));
       return;

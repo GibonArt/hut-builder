@@ -20,13 +20,7 @@ export function ceskaZpravaAuthNeboDb(raw: string): string {
   if (n.includes("permission denied") || n.includes("row-level security"))
     return "Nemáš oprávnění k této akci. Jsi přihlášený?";
   if (n.includes("violates foreign key") || n.includes("foreign key constraint")) {
-    if (n.includes("cards") || n.includes("user_id") || n.includes("updated_by")) {
-      return (
-        "Nelze uložit — FK na auth.users (NHL27 nemá lokální uživatele). " +
-        "Na NAS spusť: ./scripts/nas/04-fix-nhl27-auth-fks.sh"
-      );
-    }
-    return `Nelze uložit — odkazuješ na neexistující údaj. (${t})`;
+    return `Nelze uložit — porušení cizího klíče v DB. Detail: ${t}`;
   }
 
   return t;
