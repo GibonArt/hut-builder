@@ -24,6 +24,7 @@ import {
   TYPY_BONUSU_KOMBINACE,
   type TypBonusuKombinace,
 } from "@/lib/bonusKombinaceDb";
+import { APP_GIT_SHA } from "@/lib/appBuild";
 import {
   filtrujDvojiceBezDuplicitnihoJmena,
   filtrujDvojicePodleMaxVyskytuOvr,
@@ -34,6 +35,7 @@ import {
   filtrujUtokPodleTymuKapitanskaSouhra,
   konsolidujDvojiceNaJednuSestavu,
   konsolidujUtokNaJednuTrojici,
+  diagnostikaShodyUtocnichKombinaci,
   normalizujJmenoKarty,
   klicNeusporadaneDvojiceIde,
   klicNeusporadaneDvojiceJmen,
@@ -1424,6 +1426,28 @@ export function OptimalizatorFormaci() {
     typKartyMetaOpts,
   ]);
 
+  const diagnostikaShodyUtok = useMemo(() => {
+    if (!filtryPoHledani || vysledkyUtok.length > 0 || utocneRadky.length === 0) {
+      return [];
+    }
+    const radky =
+      typBonusuAplikovany === "vse"
+        ? utocneRadky
+        : utocneRadky.filter((r) => r.bonusTyp === typBonusuAplikovany);
+    return diagnostikaShodyUtocnichKombinaci(kartyVeFiltru, radky, narodnostiVolby, {
+      typKartyMeta: typKartyMetaOpts,
+      limit: 6,
+    });
+  }, [
+    filtryPoHledani,
+    vysledkyUtok.length,
+    utocneRadky,
+    typBonusuAplikovany,
+    kartyVeFiltru,
+    narodnostiVolby,
+    typKartyMetaOpts,
+  ]);
+
   const vysledkyUtokBezDup = useMemo(
     () => filtrujUtokBezDuplicitnihoJmena(vysledkyUtok),
     [vysledkyUtok],
@@ -2394,19 +2418,19 @@ export function OptimalizatorFormaci() {
             <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
               <label
                 htmlFor="opt-kridla-vzajemna"
-                className="flex cursor-pointer items-start gap-2.5 text-xs leading-snug text-[var(--hut-muted)]"
+                className="flex cursor-default items-start gap-2.5 text-xs leading-snug text-[var(--hut-muted)]"
               >
                 <input
                   id="opt-kridla-vzajemna"
                   type="checkbox"
-                  checked={kridlaVzajemna}
-                  onChange={(e) => setKridlaVzajemna(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
+                  checked
+                  disabled
+                  readOnly
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)] opacity-70"
                 />
                 <span className="min-w-0">
-                  <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> na LK, C i PK
-                  lze dát libovolného útočníka (LK / C / PK) — tři různí hráči. Chemie ve hře sloty
-                  neřeší.
+                  <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> vždy zapnuto —
+                  LK / C / PK libovolně na všech třech slotech (chemie ve hře sloty neřeší).
                 </span>
               </label>
               <label
@@ -2484,6 +2508,8 @@ export function OptimalizatorFormaci() {
             <p className="text-xs text-[var(--hut-muted)]" role="status">
               V databázi: <strong className="font-medium text-zinc-300">{utocneRadky.length}</strong> útočných
               a <strong className="font-medium text-zinc-300">{obranneRadky.length}</strong> obranných kombinací.
+              {" · "}
+              build <span className="font-mono text-zinc-500">{APP_GIT_SHA}</span>
               {utocneRadky.length === 0 ? (
                 <>
                   {" "}
@@ -3179,8 +3205,7 @@ export function OptimalizatorFormaci() {
             {vysledkyUtok.length === 0 && utocneRadky.length > 0 && filtryPoHledani ? (
               <div className="mt-2 space-y-1.5 text-sm text-[var(--hut-muted)]">
                 <p>
-                  Žádná trojice nepokrývá všechny tři symboly kombinace na pozicích LK/C/PK při zvolených
-                  filtrech.
+                  Žádná trojice nepokrývá všechny tři symboly kombinace (útočníci LK/C/PK se berou vzájemně).
                 </p>
                 <p className="text-[12px] leading-snug text-[var(--hut-muted)]/90">
                   Ve filtru je {kartyVeFiltru.length} karet
@@ -3197,18 +3222,28 @@ export function OptimalizatorFormaci() {
                     : ""}
                   .
                 </p>
-                {!kridlaVzajemna &&
-                kartyVeFiltru.filter((k) => k.pozice === "C").length >= 3 &&
-                (kartyVeFiltru.filter((k) => k.pozice === "LK").length === 0 ||
-                  kartyVeFiltru.filter((k) => k.pozice === "PK").length === 0) ? (
-                  <p className="text-[12px] leading-snug text-amber-200/90">
-                    Máš hodně centerů a málo křídel — zapni{" "}
-                    <span className="font-medium text-amber-100">Záměna křídel (útok)</span> a znovu Hledat.
-                  </p>
+                {diagnostikaShodyUtok.length > 0 ? (
+                  <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-950/30 px-2.5 py-2 text-[11px] leading-snug text-amber-100/95">
+                    <p className="font-semibold text-amber-50">
+                      Diagnostika: kolik útočníků v inventáři sedí na každý symbol
+                    </p>
+                    <ul className="mt-1.5 space-y-1 font-mono text-[10px] text-amber-100/90">
+                      {diagnostikaShodyUtok.map((d, i) => (
+                        <li key={i}>
+                          {d.bonusTyp} {d.bonusHodnota ?? "—"}: {d.popisy[0]}→{d.matchP1},{" "}
+                          {d.popisy[1]}→{d.matchP2}, {d.popisy[2]}→{d.matchP3}
+                          {d.matchP1 === 0 || d.matchP2 === 0 || d.matchP3 === 0
+                            ? " ← chybí karta pro symbol"
+                            : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ) : null}
                 <p className="text-[12px] leading-snug text-[var(--hut-muted)]/90">
-                  Zkontroluj také typ karty / národnost / tým u karet (musí sedět na parametry kombinace) a že
-                  karty nejsou označené jako prodané.
+                  Build <span className="font-mono text-zinc-400">{APP_GIT_SHA}</span> — když na{" "}
+                  <span className="font-mono">/api/version</span> vidíš jiný SHA, NAS ještě nemá nový
+                  deploy.
                 </p>
               </div>
             ) : null}

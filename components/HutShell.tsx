@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { APP_GIT_SHA } from "@/lib/appBuild";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
@@ -381,6 +382,9 @@ export function HutShell({
             >
               O aplikaci
             </Link>
+          </p>
+          <p className="mt-2 font-mono text-[10px] text-[var(--hut-muted)]/50" title="Git SHA běžícího buildu">
+            build {APP_GIT_SHA}
           </p>
         </div>
       </aside>

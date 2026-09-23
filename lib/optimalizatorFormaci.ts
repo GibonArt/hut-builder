@@ -474,8 +474,8 @@ export function prirazeniSymboluDvojice(
 
 export type SpoctiUtocneFormaceOpts = {
   /**
-   * Když true, na LK / C / PK lze dát libovolného útočníka (LK, PK nebo C) —
-   * tři různí hráči. Chemie ve hře neřeší přesný slot.
+   * @deprecated Ignorováno — útočné sloty jsou vždy volné (LK/C/PK vzájemně).
+   * Ponecháno kvůli volajícím, kteří ještě posílají flag.
    */
   kridlaVzajemna?: boolean;
   /** Aliasy typů karet (TOTW ↔ TEAM OF THE WEEK) — bez toho CLK často nic nenajde. */
@@ -638,16 +638,16 @@ export function spoctiUtocneFormace(
   narodnostiVolby: readonly NarodnostVolba[],
   opts?: SpoctiUtocneFormaceOpts | null,
 ): UtocnaFormaceVysledek[] {
-  const kridlaVzajemna = Boolean(opts?.kridlaVzajemna);
   const typKartyMeta = opts?.typKartyMeta ?? null;
+  // Chemie neřeší sloty — vždy libovolný útočník (LK/C/PK) na kterémkoli ze tří míst.
+  // `kridlaVzajemna: false` necháváme v opts jen kvůli zpětné kompatibilitě API; ignoruje se.
+  void opts?.kridlaVzajemna;
   const utocnici: HutCard[] = karty.filter(
     (k) => k.pozice === "LK" || k.pozice === "PK" || k.pozice === "C",
   );
-  // Bez záměny: přísné sloty. Se záměnou: libovolný útočník na kterémkoli ze tří slotů
-  // (jinak trojice samých křídel / bez „pravého C“ nikdy nesedí — častý důvod 0 výsledků).
-  const lk = kridlaVzajemna ? utocnici : karty.filter((k) => k.pozice === "LK");
-  const c = kridlaVzajemna ? utocnici : karty.filter((k) => k.pozice === "C");
-  const pk = kridlaVzajemna ? utocnici : karty.filter((k) => k.pozice === "PK");
+  const lk = utocnici;
+  const c = utocnici;
+  const pk = utocnici;
   const narodnostKodMap = vytvorNarodnostKodMap(narodnostiVolby);
   const best = new Map<string, { v: UtocnaFormaceVysledek; skore: number }>();
 
@@ -808,3 +808,79 @@ export function spoctiGolmanskeDvojice(
   }
   return out;
 }
+
+export type DiagnostikaShodyRadku = {
+  bonusTyp: string;
+  bonusHodnota: number | null;
+  /** Kolik útočníků v inventáři sedí na param1 / param2 / param3. */
+  matchP1: number;
+  matchP2: number;
+  matchP3: number;
+  popisy: [string, string, string];
+};
+
+function popisParametruKratce(p: BonusKombinaceParametr): string {
+  switch (p.typ) {
+    case "narodnost":
+      return `národnost:${p.narodnostKod || "?"}`;
+    case "tym":
+      return `tým:${p.liga}/${p.tym || "?"}`;
+    case "typ_karty":
+      return `typ:${p.typKarty || "?"}`;
+  }
+}
+
+/**
+ * Proč kombinace nesedí: u každého řádku spočítá, kolik útočníků pokrývá jednotlivé symboly.
+ * Když u některého parametru je 0, inventář ten symbol vůbec nemá.
+ */
+export function diagnostikaShodyUtocnichKombinaci(
+  karty: readonly HutCard[],
+  radkyKombinaci: readonly RadekBonusKombinaceUi[],
+  narodnostiVolby: readonly NarodnostVolba[],
+  opts?: { typKartyMeta?: NajdiMetaTypuKartyOpts | null; limit?: number },
+): DiagnostikaShodyRadku[] {
+  const typKartyMeta = opts?.typKartyMeta ?? null;
+  const limit = opts?.limit ?? 8;
+  const utocnici = karty.filter(
+    (k) => k.pozice === "LK" || k.pozice === "PK" || k.pozice === "C",
+  );
+  const narodnostKodMap = vytvorNarodnostKodMap(narodnostiVolby);
+  const out: DiagnostikaShodyRadku[] = [];
+
+  for (const r of radkyKombinaci) {
+    if (out.length >= limit) break;
+    const params = [r.param1, r.param2, r.param3] as const;
+    let matchP1 = 0;
+    let matchP2 = 0;
+    let matchP3 = 0;
+    for (const k of utocnici) {
+      if (kartaSplnujeParametrRychle(k, params[0], narodnostKodMap, typKartyMeta)) matchP1++;
+      if (kartaSplnujeParametrRychle(k, params[1], narodnostKodMap, typKartyMeta)) matchP2++;
+      if (kartaSplnujeParametrRychle(k, params[2], narodnostKodMap, typKartyMeta)) matchP3++;
+    }
+    // Preferuj řádky, kde aspoň jeden symbol chybí — ty vysvětlují 0 výsledků
+    if (matchP1 === 0 || matchP2 === 0 || matchP3 === 0 || out.length < 3) {
+      out.push({
+        bonusTyp: r.bonusTyp,
+        bonusHodnota: r.bonusHodnota,
+        matchP1,
+        matchP2,
+        matchP3,
+        popisy: [
+          popisParametruKratce(params[0]),
+          popisParametruKratce(params[1]),
+          popisParametruKratce(params[2]),
+        ],
+      });
+    }
+  }
+
+  out.sort((a, b) => {
+    const aZ = (a.matchP1 === 0 ? 1 : 0) + (a.matchP2 === 0 ? 1 : 0) + (a.matchP3 === 0 ? 1 : 0);
+    const bZ = (b.matchP1 === 0 ? 1 : 0) + (b.matchP2 === 0 ? 1 : 0) + (b.matchP3 === 0 ? 1 : 0);
+    return bZ - aZ;
+  });
+  return out.slice(0, limit);
+}
+
