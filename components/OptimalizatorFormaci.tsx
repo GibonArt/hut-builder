@@ -1094,8 +1094,8 @@ export function OptimalizatorFormaci() {
   const [smerRazeniHodnotyBonusu, setSmerRazeniHodnotyBonusu] =
     useState<SmerRazeniHodnotyBonusu>("sestupne");
   const [typRazeniVysledku, setTypRazeniVysledku] = useState<TypRazeniVysledku>("ovr_soucet");
-  const [kridlaVzajemna, setKridlaVzajemna] = useState(false);
-  const [loPoVzajemne, setLoPoVzajemne] = useState(false);
+  const [kridlaVzajemna, setKridlaVzajemna] = useState(true);
+  const [loPoVzajemne, setLoPoVzajemne] = useState(true);
   /**
    * Po „Hledat“: filtrování řádků podle toho, zda stejná sestava hráčů splňuje víc typů bonusů (PLAT/CLK/BS).
    * Dynamické hodnoty „BS+PLAT“ atd. odpovídají přesné množině typů u té sestavy v plném výsledku.
@@ -2086,9 +2086,7 @@ export function OptimalizatorFormaci() {
     maxRozpocetMilStr.trim() !== "" ||
     hracKartaId !== "" ||
     kapitanskaTymy.length > 0 ||
-    typBonusuFiltr !== "vse" ||
-    kridlaVzajemna ||
-    loPoVzajemne;
+    typBonusuFiltr !== "vse";
 
   const vymazatFiltryFormulare = useCallback(() => {
     setMinOvrStr("");
@@ -2099,8 +2097,8 @@ export function OptimalizatorFormaci() {
     setKapitanskaTymy([]);
     setKapitanskaOperator("alespon_jeden");
     setTypBonusuFiltr("vse");
-    setKridlaVzajemna(false);
-    setLoPoVzajemne(false);
+    setKridlaVzajemna(true);
+    setLoPoVzajemne(true);
   }, []);
 
   const zobrazitSekciUtok = sekceQuickFiltr === "utok";
@@ -3156,9 +3154,40 @@ export function OptimalizatorFormaci() {
               </p>
             ) : null}
             {vysledkyUtok.length === 0 && utocneRadky.length > 0 && filtryPoHledani ? (
-              <p className="mt-2 text-sm text-[var(--hut-muted)]">
-                Žádná trojice nepokrývá všechny tři symboly kombinace na pozicích LK/C/PK při zvolených filtrech.
-              </p>
+              <div className="mt-2 space-y-1.5 text-sm text-[var(--hut-muted)]">
+                <p>
+                  Žádná trojice nepokrývá všechny tři symboly kombinace na pozicích LK/C/PK při zvolených
+                  filtrech.
+                </p>
+                <p className="text-[12px] leading-snug text-[var(--hut-muted)]/90">
+                  Ve filtru je {kartyVeFiltru.length} karet
+                  {(() => {
+                    const lk = kartyVeFiltru.filter((k) => k.pozice === "LK").length;
+                    const c = kartyVeFiltru.filter((k) => k.pozice === "C").length;
+                    const pk = kartyVeFiltru.filter((k) => k.pozice === "PK").length;
+                    return ` (LK ${lk} · C ${c} · PK ${pk})`;
+                  })()}
+                  {" · "}
+                  útočných kombinací v DB: {utocneRadky.length}
+                  {utocneRadky.filter((r) => r.bonusTyp === "CLK").length
+                    ? ` (z toho CLK ${utocneRadky.filter((r) => r.bonusTyp === "CLK").length})`
+                    : ""}
+                  .
+                </p>
+                {!kridlaVzajemna &&
+                kartyVeFiltru.filter((k) => k.pozice === "C").length >= 3 &&
+                (kartyVeFiltru.filter((k) => k.pozice === "LK").length === 0 ||
+                  kartyVeFiltru.filter((k) => k.pozice === "PK").length === 0) ? (
+                  <p className="text-[12px] leading-snug text-amber-200/90">
+                    Máš hodně centerů a málo křídel — zapni{" "}
+                    <span className="font-medium text-amber-100">Záměna křídel (útok)</span> a znovu Hledat.
+                  </p>
+                ) : null}
+                <p className="text-[12px] leading-snug text-[var(--hut-muted)]/90">
+                  Zkontroluj také typ karty / národnost / tým u karet (musí sedět na parametry kombinace) a že
+                  karty nejsou označené jako prodané.
+                </p>
+              </div>
             ) : null}
             {vysledkyUtok.length > 0 && utokZobrazeno.length === 0 && typBonusuAplikovany !== "vse" ? (
               <p className="mt-2 text-sm text-[var(--hut-muted)]">

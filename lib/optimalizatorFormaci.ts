@@ -10,6 +10,7 @@ import {
   type NajdiMetaTypuKartyOpts,
 } from "@/lib/hutdbTypKaret";
 import type { NarodnostVolba } from "@/lib/narodnosti";
+import { narodnostKodZHutbuilderJmena } from "@/lib/narodnosti";
 
 /** Permutace indexů parametrů: slot i dostane `params[perm[i]]` (LK/C/PK nebo LO/PO). */
 const PERMUTACE3: readonly (readonly [number, number, number])[] = [
@@ -38,6 +39,20 @@ function vytvorNarodnostKodMap(narodnostiVolby: readonly NarodnostVolba[]): Naro
   return m;
 }
 
+/** Odstraní diakritiku / sjednotí mezery pro srovnání týmů. */
+function normalizujTextProSrovnani(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function typKartyKlicAlnum(s: string): string {
+  return s.toUpperCase().replace(/[^A-Z0-9]+/g, "");
+}
+
 function typKartySplnujeBonus(
   typNaKarte: string,
   typVKombinaci: string,
@@ -46,10 +61,28 @@ function typKartySplnujeBonus(
   const poz = typVKombinaci.trim();
   if (!poz) return false;
   if (poz === "*") return true;
-  return (
-    kanonickyFiltrTypuKarty(typNaKarte, typKartyMeta) ===
-    kanonickyFiltrTypuKarty(poz, typKartyMeta)
-  );
+  const karta = typNaKarte.trim();
+  if (!karta) return false;
+
+  const kanKarta = kanonickyFiltrTypuKarty(karta, typKartyMeta);
+  const kanPoz = kanonickyFiltrTypuKarty(poz, typKartyMeta);
+  if (kanKarta && kanPoz && kanKarta === kanPoz) return true;
+
+  // Fallback: "FOO BAR" ≡ "FOO-BAR" / "FooBar" když alias v katalogu chybí
+  const a = typKartyKlicAlnum(kanKarta || karta);
+  const b = typKartyKlicAlnum(kanPoz || poz);
+  return Boolean(a) && a === b;
+}
+
+function tymSplnujeBonus(k: HutCard, p: Extract<BonusKombinaceParametr, { typ: "tym" }>): boolean {
+  const chteny = p.tym.trim();
+  if (!chteny) return false;
+  if (normalizujTextProSrovnani(k.tym) !== normalizujTextProSrovnani(chteny)) {
+    return false;
+  }
+  // Liga musí sedět; když na kartě chybí, bereme shodu názvu
+  if (!k.liga) return true;
+  return k.liga === p.liga;
 }
 
 function kartaSplnujeParametrRychle(
@@ -63,15 +96,15 @@ function kartaSplnujeParametrRychle(
       const poz = p.narodnostKod.trim();
       if (!poz) return false;
       const naKarte = k.narodnost.trim();
-      const kod = narodnostKodMap.get(naKarte) ?? narodnostKodMap.get(naKarte.toUpperCase());
+      if (!naKarte) return false;
+      const kod =
+        narodnostKodMap.get(naKarte) ??
+        narodnostKodMap.get(naKarte.toUpperCase()) ??
+        narodnostKodZHutbuilderJmena(naKarte);
       return kod === poz;
     }
     case "tym":
-      return (
-        Boolean(p.tym.trim()) &&
-        k.liga === p.liga &&
-        k.tym.trim() === p.tym.trim()
-      );
+      return tymSplnujeBonus(k, p);
     case "typ_karty":
       return typKartySplnujeBonus(k.typKarty, p.typKarty, typKartyMeta);
   }
