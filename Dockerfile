@@ -36,11 +36,25 @@ ENV NEXT_PUBLIC_SUPABASE_NHL27_ANON_KEY=$NEXT_PUBLIC_SUPABASE_NHL27_ANON_KEY
 ENV NEXT_PUBLIC_SUPABASE_NHL27_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_NHL27_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
-# SHA: build-arg → soubor .build-git-sha (deploy skript) → unknown
-# (.git není v Docker kontextu kvůli .dockerignore)
+# SHA i při holém `sudo docker compose build` (sudo maže env):
+# build-arg → .build-git-sha → .git/HEAD (v kontextu) → unknown
 RUN SHA="${NEXT_PUBLIC_APP_GIT_SHA}"; \
   if [ -z "$SHA" ] || [ "$SHA" = "unknown" ]; then \
     if [ -f .build-git-sha ]; then SHA="$(tr -d '[:space:]' < .build-git-sha)"; fi; \
+  fi; \
+  if [ -z "$SHA" ] || [ "$SHA" = "unknown" ]; then \
+    if [ -f .git/HEAD ]; then \
+      _ref="$(tr -d '[:space:]' < .git/HEAD)"; \
+      case "$_ref" in \
+        ref:*) \
+          _path=".git/${_ref#ref:}"; \
+          if [ -f "$_path" ]; then SHA="$(tr -d '[:space:]' < "$_path" | cut -c1-7)"; \
+          elif [ -f .git/packed-refs ]; then \
+            SHA="$(awk -v r="${_ref#ref:}" 'index($0," " r)>0 { print substr($1,1,7); exit }' .git/packed-refs)"; \
+          fi ;; \
+        *) SHA="$(printf '%s' "$_ref" | cut -c1-7)" ;; \
+      esac; \
+    fi; \
   fi; \
   BUILT="${NEXT_PUBLIC_APP_BUILT_AT}"; \
   if [ -z "$BUILT" ]; then BUILT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"; fi; \

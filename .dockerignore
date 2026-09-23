@@ -1,5 +1,10 @@
-# Git a vývoj
-.git
+# Git: v kontextu jen to, co stačí na short SHA (bez celého objects/)
+.git/**
+!.git/HEAD
+!.git/refs/
+!.git/refs/**
+!.git/packed-refs
+
 .gitignore
 *.md
 .env

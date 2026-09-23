@@ -2,9 +2,11 @@
 #
 # 1) Zkopíruj .env.example → .env a doplň hodnoty z Supabase (Dashboard → Settings → API).
 # 2) Soubor .env NIKDY necommituj — zůstane jen na NAS / u tebe lokálně.
-# 3) Build bere NEXT_PUBLIC_* z .env (kvůli vložení do frontendu je potřeba znovu build po změně těchto klíčů):
-#      docker compose build --no-cache
-#      docker compose up -d
+# 3) Build bere NEXT_PUBLIC_* z .env (po změně těchto klíčů znovu build).
+#    Git SHA se do image vloží sám z .git (i při `sudo docker compose build` bez env):
+#      sudo docker compose build
+#      sudo docker compose up -d
+#    Ověř: curl -s https://hut.gibonart.cz/api/version
 #
 # Port: aplikace uvnitř kontejneru poslouchá na 3000. Níže mapuješ host:container.
 # Na Synology v DSM často nastavíš Reverse Proxy z 443 na http://127.0.0.1:3000 (nebo jiný host port).
