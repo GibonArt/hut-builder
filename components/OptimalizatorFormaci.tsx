@@ -3270,6 +3270,10 @@ export function OptimalizatorFormaci() {
                     <p className="font-semibold text-amber-50">
                       Diagnostika {typBonusuAplikovany}: shoda symbolů v inventáři
                     </p>
+                    <p className="mt-1 text-[10px] text-amber-100/80">
+                      NHL tým (např. Anaheim Ducks) sedí i na symbol NHLAA Alumni stejného
+                      franchise. Každý hráč ve formaci obsadí právě jeden symbol kombinace.
+                    </p>
                     <ul className="mt-1.5 space-y-1 font-mono text-[10px] text-amber-100/90">
                       {diagnostikaShodyUtok.map((d, i) => (
                         <li key={i}>

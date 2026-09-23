@@ -50,6 +50,36 @@ function normalizujTextProSrovnani(s: string): string {
     .trim();
 }
 
+/**
+ * Franchise pro chemii: „Anaheim Ducks Alumni“ ≡ „Anaheim Ducks“, „St. Louis“ ≡ „St Louis“.
+ * V HUT Builderu / EA je NHLAA oddělená liga, ale na kartě často zůstane NHL + základní název.
+ */
+export function normalizujNazevTymuProChemii(s: string): string {
+  return normalizujTextProSrovnani(s)
+    .replace(/\./g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s+alumni$/, "")
+    .trim();
+}
+
+function ligyKompatibilniProChemii(a: string, b: string): boolean {
+  if (a === b) return true;
+  // NHL ↔ NHLAA: stejný franchise (Ducks ≡ Ducks Alumni)
+  const nhl = new Set(["NHL", "NHLAA"]);
+  return nhl.has(a) && nhl.has(b);
+}
+
+function tymSplnujeBonus(k: HutCard, p: Extract<BonusKombinaceParametr, { typ: "tym" }>): boolean {
+  const chteny = p.tym.trim();
+  if (!chteny) return false;
+  const kTym = normalizujNazevTymuProChemii(k.tym);
+  const pTym = normalizujNazevTymuProChemii(chteny);
+  if (!kTym || kTym !== pTym) return false;
+  // Liga musí sedět (nebo NHL↔NHLAA); když na kartě chybí, bereme shodu názvu
+  if (!k.liga) return true;
+  return ligyKompatibilniProChemii(k.liga, p.liga);
+}
+
 function typKartyKlicAlnum(s: string): string {
   return s.toUpperCase().replace(/[^A-Z0-9]+/g, "");
 }
@@ -73,17 +103,6 @@ function typKartySplnujeBonus(
   const a = typKartyKlicAlnum(kanKarta || karta);
   const b = typKartyKlicAlnum(kanPoz || poz);
   return Boolean(a) && a === b;
-}
-
-function tymSplnujeBonus(k: HutCard, p: Extract<BonusKombinaceParametr, { typ: "tym" }>): boolean {
-  const chteny = p.tym.trim();
-  if (!chteny) return false;
-  if (normalizujTextProSrovnani(k.tym) !== normalizujTextProSrovnani(chteny)) {
-    return false;
-  }
-  // Liga musí sedět; když na kartě chybí, bereme shodu názvu
-  if (!k.liga) return true;
-  return k.liga === p.liga;
 }
 
 function kartaSplnujeParametrRychle(
@@ -813,6 +832,8 @@ function popisParametruKratce(p: BonusKombinaceParametr): string {
 /**
  * Proč kombinace nesedí: u každého řádku spočítá, kolik útočníků pokrývá jednotlivé symboly.
  * Když u některého parametru je 0, inventář ten symbol vůbec nemá.
+ * Preferuje řádky „těsně vedle“ (max. min. shoda) — ne jen čisté nuly (NHLAA alumni dřív
+ * přebíjely užitečnější řádky v diagnostice).
  */
 export function diagnostikaShodyUtocnichKombinaci(
   karty: readonly HutCard[],
@@ -826,10 +847,9 @@ export function diagnostikaShodyUtocnichKombinaci(
     (k) => k.pozice === "LK" || k.pozice === "PK" || k.pozice === "C",
   );
   const narodnostKodMap = vytvorNarodnostKodMap(narodnostiVolby);
-  const out: DiagnostikaShodyRadku[] = [];
+  const scored: (DiagnostikaShodyRadku & { minM: number; nuly: number })[] = [];
 
   for (const r of radkyKombinaci) {
-    if (out.length >= limit) break;
     const params = [r.param1, r.param2, r.param3] as const;
     let matchP1 = 0;
     let matchP2 = 0;
@@ -839,28 +859,30 @@ export function diagnostikaShodyUtocnichKombinaci(
       if (kartaSplnujeParametrRychle(k, params[1], narodnostKodMap, typKartyMeta)) matchP2++;
       if (kartaSplnujeParametrRychle(k, params[2], narodnostKodMap, typKartyMeta)) matchP3++;
     }
-    // Preferuj řádky, kde aspoň jeden symbol chybí — ty vysvětlují 0 výsledků
-    if (matchP1 === 0 || matchP2 === 0 || matchP3 === 0 || out.length < 3) {
-      out.push({
-        bonusTyp: r.bonusTyp,
-        bonusHodnota: r.bonusHodnota,
-        matchP1,
-        matchP2,
-        matchP3,
-        popisy: [
-          popisParametruKratce(params[0]),
-          popisParametruKratce(params[1]),
-          popisParametruKratce(params[2]),
-        ],
-      });
-    }
+    const nuly =
+      (matchP1 === 0 ? 1 : 0) + (matchP2 === 0 ? 1 : 0) + (matchP3 === 0 ? 1 : 0);
+    scored.push({
+      bonusTyp: r.bonusTyp,
+      bonusHodnota: r.bonusHodnota,
+      matchP1,
+      matchP2,
+      matchP3,
+      popisy: [
+        popisParametruKratce(params[0]),
+        popisParametruKratce(params[1]),
+        popisParametruKratce(params[2]),
+      ],
+      minM: Math.min(matchP1, matchP2, matchP3),
+      nuly,
+    });
   }
 
-  out.sort((a, b) => {
-    const aZ = (a.matchP1 === 0 ? 1 : 0) + (a.matchP2 === 0 ? 1 : 0) + (a.matchP3 === 0 ? 1 : 0);
-    const bZ = (b.matchP1 === 0 ? 1 : 0) + (b.matchP2 === 0 ? 1 : 0) + (b.matchP3 === 0 ? 1 : 0);
-    return bZ - aZ;
+  // Nejdřív řádky s alespoň nějakou šancí (vyšší minM), pak méně nul
+  scored.sort((a, b) => {
+    if (b.minM !== a.minM) return b.minM - a.minM;
+    if (a.nuly !== b.nuly) return a.nuly - b.nuly;
+    return 0;
   });
-  return out.slice(0, limit);
+  return scored.slice(0, limit).map(({ minM: _m, nuly: _n, ...rest }) => rest);
 }
 
