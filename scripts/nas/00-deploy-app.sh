@@ -11,6 +11,8 @@ SHA="$(git rev-parse --short HEAD)"
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export NEXT_PUBLIC_APP_GIT_SHA="$SHA"
 export NEXT_PUBLIC_APP_BUILT_AT="$BUILT_AT"
+# Dockerfile bere SHA i z tohoto souboru (když sudo ztratí env)
+printf '%s\n' "$SHA" > .build-git-sha
 echo "→ build $SHA ($BUILT_AT)" >&2
 
 echo "→ docker compose build" >&2

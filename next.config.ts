@@ -2,13 +2,13 @@ import type { NextConfig } from "next";
 import { execSync } from "node:child_process";
 
 function gitShortSha(): string {
-  if (process.env.NEXT_PUBLIC_APP_GIT_SHA?.trim()) {
-    return process.env.NEXT_PUBLIC_APP_GIT_SHA.trim();
-  }
+  const fromEnv = process.env.NEXT_PUBLIC_APP_GIT_SHA?.trim();
+  // Compose default „unknown“ nesmí přebít git — bere se jen skutečný SHA.
+  if (fromEnv && fromEnv !== "unknown") return fromEnv;
   try {
     return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
   } catch {
-    return "unknown";
+    return fromEnv || "unknown";
   }
 }
 

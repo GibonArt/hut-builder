@@ -52,3 +52,6 @@ next-env.d.ts
 /export/cloud.env
 /export/cloud.password
 /export/*.sql
+
+# SHA zapsaný před docker compose build (scripts/nas/00-deploy-app.sh)
+.build-git-sha
