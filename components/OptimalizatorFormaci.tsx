@@ -1150,7 +1150,6 @@ export function OptimalizatorFormaci() {
       filtryPoHledani.maxOvrStr !== maxOvrStr ||
       filtryPoHledani.maxRozpocetMilStr !== maxRozpocetMilStr ||
       filtryPoHledani.hracKartaId !== hracKartaId ||
-      filtryPoHledani.typBonusuFiltr !== typBonusuFiltr ||
       !stejneTymyFiltryKapitanskaSouhra(filtryPoHledani.kapitanskaTymy, kapitanskaTymy) ||
       filtryPoHledani.kapitanskaOperator !== kapitanskaOperator
     );
@@ -1160,7 +1159,6 @@ export function OptimalizatorFormaci() {
     maxOvrStr,
     maxRozpocetMilStr,
     hracKartaId,
-    typBonusuFiltr,
     kapitanskaTymy,
     kapitanskaOperator,
   ]);
@@ -1293,7 +1291,7 @@ export function OptimalizatorFormaci() {
     return filtrujKartyPodleOvr(bezProdanych, min, max);
   }, [karty, filtryPoHledani]);
 
-  const typBonusuAplikovany = filtryPoHledani?.typBonusuFiltr ?? "vse";
+  const typBonusuAplikovany = typBonusuFiltr;
 
   const maxRozpocetAplikovany = useMemo(() => {
     if (!filtryPoHledani) return null;
@@ -1427,20 +1425,26 @@ export function OptimalizatorFormaci() {
   ]);
 
   const diagnostikaShodyUtok = useMemo(() => {
-    if (!filtryPoHledani || vysledkyUtok.length > 0 || utocneRadky.length === 0) {
+    if (!filtryPoHledani || utocneRadky.length === 0) {
       return [];
     }
-    const radky =
+    const radkyProDiag =
       typBonusuAplikovany === "vse"
         ? utocneRadky
         : utocneRadky.filter((r) => r.bonusTyp === typBonusuAplikovany);
-    return diagnostikaShodyUtocnichKombinaci(kartyVeFiltru, radky, narodnostiVolby, {
+    if (radkyProDiag.length === 0) return [];
+    // Po výpočtu: buď žádná sestava vůbec, nebo filtr typu (CLK/…) všechno odřízl
+    const poTypuPrazdne =
+      typBonusuAplikovany !== "vse" &&
+      !vysledkyUtok.some((v) => v.kombinace.bonusTyp === typBonusuAplikovany);
+    if (vysledkyUtok.length > 0 && !poTypuPrazdne) return [];
+    return diagnostikaShodyUtocnichKombinaci(kartyVeFiltru, radkyProDiag, narodnostiVolby, {
       typKartyMeta: typKartyMetaOpts,
       limit: 6,
     });
   }, [
     filtryPoHledani,
-    vysledkyUtok.length,
+    vysledkyUtok,
     utocneRadky,
     typBonusuAplikovany,
     kartyVeFiltru,
@@ -2206,13 +2210,13 @@ export function OptimalizatorFormaci() {
               Filtry formací
             </h3>
             <p className="mt-1 text-xs text-[var(--hut-muted)]/90">
+              Typ bonusu (PLAT / CLK / BS) filtruje výsledky hned — nemusíš znovu mačkat Hledat.
               OVR a rozpočet: prázdné pole = bez limitu. Rozpočet = součet platů všech hráčů v dané sestavě (útok 3
               karty, obrana / brankáři 2 karty), ve stejných milionech jako u karet v inventáři. Výběr hráče z tvého
               inventáře zobrazí jen formace, kde daná karta figuruje. U kapitánské souhry vyber týmy z požadavku na tvé
               kapitánské kartě — v útoku a obraně uvidíš jen formace, kde je alespoň jeden hráč z některého zvoleného
-              týmu (ostatní ve formaci mohou být i z jiných týmů; brankáře filtr neomezí). Typ bonusu zužuje
-              výsledky podle hodnoty z Nastavení bonusů. Kombinace se dopočítají až po kliknutí na{" "}
-              <span className="text-zinc-300">Hledat</span> — úvodní načtení stránky tak zůstane rychlé.
+              týmu (ostatní ve formaci mohou být i z jiných týmů; brankáře filtr neomezí). Kombinace se dopočítají až po
+              kliknutí na <span className="text-zinc-300">Hledat</span> — úvodní načtení stránky tak zůstane rychlé.
             </p>
             <div
               className="mt-5 flex flex-wrap items-center gap-2"
@@ -3008,8 +3012,8 @@ export function OptimalizatorFormaci() {
                     ? ` · kapitánská souhra (${kapitanskaOperatorAplikovany === "vsechny" ? "A" : "NEBO"}: ${kapitanskaTymyAplikovane.map((t) => t.tym).join(kapitanskaOperatorAplikovany === "vsechny" ? " + " : ", ")}): útok ${utokZobrazenoPoKapitanske.length}, obrana ${obranaZobrazenoPoKapitanske.length}, brankáři ${golmaniZobrazenoPoKapitanske.length}`
                     : maxRozpocetAplikovany !== null
                     ? ` · max. plat ≤ ${formatovatPlatVMil(maxRozpocetAplikovany)}: útok ${utokZobrazenoPoRozpoctu.length}, obrana ${obranaZobrazenoPoRozpoctu.length}, brankáři ${golmaniZobrazenoPoRozpoctu.length}`
-                    : filtryPoHledani.typBonusuFiltr !== "vse"
-                      ? ` · zobrazeno jen ${filtryPoHledani.typBonusuFiltr}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
+                    : typBonusuAplikovany !== "vse"
+                      ? ` · zobrazeno jen ${typBonusuAplikovany}: útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`
                       : ` · výsledků (bez duplicit jmen): útok ${utokZobrazeno.length}, obrana ${obranaZobrazeno.length}, brankáři ${golmaniZobrazeno.length}`}
                 {maVybranouUtok || maVybranouObranu || maVybraneGolmany
                   ? ` · po výběru hráčů: útok ${utokZobrazenoPoVylouceni.length}/${utokZobrazenoPoPrekryvu.length}, obrana ${obranaZobrazenoPoVylouceni.length}/${obranaZobrazenoPoPrekryvu.length}, brankáři ${golmaniZobrazenoPoVylouceni.length}/${golmaniZobrazenoPoPrekryvu.length}`
@@ -3219,7 +3223,7 @@ export function OptimalizatorFormaci() {
                   útočných kombinací v DB: {utocneRadky.length}
                   {utocneRadky.filter((r) => r.bonusTyp === "CLK").length
                     ? ` (z toho CLK ${utocneRadky.filter((r) => r.bonusTyp === "CLK").length})`
-                    : ""}
+                    : " (CLK 0 — v DB chybí overall/OVR kombinace)"}
                   .
                 </p>
                 {diagnostikaShodyUtok.length > 0 ? (
@@ -3248,9 +3252,38 @@ export function OptimalizatorFormaci() {
               </div>
             ) : null}
             {vysledkyUtok.length > 0 && utokZobrazeno.length === 0 && typBonusuAplikovany !== "vse" ? (
-              <p className="mt-2 text-sm text-[var(--hut-muted)]">
-                Po zapnutí filtru „{typBonusuAplikovany}“ nezůstala žádná útočná sestava — zkus „Vše“ nebo jiný typ.
-              </p>
+              <div className="mt-2 space-y-1.5 text-sm text-[var(--hut-muted)]">
+                <p>
+                  Po filtru „{typBonusuAplikovany}“ nezůstala žádná útočná sestava — zkus „Vše“ (naleseno{" "}
+                  {vysledkyUtok.length} sestav) nebo jiný typ.
+                </p>
+                <p className="text-[12px] leading-snug text-[var(--hut-muted)]/90">
+                  V DB je {utocneRadky.filter((r) => r.bonusTyp === typBonusuAplikovany).length} útočných
+                  kombinací typu {typBonusuAplikovany}
+                  {typBonusuAplikovany === "CLK" &&
+                  utocneRadky.filter((r) => r.bonusTyp === "CLK").length === 0
+                    ? " — import overall/CLK pravděpodobně neproběhl (Nastavení bonusů → Chemistry Combos / overall)."
+                    : "."}
+                </p>
+                {diagnostikaShodyUtok.length > 0 ? (
+                  <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-950/30 px-2.5 py-2 text-[11px] leading-snug text-amber-100/95">
+                    <p className="font-semibold text-amber-50">
+                      Diagnostika {typBonusuAplikovany}: shoda symbolů v inventáři
+                    </p>
+                    <ul className="mt-1.5 space-y-1 font-mono text-[10px] text-amber-100/90">
+                      {diagnostikaShodyUtok.map((d, i) => (
+                        <li key={i}>
+                          {d.bonusTyp} {d.bonusHodnota ?? "—"}: {d.popisy[0]}→{d.matchP1},{" "}
+                          {d.popisy[1]}→{d.matchP2}, {d.popisy[2]}→{d.matchP3}
+                          {d.matchP1 === 0 || d.matchP2 === 0 || d.matchP3 === 0
+                            ? " ← chybí karta pro symbol"
+                            : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             {utokZobrazeno.length > 0 &&
             utokZobrazenoPoRozpoctu.length === 0 &&

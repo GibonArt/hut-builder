@@ -111,21 +111,6 @@ function kartaSplnujeParametrRychle(
   }
 }
 
-function maskaTriParametru(
-  k: HutCard,
-  params: readonly [BonusKombinaceParametr, BonusKombinaceParametr, BonusKombinaceParametr],
-  narodnostKodMap: NarodnostKodMap,
-  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
-): number {
-  let mask = 0;
-  for (let i = 0; i < 3; i++) {
-    if (kartaSplnujeParametrRychle(k, params[i]!, narodnostKodMap, typKartyMeta)) {
-      mask |= 1 << i;
-    }
-  }
-  return mask;
-}
-
 function maskaDvuParametru(
   k: HutCard,
   params: readonly [BonusKombinaceParametr, BonusKombinaceParametr],
@@ -136,20 +121,6 @@ function maskaDvuParametru(
   if (kartaSplnujeParametrRychle(k, params[0]!, narodnostKodMap, typKartyMeta)) mask |= 1;
   if (kartaSplnujeParametrRychle(k, params[1]!, narodnostKodMap, typKartyMeta)) mask |= 2;
   return mask;
-}
-
-function trojiceMaskyOk(mLK: number, mC: number, mPK: number): boolean {
-  if (!mLK || !mC || !mPK) return false;
-  for (const perm of PERMUTACE3) {
-    if (
-      (mLK & (1 << perm[0]!)) &&
-      (mC & (1 << perm[1]!)) &&
-      (mPK & (1 << perm[2]!))
-    ) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function dvojiceMaskyOk(mA: number, mB: number): boolean {
@@ -629,8 +600,11 @@ export function konsolidujDvojiceNaJednuSestavu(
 }
 
 /**
- * Útočné trojice LK + C + PK; každý ze tří symbolů kombinace připadne některé pozici (libovolné pořadí).
- * Stejná neuspořádaná trojice + stejná kombinace jen jednou (preferuje přirozené sloty).
+ * Útočné trojice LK + C + PK; tři symboly kombinace musí pokrýt tři různí útočníci
+ * (libovolné pozice LK/C/PK — chemie sloty neřeší).
+ *
+ * Algoritmus: karty po symbolech (ne n³ přes všechny útočníky s maskou) — u CLK/PLAT
+ * s úzkými symboly je to řádově rychlejší a spolehlivější.
  */
 export function spoctiUtocneFormace(
   karty: readonly HutCard[],
@@ -639,52 +613,58 @@ export function spoctiUtocneFormace(
   opts?: SpoctiUtocneFormaceOpts | null,
 ): UtocnaFormaceVysledek[] {
   const typKartyMeta = opts?.typKartyMeta ?? null;
-  // Chemie neřeší sloty — vždy libovolný útočník (LK/C/PK) na kterémkoli ze tří míst.
   // `kridlaVzajemna: false` necháváme v opts jen kvůli zpětné kompatibilitě API; ignoruje se.
   void opts?.kridlaVzajemna;
   const utocnici: HutCard[] = karty.filter(
     (k) => k.pozice === "LK" || k.pozice === "PK" || k.pozice === "C",
   );
-  const lk = utocnici;
-  const c = utocnici;
-  const pk = utocnici;
   const narodnostKodMap = vytvorNarodnostKodMap(narodnostiVolby);
   const best = new Map<string, { v: UtocnaFormaceVysledek; skore: number }>();
 
   for (const r of radkyKombinaci) {
     const kR = klicLogickeKombinace(r);
-    const params = [r.param1, r.param2, r.param3] as const;
-    const lkK = lk
-      .map((k) => ({
-        k,
-        m: maskaTriParametru(k, params, narodnostKodMap, typKartyMeta),
-      }))
-      .filter((x) => x.m > 0);
-    const cK = c
-      .map((k) => ({
-        k,
-        m: maskaTriParametru(k, params, narodnostKodMap, typKartyMeta),
-      }))
-      .filter((x) => x.m > 0);
-    const pkK = pk
-      .map((k) => ({
-        k,
-        m: maskaTriParametru(k, params, narodnostKodMap, typKartyMeta),
-      }))
-      .filter((x) => x.m > 0);
-    for (const { k: kLK, m: mLK } of lkK) {
-      for (const { k: kC, m: mC } of cK) {
-        if (kC.id === kLK.id) continue;
-        for (const { k: kPK, m: mPK } of pkK) {
-          if (kPK.id === kLK.id || kPK.id === kC.id) continue;
-          if (!trojiceMaskyOk(mLK, mC, mPK)) continue;
-          const klic = `${kR}|${klicNeusporadaneTrojiceIde(kLK.id, kC.id, kPK.id)}`;
-          const skore = skorePrirazeniSlotuUtok(kLK, kC, kPK);
+    const p0 = r.param1;
+    const p1 = r.param2;
+    const p2 = r.param3;
+    const m0 = utocnici.filter((k) =>
+      kartaSplnujeParametrRychle(k, p0, narodnostKodMap, typKartyMeta),
+    );
+    const m1 = utocnici.filter((k) =>
+      kartaSplnujeParametrRychle(k, p1, narodnostKodMap, typKartyMeta),
+    );
+    const m2 = utocnici.filter((k) =>
+      kartaSplnujeParametrRychle(k, p2, narodnostKodMap, typKartyMeta),
+    );
+    if (!m0.length || !m1.length || !m2.length) continue;
+
+    for (const a of m0) {
+      for (const b of m1) {
+        if (b.id === a.id) continue;
+        for (const c of m2) {
+          if (c.id === a.id || c.id === b.id) continue;
+          const trio = [a, b, c] as const;
+          let bestSkore = -1;
+          let bestLK = a;
+          let bestC = b;
+          let bestPK = c;
+          for (const perm of PERMUTACE3) {
+            const kLK = trio[perm[0]!]!;
+            const kC = trio[perm[1]!]!;
+            const kPK = trio[perm[2]!]!;
+            const skore = skorePrirazeniSlotuUtok(kLK, kC, kPK);
+            if (skore > bestSkore) {
+              bestSkore = skore;
+              bestLK = kLK;
+              bestC = kC;
+              bestPK = kPK;
+            }
+          }
+          const klic = `${kR}|${klicNeusporadaneTrojiceIde(bestLK.id, bestC.id, bestPK.id)}`;
           const prev = best.get(klic);
-          if (prev && prev.skore >= skore) continue;
+          if (prev && prev.skore >= bestSkore) continue;
           best.set(klic, {
-            v: { kombinace: r, lk: kLK, c: kC, pk: kPK },
-            skore,
+            v: { kombinace: r, lk: bestLK, c: bestC, pk: bestPK },
+            skore: bestSkore,
           });
         }
       }
