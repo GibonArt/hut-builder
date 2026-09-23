@@ -41,9 +41,10 @@ function vytvorNarodnostKodMap(narodnostiVolby: readonly NarodnostVolba[]): Naro
 
 /** Odstraní diakritiku / sjednotí mezery pro srovnání týmů. */
 function normalizujTextProSrovnani(s: string): string {
+  // Bez \p{M} — starší runtime / některé buildy Unicode property escapes neumí.
   return s
     .normalize("NFD")
-    .replace(/\p{M}/gu, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
@@ -473,8 +474,8 @@ export function prirazeniSymboluDvojice(
 
 export type SpoctiUtocneFormaceOpts = {
   /**
-   * Když true, na slot „levé křídlo“ lze dát hráče s pozicí LK, PK nebo C a na „pravé křídlo“ také
-   * (stejná sada, tři různí hráči). Centr zůstává jen C.
+   * Když true, na LK / C / PK lze dát libovolného útočníka (LK, PK nebo C) —
+   * tři různí hráči. Chemie ve hře neřeší přesný slot.
    */
   kridlaVzajemna?: boolean;
   /** Aliasy typů karet (TOTW ↔ TEAM OF THE WEEK) — bez toho CLK často nic nenajde. */
@@ -639,12 +640,14 @@ export function spoctiUtocneFormace(
 ): UtocnaFormaceVysledek[] {
   const kridlaVzajemna = Boolean(opts?.kridlaVzajemna);
   const typKartyMeta = opts?.typKartyMeta ?? null;
-  const kridla: HutCard[] = karty.filter(
+  const utocnici: HutCard[] = karty.filter(
     (k) => k.pozice === "LK" || k.pozice === "PK" || k.pozice === "C",
   );
-  const lk = kridlaVzajemna ? kridla : karty.filter((k) => k.pozice === "LK");
-  const c = karty.filter((k) => k.pozice === "C");
-  const pk = kridlaVzajemna ? kridla : karty.filter((k) => k.pozice === "PK");
+  // Bez záměny: přísné sloty. Se záměnou: libovolný útočník na kterémkoli ze tří slotů
+  // (jinak trojice samých křídel / bez „pravého C“ nikdy nesedí — častý důvod 0 výsledků).
+  const lk = kridlaVzajemna ? utocnici : karty.filter((k) => k.pozice === "LK");
+  const c = kridlaVzajemna ? utocnici : karty.filter((k) => k.pozice === "C");
+  const pk = kridlaVzajemna ? utocnici : karty.filter((k) => k.pozice === "PK");
   const narodnostKodMap = vytvorNarodnostKodMap(narodnostiVolby);
   const best = new Map<string, { v: UtocnaFormaceVysledek; skore: number }>();
 

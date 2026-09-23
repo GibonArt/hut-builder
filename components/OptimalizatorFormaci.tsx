@@ -1122,6 +1122,7 @@ export function OptimalizatorFormaci() {
   const [vysledkyObrana, setVysledkyObrana] = useState<DvojiceVysledek[]>([]);
   const [vysledkyGolmani, setVysledkyGolmani] = useState<DvojiceVysledek[]>([]);
   const [vypocetFormaciBezi, setVypocetFormaciBezi] = useState(false);
+  const [chybaVypoctuFormaci, setChybaVypoctuFormaci] = useState<string | null>(null);
   const vypocetFormaciGenRef = useRef(0);
 
   const minOvr = useMemo(() => parseOvrVolitelne(minOvrStr), [minOvrStr]);
@@ -1349,6 +1350,7 @@ export function OptimalizatorFormaci() {
 
     const gen = ++vypocetFormaciGenRef.current;
     setVypocetFormaciBezi(true);
+    setChybaVypoctuFormaci(null);
     setVysledkyUtok([]);
     setVysledkyObrana([]);
     setVysledkyGolmani([]);
@@ -1360,37 +1362,51 @@ export function OptimalizatorFormaci() {
       });
 
     void (async () => {
-      await yieldMain();
-      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+      try {
+        await yieldMain();
+        if (zruseno || vypocetFormaciGenRef.current !== gen) return;
 
-      const utok = spoctiUtocneFormace(kartyVeFiltru, utocneRadky, narodnostiVolby, {
-        kridlaVzajemna,
-        typKartyMeta: typKartyMetaOpts,
-      });
-      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
-      startTransition(() => setVysledkyUtok(utok));
+        const utok = spoctiUtocneFormace(kartyVeFiltru, utocneRadky, narodnostiVolby, {
+          kridlaVzajemna,
+          typKartyMeta: typKartyMetaOpts,
+        });
+        if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+        startTransition(() => setVysledkyUtok(utok));
 
-      await yieldMain();
-      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+        await yieldMain();
+        if (zruseno || vypocetFormaciGenRef.current !== gen) return;
 
-      const obrana = spoctiObranneDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby, {
-        loPoVzajemne,
-        typKartyMeta: typKartyMetaOpts,
-      });
-      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
-      startTransition(() => setVysledkyObrana(obrana));
+        const obrana = spoctiObranneDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby, {
+          loPoVzajemne,
+          typKartyMeta: typKartyMetaOpts,
+        });
+        if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+        startTransition(() => setVysledkyObrana(obrana));
 
-      await yieldMain();
-      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+        await yieldMain();
+        if (zruseno || vypocetFormaciGenRef.current !== gen) return;
 
-      const golmani = spoctiGolmanskeDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby, {
-        typKartyMeta: typKartyMetaOpts,
-      });
-      if (zruseno || vypocetFormaciGenRef.current !== gen) return;
-      startTransition(() => {
-        setVysledkyGolmani(golmani);
-        setVypocetFormaciBezi(false);
-      });
+        const golmani = spoctiGolmanskeDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby, {
+          typKartyMeta: typKartyMetaOpts,
+        });
+        if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+        startTransition(() => {
+          setVysledkyGolmani(golmani);
+          setVypocetFormaciBezi(false);
+        });
+      } catch (e) {
+        console.error("Výpočet formací selhal:", e);
+        if (zruseno || vypocetFormaciGenRef.current !== gen) return;
+        startTransition(() => {
+          setVysledkyUtok([]);
+          setVysledkyObrana([]);
+          setVysledkyGolmani([]);
+          setVypocetFormaciBezi(false);
+          setChybaVypoctuFormaci(
+            `Výpočet formací selhal: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        });
+      }
     })();
 
     return () => {
@@ -2388,8 +2404,9 @@ export function OptimalizatorFormaci() {
                   className="mt-0.5 h-4 w-4 shrink-0 rounded border-[var(--hut-border)] bg-[var(--hut-bg)] accent-[var(--hut-focus)]"
                 />
                 <span className="min-w-0">
-                  <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> na LK i PK lze dát LK, PK
-                  nebo C (tři různí hráči). Centr zůstává jen pozice C.
+                  <span className="font-medium text-zinc-200">Záměna křídel (útok):</span> na LK, C i PK
+                  lze dát libovolného útočníka (LK / C / PK) — tři různí hráči. Chemie ve hře sloty
+                  neřeší.
                 </span>
               </label>
               <label
@@ -2489,6 +2506,12 @@ export function OptimalizatorFormaci() {
               {vysledkyUtok.length > 0
                 ? ` Útok: ${vysledkyUtok.length}${vysledkyObrana.length > 0 ? ` · obrana: ${vysledkyObrana.length}` : ""}${vysledkyGolmani.length > 0 ? ` · brankáři: ${vysledkyGolmani.length}` : ""}.`
                 : ""}
+            </p>
+          ) : null}
+
+          {chybaVypoctuFormaci ? (
+            <p className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm text-red-200" role="alert">
+              {chybaVypoctuFormaci}
             </p>
           ) : null}
 
