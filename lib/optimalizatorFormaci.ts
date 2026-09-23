@@ -5,6 +5,10 @@ import {
   type BonusKombinaceParametr,
   type RadekBonusKombinaceUi,
 } from "@/lib/bonusKombinaceDb";
+import {
+  kanonickyFiltrTypuKarty,
+  type NajdiMetaTypuKartyOpts,
+} from "@/lib/hutdbTypKaret";
 import type { NarodnostVolba } from "@/lib/narodnosti";
 
 /** Permutace indexů parametrů: slot i dostane `params[perm[i]]` (LK/C/PK nebo LO/PO). */
@@ -28,20 +32,39 @@ function vytvorNarodnostKodMap(narodnostiVolby: readonly NarodnostVolba[]): Naro
   const m = new Map<string, string>();
   for (const v of narodnostiVolby) {
     m.set(v.label.trim(), v.code.trim());
+    // Přímý kód na kartě (CA) i kdyby label v Intl neseděl 1:1
+    m.set(v.code.trim().toUpperCase(), v.code.trim());
   }
   return m;
+}
+
+function typKartySplnujeBonus(
+  typNaKarte: string,
+  typVKombinaci: string,
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
+): boolean {
+  const poz = typVKombinaci.trim();
+  if (!poz) return false;
+  if (poz === "*") return true;
+  return (
+    kanonickyFiltrTypuKarty(typNaKarte, typKartyMeta) ===
+    kanonickyFiltrTypuKarty(poz, typKartyMeta)
+  );
 }
 
 function kartaSplnujeParametrRychle(
   k: HutCard,
   p: BonusKombinaceParametr,
   narodnostKodMap: NarodnostKodMap,
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
 ): boolean {
   switch (p.typ) {
     case "narodnost": {
-      const kod = narodnostKodMap.get(k.narodnost.trim());
       const poz = p.narodnostKod.trim();
-      return Boolean(poz) && kod === poz;
+      if (!poz) return false;
+      const naKarte = k.narodnost.trim();
+      const kod = narodnostKodMap.get(naKarte) ?? narodnostKodMap.get(naKarte.toUpperCase());
+      return kod === poz;
     }
     case "tym":
       return (
@@ -50,11 +73,7 @@ function kartaSplnujeParametrRychle(
         k.tym.trim() === p.tym.trim()
       );
     case "typ_karty":
-      return (
-        Boolean(p.typKarty.trim()) &&
-        (p.typKarty.trim() === "*" ||
-          k.typKarty.trim() === p.typKarty.trim())
-      );
+      return typKartySplnujeBonus(k.typKarty, p.typKarty, typKartyMeta);
   }
 }
 
@@ -62,10 +81,13 @@ function maskaTriParametru(
   k: HutCard,
   params: readonly [BonusKombinaceParametr, BonusKombinaceParametr, BonusKombinaceParametr],
   narodnostKodMap: NarodnostKodMap,
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
 ): number {
   let mask = 0;
   for (let i = 0; i < 3; i++) {
-    if (kartaSplnujeParametrRychle(k, params[i]!, narodnostKodMap)) mask |= 1 << i;
+    if (kartaSplnujeParametrRychle(k, params[i]!, narodnostKodMap, typKartyMeta)) {
+      mask |= 1 << i;
+    }
   }
   return mask;
 }
@@ -74,10 +96,11 @@ function maskaDvuParametru(
   k: HutCard,
   params: readonly [BonusKombinaceParametr, BonusKombinaceParametr],
   narodnostKodMap: NarodnostKodMap,
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
 ): number {
   let mask = 0;
-  if (kartaSplnujeParametrRychle(k, params[0]!, narodnostKodMap)) mask |= 1;
-  if (kartaSplnujeParametrRychle(k, params[1]!, narodnostKodMap)) mask |= 2;
+  if (kartaSplnujeParametrRychle(k, params[0]!, narodnostKodMap, typKartyMeta)) mask |= 1;
+  if (kartaSplnujeParametrRychle(k, params[1]!, narodnostKodMap, typKartyMeta)) mask |= 2;
   return mask;
 }
 
@@ -101,30 +124,20 @@ function dvojiceMaskyOk(mA: number, mB: number): boolean {
 
 /**
  * Karta splní parametr kombinace (národnost / tým+liga / typ karty).
+ * Typ karty se porovnává kanonicky (TOTW ≡ TEAM OF THE WEEK, aliasy z DB).
  */
 export function kartaSplnujeParametr(
   k: HutCard,
   p: BonusKombinaceParametr,
   narodnostiVolby: readonly NarodnostVolba[],
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
 ): boolean {
-  switch (p.typ) {
-    case "narodnost": {
-      const kod = narodnostiVolby.find((v) => v.label === k.narodnost.trim())?.code;
-      return Boolean(p.narodnostKod.trim()) && kod === p.narodnostKod.trim();
-    }
-    case "tym":
-      return (
-        Boolean(p.tym.trim()) &&
-        k.liga === p.liga &&
-        k.tym.trim() === p.tym.trim()
-      );
-    case "typ_karty":
-      return (
-        Boolean(p.typKarty.trim()) &&
-        (p.typKarty.trim() === "*" ||
-          k.typKarty.trim() === p.typKarty.trim())
-      );
-  }
+  return kartaSplnujeParametrRychle(
+    k,
+    p,
+    vytvorNarodnostKodMap(narodnostiVolby),
+    typKartyMeta,
+  );
 }
 
 /** Prázdný řetězec = bez limitu; jinak celé číslo 0–99. */
@@ -326,12 +339,18 @@ export function trojiceSplnujeKombinaciUtok(
   kPK: HutCard,
   r: RadekBonusKombinaceUi,
   narodnostiVolby: readonly NarodnostVolba[],
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
 ): boolean {
   const params = [r.param1, r.param2, r.param3] as const;
   const slotKarty = [kLK, kC, kPK] as const;
   return PERMUTACE3.some((perm) =>
     slotKarty.every((karta, slotIdx) =>
-      kartaSplnujeParametr(karta, params[perm[slotIdx]!]!, narodnostiVolby),
+      kartaSplnujeParametr(
+        karta,
+        params[perm[slotIdx]!]!,
+        narodnostiVolby,
+        typKartyMeta,
+      ),
     ),
   );
 }
@@ -344,12 +363,18 @@ export function dvojiceSplnujeDvaParametry(
   kB: HutCard,
   r: RadekBonusKombinaceUi,
   narodnostiVolby: readonly NarodnostVolba[],
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
 ): boolean {
   const params = [r.param1, r.param2] as const;
   const slotKarty = [kA, kB] as const;
   return PERMUTACE2.some((perm) =>
     slotKarty.every((karta, slotIdx) =>
-      kartaSplnujeParametr(karta, params[perm[slotIdx]!]!, narodnostiVolby),
+      kartaSplnujeParametr(
+        karta,
+        params[perm[slotIdx]!]!,
+        narodnostiVolby,
+        typKartyMeta,
+      ),
     ),
   );
 }
@@ -363,13 +388,19 @@ export function prirazeniSymboluUtok(
   kPK: HutCard,
   r: RadekBonusKombinaceUi,
   narodnostiVolby: readonly NarodnostVolba[],
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
 ): [BonusKombinaceParametr, BonusKombinaceParametr, BonusKombinaceParametr] | null {
   const params = [r.param1, r.param2, r.param3] as const;
   const slotKarty = [kLK, kC, kPK] as const;
   for (const perm of PERMUTACE3) {
     if (
       slotKarty.every((karta, slotIdx) =>
-        kartaSplnujeParametr(karta, params[perm[slotIdx]!]!, narodnostiVolby),
+        kartaSplnujeParametr(
+          karta,
+          params[perm[slotIdx]!]!,
+          narodnostiVolby,
+          typKartyMeta,
+        ),
       )
     ) {
       return [params[perm[0]!]!, params[perm[1]!]!, params[perm[2]!]!];
@@ -386,13 +417,19 @@ export function prirazeniSymboluDvojice(
   kB: HutCard,
   r: RadekBonusKombinaceUi,
   narodnostiVolby: readonly NarodnostVolba[],
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null,
 ): [BonusKombinaceParametr, BonusKombinaceParametr] | null {
   const params = [r.param1, r.param2] as const;
   const slotKarty = [kA, kB] as const;
   for (const perm of PERMUTACE2) {
     if (
       slotKarty.every((karta, slotIdx) =>
-        kartaSplnujeParametr(karta, params[perm[slotIdx]!]!, narodnostiVolby),
+        kartaSplnujeParametr(
+          karta,
+          params[perm[slotIdx]!]!,
+          narodnostiVolby,
+          typKartyMeta,
+        ),
       )
     ) {
       return [params[perm[0]!]!, params[perm[1]!]!];
@@ -407,6 +444,8 @@ export type SpoctiUtocneFormaceOpts = {
    * (stejná sada, tři různí hráči). Centr zůstává jen C.
    */
   kridlaVzajemna?: boolean;
+  /** Aliasy typů karet (TOTW ↔ TEAM OF THE WEEK) — bez toho CLK často nic nenajde. */
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null;
 };
 
 export type SpoctiObranneDvojiceOpts = {
@@ -415,6 +454,11 @@ export type SpoctiObranneDvojiceOpts = {
    * (stejná sada „křídel“ obrany, dva různí hráči).
    */
   loPoVzajemne?: boolean;
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null;
+};
+
+export type SpoctiGolmanskeDvojiceOpts = {
+  typKartyMeta?: NajdiMetaTypuKartyOpts | null;
 };
 
 /** Neuspořádaná trojice karet (stejná lajna bez ohledu na LK/C/PK). */
@@ -561,6 +605,7 @@ export function spoctiUtocneFormace(
   opts?: SpoctiUtocneFormaceOpts | null,
 ): UtocnaFormaceVysledek[] {
   const kridlaVzajemna = Boolean(opts?.kridlaVzajemna);
+  const typKartyMeta = opts?.typKartyMeta ?? null;
   const kridla: HutCard[] = karty.filter(
     (k) => k.pozice === "LK" || k.pozice === "PK" || k.pozice === "C",
   );
@@ -574,13 +619,22 @@ export function spoctiUtocneFormace(
     const kR = klicLogickeKombinace(r);
     const params = [r.param1, r.param2, r.param3] as const;
     const lkK = lk
-      .map((k) => ({ k, m: maskaTriParametru(k, params, narodnostKodMap) }))
+      .map((k) => ({
+        k,
+        m: maskaTriParametru(k, params, narodnostKodMap, typKartyMeta),
+      }))
       .filter((x) => x.m > 0);
     const cK = c
-      .map((k) => ({ k, m: maskaTriParametru(k, params, narodnostKodMap) }))
+      .map((k) => ({
+        k,
+        m: maskaTriParametru(k, params, narodnostKodMap, typKartyMeta),
+      }))
       .filter((x) => x.m > 0);
     const pkK = pk
-      .map((k) => ({ k, m: maskaTriParametru(k, params, narodnostKodMap) }))
+      .map((k) => ({
+        k,
+        m: maskaTriParametru(k, params, narodnostKodMap, typKartyMeta),
+      }))
       .filter((x) => x.m > 0);
     for (const { k: kLK, m: mLK } of lkK) {
       for (const { k: kC, m: mC } of cK) {
@@ -614,6 +668,7 @@ export function spoctiObranneDvojice(
   opts?: SpoctiObranneDvojiceOpts | null,
 ): DvojiceVysledek[] {
   const loPoVzajemne = Boolean(opts?.loPoVzajemne);
+  const typKartyMeta = opts?.typKartyMeta ?? null;
   const loNeboPo: HutCard[] = karty.filter((k) => k.pozice === "LO" || k.pozice === "PO");
   const lo = loPoVzajemne ? loNeboPo : karty.filter((k) => k.pozice === "LO");
   const po = loPoVzajemne ? loNeboPo : karty.filter((k) => k.pozice === "PO");
@@ -624,10 +679,16 @@ export function spoctiObranneDvojice(
     const kR = klicLogickeKombinace(r);
     const params = [r.param1, r.param2] as const;
     const loK = lo
-      .map((k) => ({ k, m: maskaDvuParametru(k, params, narodnostKodMap) }))
+      .map((k) => ({
+        k,
+        m: maskaDvuParametru(k, params, narodnostKodMap, typKartyMeta),
+      }))
       .filter((x) => x.m > 0);
     const poK = po
-      .map((k) => ({ k, m: maskaDvuParametru(k, params, narodnostKodMap) }))
+      .map((k) => ({
+        k,
+        m: maskaDvuParametru(k, params, narodnostKodMap, typKartyMeta),
+      }))
       .filter((x) => x.m > 0);
     for (const { k: kLO, m: mLO } of loK) {
       for (const { k: kPO, m: mPO } of poK) {
@@ -680,7 +741,9 @@ export function spoctiGolmanskeDvojice(
   karty: readonly HutCard[],
   radkyKombinaci: readonly RadekBonusKombinaceUi[],
   narodnostiVolby: readonly NarodnostVolba[],
+  opts?: SpoctiGolmanskeDvojiceOpts | null,
 ): DvojiceVysledek[] {
+  const typKartyMeta = opts?.typKartyMeta ?? null;
   const gs = karty.filter((k) => k.pozice === "G");
   const narodnostKodMap = vytvorNarodnostKodMap(narodnostiVolby);
   const out: DvojiceVysledek[] = [];
@@ -690,7 +753,10 @@ export function spoctiGolmanskeDvojice(
     const kR = klicLogickeKombinace(r);
     const params = [r.param1, r.param2] as const;
     const gK = gs
-      .map((k) => ({ k, m: maskaDvuParametru(k, params, narodnostKodMap) }))
+      .map((k) => ({
+        k,
+        m: maskaDvuParametru(k, params, narodnostKodMap, typKartyMeta),
+      }))
       .filter((x) => x.m > 0);
     for (let i = 0; i < gK.length; i++) {
       const { k: g1, m: m1 } = gK[i]!;

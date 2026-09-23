@@ -138,11 +138,12 @@ function parametrZUlozeneho(raw: unknown): BonusKombinaceParametr | null {
   return null;
 }
 
-/** Aktuální hodnoty + zpětná kompatibilita se starým JSON (SAL → PLAT, AP → BS). */
+/** Aktuální hodnoty + zpětná kompatibilita se starým JSON (SAL → PLAT, AP → BS, OVR → CLK). */
 function bonusTypZeStorage(raw: unknown): TypBonusuKombinace {
   if (raw === "PLAT" || raw === "CLK" || raw === "BS") return raw;
   if (raw === "SAL") return "PLAT";
   if (raw === "AP") return "BS";
+  if (raw === "OVR") return "CLK";
   return "PLAT";
 }
 
@@ -436,7 +437,8 @@ export async function ulozBonusKombinaciSdilenou(
 }
 
 /**
- * Nahradí v surovém JSONB poli `bonus_typ`: SAL → PLAT, AP → BS (beze změny struktury řádků).
+ * Nahradí v surovém JSONB poli `bonus_typ`: SAL → PLAT, AP → BS, OVR → CLK
+ * (beze změny struktury řádků).
  */
 export function migrujRawRadkyJsonb(raw: unknown): { radky: unknown; zmeneno: boolean } {
   if (!Array.isArray(raw)) return { radky: raw, zmeneno: false };
@@ -453,6 +455,10 @@ export function migrujRawRadkyJsonb(raw: unknown): { radky: unknown; zmeneno: bo
       zmeneno = true;
       return { ...o, bonus_typ: "BS" };
     }
+    if (t === "OVR") {
+      zmeneno = true;
+      return { ...o, bonus_typ: "CLK" };
+    }
     return item;
   });
   return { radky, zmeneno };
@@ -460,7 +466,7 @@ export function migrujRawRadkyJsonb(raw: unknown): { radky: unknown; zmeneno: bo
 
 /**
  * Jednorázová oprava uložených dat v `bonus_kombinace_global` (volá editor při načtení stránky).
- * Po úspěchu mají všechny řádky v DB už PLAT/BS — není potřeba ručně přepisovat kombinace.
+ * Po úspěchu mají všechny řádky v DB už PLAT/BS/CLK — není potřeba ručně přepisovat kombinace.
  */
 export async function migrujLegacyBonusTypyVSdileneTabulce(
   supabase: SupabaseClient,

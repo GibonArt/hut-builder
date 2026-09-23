@@ -1365,6 +1365,7 @@ export function OptimalizatorFormaci() {
 
       const utok = spoctiUtocneFormace(kartyVeFiltru, utocneRadky, narodnostiVolby, {
         kridlaVzajemna,
+        typKartyMeta: typKartyMetaOpts,
       });
       if (zruseno || vypocetFormaciGenRef.current !== gen) return;
       startTransition(() => setVysledkyUtok(utok));
@@ -1374,6 +1375,7 @@ export function OptimalizatorFormaci() {
 
       const obrana = spoctiObranneDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby, {
         loPoVzajemne,
+        typKartyMeta: typKartyMetaOpts,
       });
       if (zruseno || vypocetFormaciGenRef.current !== gen) return;
       startTransition(() => setVysledkyObrana(obrana));
@@ -1381,7 +1383,9 @@ export function OptimalizatorFormaci() {
       await yieldMain();
       if (zruseno || vypocetFormaciGenRef.current !== gen) return;
 
-      const golmani = spoctiGolmanskeDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby);
+      const golmani = spoctiGolmanskeDvojice(kartyVeFiltru, obranneRadky, narodnostiVolby, {
+        typKartyMeta: typKartyMetaOpts,
+      });
       if (zruseno || vypocetFormaciGenRef.current !== gen) return;
       startTransition(() => {
         setVysledkyGolmani(golmani);
@@ -1401,6 +1405,7 @@ export function OptimalizatorFormaci() {
     narodnostiVolby,
     kridlaVzajemna,
     loPoVzajemne,
+    typKartyMetaOpts,
   ]);
 
   const vysledkyUtokBezDup = useMemo(
