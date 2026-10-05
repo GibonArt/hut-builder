@@ -338,7 +338,7 @@ export function MujInventar() {
       if (editZQueryZpracovan.current === slug) return;
       editZQueryZpracovan.current = slug;
       navratPoUlozeniPath.current = null;
-      router.replace("/", { scroll: false });
+      router.replace(cesta(), { scroll: false });
       return;
     }
 
@@ -347,8 +347,8 @@ export function MujInventar() {
     navratPoUlozeniPath.current =
       searchParams.get("from") === "moje-karty" ? cesta("/moje-karty") : null;
     naplnFormZKarty(k, "editovat");
-    router.replace("/", { scroll: false });
-  }, [searchParams, user?.id, kartyLoading, karty, naplnFormZKarty, router]);
+    router.replace(cesta(), { scroll: false });
+  }, [searchParams, user?.id, kartyLoading, karty, naplnFormZKarty, router, cesta]);
 
   useEffect(() => {
     const dup = searchParams.get("duplicate");
@@ -363,7 +363,7 @@ export function MujInventar() {
       if (duplicitaZQueryZpracovan.current === dup) return;
       duplicitaZQueryZpracovan.current = dup;
       navratPoUlozeniPath.current = null;
-      router.replace("/", { scroll: false });
+      router.replace(cesta(), { scroll: false });
       return;
     }
 
@@ -372,9 +372,9 @@ export function MujInventar() {
     navratPoUlozeniPath.current =
       searchParams.get("from") === "moje-karty" ? cesta("/moje-karty") : null;
     naplnFormZKarty(k, "kopie");
-    router.replace("/", { scroll: false });
+    router.replace(cesta(), { scroll: false });
     toast.info("Zkopírované údaje — ulož jako novou kartu (uprav OVR/jméno, pokud koliduje).");
-  }, [searchParams, user?.id, kartyLoading, karty, naplnFormZKarty, router]);
+  }, [searchParams, user?.id, kartyLoading, karty, naplnFormZKarty, router, cesta]);
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
