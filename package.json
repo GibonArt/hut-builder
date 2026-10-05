@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "loga": "node scripts/stahni-tym-loga.mjs",
+    "loga:force": "node scripts/stahni-tym-loga.mjs --force",
     "loga-nhlaa": "node scripts/stahni-nhlaa-loga.mjs",
     "loga:typy-karet": "node scripts/stahni-typy-karet.mjs",
     "loga:typy-karet:force": "node scripts/stahni-typy-karet.mjs --force",

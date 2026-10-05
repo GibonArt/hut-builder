@@ -13,6 +13,7 @@
  * HC Ajoie: přímý náhled z Wikimedia Commons. Löwen Frankfurt: stejné logo jako Frankfurt Lions (SportsLogos).
  *
  * Spuštění: npm run loga
+ * Přepsat už stažená: npm run loga:force   (nebo FORCE=1 / --force)
  * Jen jedna liga: ONLY_LIGA=WHL node scripts/stahni-tym-loga.mjs
  * (pro finskou Liiga použij ONLY_LIGA=LIIGA — název ligy se srovnává velkými písmeny.)
  * Slovenská extraliga + INT/WINT: ONLY_LIGA=SVK|INT|WINT
@@ -59,6 +60,10 @@ const UA =
 
 const SLN_BASE = "https://www.sportslogos.net";
 const SLN_PAUSE_MS = Number(process.env.SLN_PAUSE_MS) || 500;
+const FORCE =
+  process.env.FORCE === "1" ||
+  process.argv.includes("--force") ||
+  process.argv.includes("-f");
 
 /** Stejné pravidlo jako lib/tymLogoKlic.ts (NFC + pomlčky, Unicode písmena). */
 function tymLogoSouborKlíč(nazev) {
@@ -766,11 +771,14 @@ async function main() {
   let ok = 0;
   let fail = 0;
   let skip = 0;
+  if (FORCE) {
+    process.stderr.write("FORCE: přepisuji existující loga.\n");
+  }
   for (const { liga, tym, url } of jobs) {
     const dir = join(PUBLIC_LOGOS, liga);
     mkdirSync(dir, { recursive: true });
     const už = manifest[liga]?.[tym];
-    if (už) {
+    if (!FORCE && už) {
       const p = join(dir, už);
       try {
         if (existsSync(p) && statSync(p).size > 80) {
@@ -780,6 +788,14 @@ async function main() {
         }
       } catch {
         /* stáhnout znovu */
+      }
+    }
+    if (FORCE && už) {
+      const p = join(dir, už);
+      try {
+        if (existsSync(p)) unlinkSync(p);
+      } catch {
+        /* ignore */
       }
     }
     const base = tymLogoSouborKlíč(tym);

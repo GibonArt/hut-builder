@@ -149,7 +149,7 @@
     "Bílí Tygři Liberec": "bílí-tygři-liberec.gif",
     "BK Mladá Boleslav": "bk-mladá-boleslav.png",
     "HC Dynamo Pardubice": "hc-dynamo-pardubice.png",
-    "HC Energie Karlovy Vary": "hc-energie-karlovy-vary.gif",
+    "HC Energie Karlovy Vary": "hc-energie-karlovy-vary.png",
     "HC Kometa Brno": "hc-kometa-brno.gif",
     "HC Oceláři Třinec": "hc-oceláři-třinec.gif",
     "HC Olomouc": "hc-olomouc.png",
@@ -231,7 +231,7 @@
     "Bolzano Foxes": "bolzano-foxes.png",
     "Dornbirn Bulldogs": "dornbirn-bulldogs.gif",
     "EC KAC": "ec-kac.gif",
-    "EC Red Bull Salzburg": "ec-red-bull-salzburg.gif",
+    "EC Red Bull Salzburg": "ec-red-bull-salzburg.png",
     "EC VSV": "ec-vsv.gif",
     "EHC Black Wings Linz": "ehc-black-wings-linz.gif",
     "Fehérvár AV19": "fehérvár-av19.gif",
@@ -298,7 +298,16 @@
   },
   "WINT": {
     "Canada": "canada.png",
-    "Czechia": "czechia.png"
+    "Czechia": "czechia.png",
+    "Denmark": "denmark.png",
+    "Finland": "finland.png",
+    "France": "france.png",
+    "Germany": "germany.png",
+    "Hungary": "hungary.png",
+    "Japan": "japan.png",
+    "Sweden": "sweden.png",
+    "Switzerland": "switzerland.png",
+    "USA": "usa.png"
   },
   "SVK": {
     "HC Košice": "hc-košice.png",
