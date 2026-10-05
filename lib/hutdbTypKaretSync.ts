@@ -4,7 +4,7 @@ import {
 } from "@/lib/hutdbTypKaret";
 import type { DynamicTypKartyDbRow } from "@/lib/hutdbTypKaretMerge";
 
-/** HTML z `combo-finder.php` — volby typů karet v builderu. */
+/** HTML z `combo-finder.php` — volby typů karet v builderu (legacy data-card-type-* atributy). */
 export function parseCardTypesFromHutbuilderComboFinderHtml(html: string): {
   logo: string;
   displayName: string;
@@ -21,10 +21,66 @@ export function parseCardTypesFromHutbuilderComboFinderHtml(html: string): {
       const logo = order === "logoFirst" ? m[1] : m[2];
       const name = order === "logoFirst" ? m[2] : m[1];
       const nm = name.trim();
-      if (logo && nm) byLogo.set(logo, nm);
+      if (logo && nm) byLogo.set(logoSouborZCesty(logo), nm);
     }
   }
   return [...byLogo.entries()].map(([logo, displayName]) => ({ logo, displayName }));
+}
+
+/** Nový Chemistry Combos markup — title + card_logos z řádků. */
+export function parseCardTypesFromChemistryCombosHtml(html: string): {
+  logo: string;
+  displayName: string;
+}[] {
+  const byKey = new Map<string, { displayName: string; logo: string }>();
+  const re =
+    /combo_selector card"[^>]*title="([^"]+)"[^>]*>\s*<img[^>]+src="(?:images\/card_logos\/)?([^"]+\.(?:png|webp))"/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const displayName = m[1]!.trim();
+    const logo = logoSouborZCesty(m[2]!);
+    if (!displayName) continue;
+    byKey.set(displayName.toUpperCase(), { displayName, logo });
+  }
+  return [...byKey.values()];
+}
+
+function logoSouborZCesty(logo: string): string {
+  const t = logo.trim().replace(/\\/g, "/");
+  const i = t.lastIndexOf("/");
+  return i >= 0 ? t.slice(i + 1) : t;
+}
+
+export type HutbuilderSelectListCardType = {
+  id: string;
+  name: string;
+  abbr?: string;
+  logo?: string;
+};
+
+/** Odpověď `ajax/select-list.php?type=card_type` (NHL27 UI). */
+export function parseCardTypesFromSelectListJson(raw: unknown): {
+  logo: string;
+  displayName: string;
+  abbr?: string;
+}[] {
+  if (!raw || typeof raw !== "object") return [];
+  const o = raw as { status?: string; items?: unknown };
+  if (o.status && o.status !== "success") return [];
+  if (!Array.isArray(o.items)) return [];
+  const out: { logo: string; displayName: string; abbr?: string }[] = [];
+  for (const item of o.items) {
+    if (!item || typeof item !== "object") continue;
+    const it = item as HutbuilderSelectListCardType;
+    const name = String(it.name ?? "").trim();
+    if (!name) continue;
+    out.push({
+      displayName: name,
+      logo: logoSouborZCesty(String(it.logo ?? "")),
+      abbr: it.abbr ? String(it.abbr).trim() : undefined,
+    });
+  }
+  return out;
 }
 
 /**
@@ -69,7 +125,7 @@ export function comboSouborProHutbuilderTyp(
   displayName: string,
   logoZComboFinderu: string | null | undefined,
 ): string {
-  const zFinderu = logoZComboFinderu?.trim();
+  const zFinderu = logoSouborZCesty(logoZComboFinderu?.trim() ?? "");
   if (zFinderu) return zFinderu;
   const meta = metaTypuProHutbuilderDisplayName(displayName);
   if (meta?.comboSoubor?.trim()) return meta.comboSoubor.trim();
@@ -173,25 +229,30 @@ export function enrichDynamicTypZHutbuilder(
 }
 
 /**
- * Sloučí Combo Finder (loga) + Chemistry/Cards select (kompletní názvy).
- * NHL27: Combo Finder má 8 typů, Chemistry Combos 11 (Heroes, Next Gen, Spotlight navíc).
+ * Sloučí Combo Finder (loga) + Chemistry/Cards select + AJAX select-list (NHL27).
  */
 export function dynamicRadkyZHutbuilderTypuKaret(opts: {
-  comboFinderHtml: string;
-  /** Chemistry Combos nebo jiná stránka s `<select id="filter-card">`. */
+  comboFinderHtml?: string | null;
+  /** Chemistry Combos nebo jiná stránka s `<select id="filter-card">` / novými card logy. */
   chemistryHtml?: string | null;
   /** Cards.php s `<select id="card_type_id">`. */
   cardsHtml?: string | null;
+  /** Položky z `ajax/select-list.php?type=card_type`. */
+  selectListItems?: readonly {
+    logo: string;
+    displayName: string;
+    abbr?: string;
+  }[] | null;
 }): DynamicTypKartyDbRow[] {
   const logoPodleJmena = new Map<string, string>();
-  for (const { logo, displayName } of parseCardTypesFromHutbuilderComboFinderHtml(
-    opts.comboFinderHtml,
-  )) {
-    const key = displayName.trim().toUpperCase();
-    if (key && logo) logoPodleJmena.set(key, logo);
-  }
-
+  const abbrPodleJmena = new Map<string, string>();
   const jmena = new Map<string, string>();
+
+  const pridejLogo = (displayName: string, logo: string) => {
+    const key = displayName.trim().toUpperCase();
+    const soubor = logoSouborZCesty(logo);
+    if (key && soubor) logoPodleJmena.set(key, soubor);
+  };
   const pridejJmeno = (raw: string) => {
     const nm = raw.trim();
     if (!nm) return;
@@ -199,10 +260,13 @@ export function dynamicRadkyZHutbuilderTypuKaret(opts: {
     if (!jmena.has(key)) jmena.set(key, nm);
   };
 
-  for (const { displayName } of parseCardTypesFromHutbuilderComboFinderHtml(
-    opts.comboFinderHtml,
-  )) {
-    pridejJmeno(displayName);
+  if (opts.comboFinderHtml) {
+    for (const { logo, displayName } of parseCardTypesFromHutbuilderComboFinderHtml(
+      opts.comboFinderHtml,
+    )) {
+      pridejJmeno(displayName);
+      pridejLogo(displayName, logo);
+    }
   }
   if (opts.chemistryHtml) {
     for (const n of parseCardTypeNamesFromHutbuilderSelect(
@@ -210,6 +274,12 @@ export function dynamicRadkyZHutbuilderTypuKaret(opts: {
       "filter-card",
     )) {
       pridejJmeno(n);
+    }
+    for (const { logo, displayName } of parseCardTypesFromChemistryCombosHtml(
+      opts.chemistryHtml,
+    )) {
+      pridejJmeno(displayName);
+      pridejLogo(displayName, logo);
     }
   }
   if (opts.cardsHtml) {
@@ -220,12 +290,29 @@ export function dynamicRadkyZHutbuilderTypuKaret(opts: {
       pridejJmeno(n);
     }
   }
+  if (opts.selectListItems) {
+    for (const it of opts.selectListItems) {
+      pridejJmeno(it.displayName);
+      if (it.logo) pridejLogo(it.displayName, it.logo);
+      if (it.abbr?.trim()) {
+        abbrPodleJmena.set(it.displayName.trim().toUpperCase(), it.abbr.trim());
+      }
+    }
+  }
 
   const out: DynamicTypKartyDbRow[] = [];
   const seen = new Set<string>();
   for (const displayName of jmena.values()) {
     const logo = logoPodleJmena.get(displayName.trim().toUpperCase()) ?? "";
     const row = enrichDynamicTypZHutbuilder(displayName, logo);
+    const abbr = abbrPodleJmena.get(displayName.trim().toUpperCase());
+    if (abbr) {
+      const aliases = [...(row.aliases ?? [])];
+      if (!aliases.includes(abbr.toUpperCase())) {
+        aliases.push(abbr.toUpperCase());
+        row.aliases = aliases;
+      }
+    }
     if (seen.has(row.hodnota_filtru)) continue;
     seen.add(row.hodnota_filtru);
     out.push(row);
@@ -236,6 +323,33 @@ export function dynamicRadkyZHutbuilderTypuKaret(opts: {
 /** Všechny typy z HTML Combo Finderu připravené pro Supabase. */
 export function dynamicRadkyZComboFinderHtml(html: string): DynamicTypKartyDbRow[] {
   return dynamicRadkyZHutbuilderTypuKaret({ comboFinderHtml: html });
+}
+
+export async function stahniHutbuilderSelectListCardTypes(
+  selectListUrl: string,
+  referer: string,
+  timeoutMs = 30_000,
+): Promise<{ logo: string; displayName: string; abbr?: string }[]> {
+  const signal =
+    typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+      ? AbortSignal.timeout(timeoutMs)
+      : undefined;
+  const url = `${selectListUrl}?type=card_type&filters=${encodeURIComponent("{}")}`;
+  const res = await fetch(url, {
+    ...(signal ? { signal } : {}),
+    headers: {
+      "User-Agent": "HUT-App/1.0 (select-list card types)",
+      Referer: referer,
+      Accept: "application/json,text/plain,*/*",
+    },
+    redirect: "follow",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Hut Builder select-list HTTP ${res.status}`);
+  }
+  const raw: unknown = await res.json();
+  return parseCardTypesFromSelectListJson(raw);
 }
 
 /** Typy z Hut Builderu, které ještě nejsou ve statickém `hutdbTypKaret.ts`. */

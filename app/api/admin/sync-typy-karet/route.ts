@@ -3,6 +3,7 @@ import { upsertDynamickeTypyKaret } from "@/lib/hutdbTypKaretDynamicDb";
 import {
   dynamicRadkyZHutbuilderTypuKaret,
   noveTypyOprotiStatickemuKatalogu,
+  stahniHutbuilderSelectListCardTypes,
 } from "@/lib/hutdbTypKaretSync";
 import { jeBonusAdmin } from "@/lib/bonusAdmin";
 import { hutbuilderConfigProSezonu } from "@/lib/hutbuilderSezonaConfig";
@@ -43,8 +44,8 @@ async function stahniHutbuilderHtml(
 }
 
 /**
- * Stáhne Combo Finder + Chemistry Combos, sloučí typy karet a upsertne do `hut_typy_karet_dynamic`.
- * Query: `?sezona=nhl26|nhl27`
+ * Stáhne Combo Finder + Chemistry Combos + AJAX select-list, sloučí typy karet
+ * a upsertne do `hut_typy_karet_dynamic`. Query: `?sezona=nhl26|nhl27`
  */
 export async function POST(req: Request) {
   const supabase = await createAuthClient();
@@ -74,25 +75,34 @@ export async function POST(req: Request) {
     );
   }
 
-  const [comboRes, chemRes] = await Promise.all([
+  const [comboRes, chemRes, selectList] = await Promise.all([
     stahniHutbuilderHtml(cfg.comboFinderUrl, cfg.comboFinderReferer),
     stahniHutbuilderHtml(cfg.chemistryCombosUrl, cfg.chemistryCombosReferer),
+    stahniHutbuilderSelectListCardTypes(cfg.selectListUrl, cfg.chemistryCombosReferer).catch(
+      () => null,
+    ),
   ]);
 
-  if (!comboRes.ok) {
-    return NextResponse.json({ error: comboRes.error }, { status: 502 });
+  if (!comboRes.ok && !chemRes.ok && !selectList?.length) {
+    const err =
+      (!comboRes.ok && comboRes.error) ||
+      (!chemRes.ok && chemRes.error) ||
+      "Select-list nevrátil žádné typy.";
+    return NextResponse.json({ error: err }, { status: 502 });
   }
 
   const chemistryHtml = chemRes.ok ? chemRes.html : null;
+  const comboFinderHtml = comboRes.ok ? comboRes.html : null;
   const rows = dynamicRadkyZHutbuilderTypuKaret({
-    comboFinderHtml: comboRes.html,
+    comboFinderHtml,
     chemistryHtml,
+    selectListItems: selectList,
   });
   if (rows.length === 0) {
     return NextResponse.json(
       {
         error:
-          "V HTML se nepodařilo najít žádný typ karet (změnil se markup?). Zkus znovu později.",
+          "Nepodařilo se načíst typy karet z Hut Builderu (HTML ani select-list). Zkus znovu později.",
       },
       { status: 422 },
     );
@@ -134,14 +144,20 @@ export async function POST(req: Request) {
   }
 
   const noveVKatalogu = noveTypyOprotiStatickemuKatalogu(rows);
+  const zdroje = [
+    ...(comboFinderHtml ? [cfg.comboFinderUrl] : []),
+    ...(chemistryHtml ? [cfg.chemistryCombosUrl] : []),
+    ...(selectList?.length ? [cfg.selectListUrl] : []),
+  ];
 
   return NextResponse.json({
     ok: true,
     sezona,
-    zdroj: cfg.comboFinderUrl,
-    zdroje: [cfg.comboFinderUrl, ...(chemistryHtml ? [cfg.chemistryCombosUrl] : [])],
+    zdroj: zdroje[0] ?? cfg.comboFinderUrl,
+    zdroje,
     chemistry_ok: Boolean(chemistryHtml),
-    /** Počet unikátních typů vyparsovaných z HTML (řádků k upsertu). */
+    select_list_ok: Boolean(selectList?.length),
+    /** Počet unikátních typů vyparsovaných ze zdrojů (řádků k upsertu). */
     pocet: rows.length,
     /** Řádky s `hodnota_filtru`, které v DB před syncem nebyly → INSERT při upsertu. */
     novych_v_db: novychVDb,

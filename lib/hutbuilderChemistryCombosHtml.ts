@@ -33,7 +33,7 @@ function noveIdRadku(): string {
 
 function parseSelectMap(html: string, selectId: string): Map<string, string> {
   const sel = html.match(
-    new RegExp(`<select id="${selectId}"[\\s\\S]*?</select>`, "i"),
+    new RegExp(`<select[^>]*\\sid="${selectId}"[\\s\\S]*?</select>`, "i"),
   );
   if (!sel) return new Map();
   const map = new Map<string, string>();
@@ -67,22 +67,16 @@ function boostZRetezce(raw: string): {
   return { bonusTyp, bonusHodnota };
 }
 
-function selectorNaParametr(
+function jmenoNaParametr(
   druh: SelectorDruh,
-  selectorId: string,
-  maps: SelectorMaps,
+  jmenoRaw: string,
 ): BonusKombinaceParametr | null {
-  if (selectorId === "wildcard") {
-    if (druh === "card") {
+  const jmeno = jmenoRaw.trim();
+  if (!jmeno) return null;
+  if (druh === "card") {
+    if (/^wild\s*card$/i.test(jmeno) || jmeno === "*") {
       return { typ: "typ_karty", typKarty: HUTBUILDER_WILDCARD_TYP_KARTY };
     }
-    return null;
-  }
-
-  const jmeno = maps[druh].get(selectorId);
-  if (!jmeno) return null;
-
-  if (druh === "card") {
     const meta = najdiMetaTypuKarty(jmeno);
     const hodnota =
       meta?.hodnotaFiltru ?? jmeno.replace(/\s+/g, " ").trim().toUpperCase();
@@ -98,6 +92,23 @@ function selectorNaParametr(
   return { typ: "narodnost", narodnostKod: kod };
 }
 
+function selectorNaParametr(
+  druh: SelectorDruh,
+  selectorId: string,
+  maps: SelectorMaps,
+): BonusKombinaceParametr | null {
+  if (selectorId === "wildcard") {
+    if (druh === "card") {
+      return { typ: "typ_karty", typKarty: HUTBUILDER_WILDCARD_TYP_KARTY };
+    }
+    return null;
+  }
+
+  const jmeno = maps[druh].get(selectorId);
+  if (!jmeno) return null;
+  return jmenoNaParametr(druh, jmeno);
+}
+
 function extractTableSection(html: string, tableId: string, nextTableId: string): string {
   const start = html.indexOf(`id="${tableId}"`);
   if (start < 0) return "";
@@ -105,7 +116,8 @@ function extractTableSection(html: string, tableId: string, nextTableId: string)
   return html.slice(start, end > start ? end : undefined);
 }
 
-function parseRadkyVTabulce(
+/** Legacy markup (NHL26 archiv): chemistry_table_content + data-selector_id + boost_amount. */
+function parseRadkyVTabulceLegacy(
   section: string,
   maps: SelectorMaps,
   typKombinace: TypKombinaceBonusu,
@@ -158,16 +170,85 @@ function parseRadkyVTabulce(
   return out;
 }
 
+/**
+ * Nový markup (NHL27 root od ~října 2026):
+ * chemistry-table-row + data-selector-id + title/alt + chemistry-boost--overall|salary|ability_points
+ */
+function parseRadkyVTabulceNove(
+  section: string,
+  typKombinace: TypKombinaceBonusu,
+  minSlotu: number,
+): RadekBonusKombinaceUi[] {
+  const out: RadekBonusKombinaceUi[] = [];
+  const chunks = section.split(/class="chemistry-table-row"/);
+  const prazdny3 = novyParametrPrazdny("narodnost");
+  const need = typKombinace === "utocna" ? 3 : 2;
+
+  for (const chunk of chunks.slice(1)) {
+    const blocks = [
+      ...chunk.matchAll(
+        /class="chemistry-combo-logo combo_selector (team|nationality|card)"([\s\S]*?)<\/div>/gi,
+      ),
+    ];
+    const params: BonusKombinaceParametr[] = [];
+    let ok = true;
+    for (const b of blocks.slice(0, need)) {
+      const druh = b[1]!.toLowerCase() as SelectorDruh;
+      const attrs = b[2] ?? "";
+      const jmeno =
+        attrs.match(/\btitle="([^"]+)"/i)?.[1]?.trim() ||
+        attrs.match(/\balt="([^"]+)"/i)?.[1]?.trim() ||
+        "";
+      const p = jmenoNaParametr(druh, jmeno);
+      if (!p) {
+        ok = false;
+        break;
+      }
+      params.push(p);
+    }
+    if (!ok || params.length < minSlotu) continue;
+    if (typKombinace === "utocna" && params.length < 3) continue;
+
+    const boostRaw =
+      chunk.match(
+        /chemistry-boost--(?:overall|salary|ability_points)[^>]*>\s*([^<]+)/i,
+      )?.[1] ?? chunk.match(/class="boost_amount">([^<]+)</)?.[1];
+    if (!boostRaw) continue;
+    const boost = boostZRetezce(boostRaw);
+    if (!boost) continue;
+
+    out.push({
+      id: noveIdRadku(),
+      param1: params[0]!,
+      param2: params[1]!,
+      param3: typKombinace === "utocna" ? params[2]! : prazdny3,
+      bonusHodnota: boost.bonusHodnota,
+      bonusTyp: boost.bonusTyp,
+    });
+  }
+
+  return out;
+}
+
+function pocetRadkuVSekci(section: string): number {
+  const nove = (section.match(/class="chemistry-table-row"/g) ?? []).length;
+  if (nove > 0) return nove;
+  return Math.max(
+    0,
+    section.split('class="table-row chemistry_table_content"').length - 1,
+  );
+}
+
 export type ChemistryCombosParseVysledek = {
   utocna: RadekBonusKombinaceUi[];
   obranna: RadekBonusKombinaceUi[];
-  /** Počet slotů, které se nepodařilo namapovat (neznámý selector_id). */
+  /** Počet slotů, které se nepodařilo namapovat (neznámý selector_id / title). */
   preskocenoRadku: number;
 };
 
 /**
  * Parsuje oficiální tabulku Chemistry Combos z HTML stránky Hut Builderu.
- * Zdroj pravdy: https://nhlhutbuilder.com/chemistry-combos.php
+ * Podporuje legacy (NHL26) i nový markup (NHL27).
  */
 export function radkyZChemistryCombosHtml(html: string): ChemistryCombosParseVysledek {
   const maps = parseSelectorMaps(html);
@@ -176,13 +257,25 @@ export function radkyZChemistryCombosHtml(html: string): ChemistryCombosParseVys
     "forwards_chemistry_table",
     "defense_chemistry_table",
   );
-  const defense = extractTableSection(html, "defense_chemistry_table", "footer");
+  const defense = extractTableSection(
+    html,
+    "defense_chemistry_table",
+    "chemistry_no_results",
+  );
+  const defenseFallback =
+    defense || extractTableSection(html, "defense_chemistry_table", "footer");
 
-  const utocna = parseRadkyVTabulce(forwards, maps, "utocna", 3);
-  const obranna = parseRadkyVTabulce(defense, maps, "obranna", 2);
+  const jeNovyMarkup = html.includes("chemistry-table-row");
 
-  const fwdChunks = forwards.split('class="table-row chemistry_table_content"').length - 1;
-  const defChunks = defense.split('class="table-row chemistry_table_content"').length - 1;
+  const utocna = jeNovyMarkup
+    ? parseRadkyVTabulceNove(forwards, "utocna", 3)
+    : parseRadkyVTabulceLegacy(forwards, maps, "utocna", 3);
+  const obranna = jeNovyMarkup
+    ? parseRadkyVTabulceNove(defenseFallback, "obranna", 2)
+    : parseRadkyVTabulceLegacy(defenseFallback, maps, "obranna", 2);
+
+  const fwdChunks = pocetRadkuVSekci(forwards);
+  const defChunks = pocetRadkuVSekci(defenseFallback);
 
   return {
     utocna,

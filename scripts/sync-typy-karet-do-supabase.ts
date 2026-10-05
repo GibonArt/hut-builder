@@ -2,7 +2,7 @@
  * Krok 1 — synchronizace typů karet z Hut Builderu do Supabase.
  * Stejná logika jako POST /api/admin/sync-typy-karet (bez prohlížeče).
  *
- * Combo Finder (loga) + Chemistry Combos (kompletní seznam typů).
+ * Combo Finder + Chemistry Combos + AJAX select-list (NHL27).
  *
  * Vyžaduje v .env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * NHL27: NEXT_PUBLIC_SUPABASE_NHL27_URL, SUPABASE_NHL27_SERVICE_ROLE_KEY
@@ -14,6 +14,7 @@ import { upsertDynamickeTypyKaret } from "@/lib/hutdbTypKaretDynamicDb";
 import {
   dynamicRadkyZHutbuilderTypuKaret,
   noveTypyOprotiStatickemuKatalogu,
+  stahniHutbuilderSelectListCardTypes,
 } from "@/lib/hutdbTypKaretSync";
 import { hutbuilderConfigProSezonu } from "@/lib/hutbuilderSezonaConfig";
 import { labelSezony, parseSezonaZArgv } from "@/lib/sezona";
@@ -44,25 +45,35 @@ async function main() {
   const sezona = parseSezonaZArgv(process.argv.slice(2));
   const cfg = hutbuilderConfigProSezonu(sezona);
   process.stderr.write(
-    `Sezóna ${labelSezony(sezona)} — stahuji Combo Finder + Chemistry Combos…\n`,
+    `Sezóna ${labelSezony(sezona)} — stahuji Combo Finder + Chemistry Combos + select-list…\n`,
   );
 
-  const [comboHtml, chemHtml] = await Promise.all([
-    stahni(cfg.comboFinderUrl, cfg.comboFinderReferer),
+  const [comboHtml, chemHtml, selectList] = await Promise.all([
+    stahni(cfg.comboFinderUrl, cfg.comboFinderReferer).catch((e) => {
+      process.stderr.write(`Varování: Combo Finder (${String(e)})\n`);
+      return null as string | null;
+    }),
     stahni(cfg.chemistryCombosUrl, cfg.chemistryCombosReferer).catch((e) => {
       process.stderr.write(
-        `Varování: Chemistry Combos nedostupné (${String(e)}); použiji jen Combo Finder.\n`,
+        `Varování: Chemistry Combos nedostupné (${String(e)}).\n`,
       );
       return null as string | null;
     }),
+    stahniHutbuilderSelectListCardTypes(cfg.selectListUrl, cfg.chemistryCombosReferer).catch(
+      (e) => {
+        process.stderr.write(`Varování: select-list (${String(e)})\n`);
+        return null;
+      },
+    ),
   ]);
 
   const rows = dynamicRadkyZHutbuilderTypuKaret({
     comboFinderHtml: comboHtml,
     chemistryHtml: chemHtml,
+    selectListItems: selectList,
   });
   if (rows.length === 0) {
-    console.error("V HTML se nepodařilo najít žádný typ karet.");
+    console.error("Nepodařilo se načíst žádný typ karet (HTML ani select-list).");
     process.exit(1);
   }
 
@@ -108,6 +119,9 @@ async function main() {
   const nove = noveTypyOprotiStatickemuKatalogu(rows);
   process.stderr.write(
     `\nHotovo (${sezona}): ${rows.length} typů, nových v DB: ${novychVDb}, aktualizováno: ${rows.length - novychVDb}\n`,
+  );
+  process.stderr.write(
+    `Zdroje: combo=${Boolean(comboHtml)} chem=${Boolean(chemHtml)} select-list=${selectList?.length ?? 0}\n`,
   );
   process.stderr.write(
     `Typy: ${rows.map((r) => r.jmeno_cs).join(", ")}\n`,

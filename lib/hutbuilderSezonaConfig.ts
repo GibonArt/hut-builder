@@ -11,6 +11,8 @@ export type HutbuilderSezonaConfig = {
   chemistryCombosReferer: string;
   comboFinderUrl: string;
   comboFinderReferer: string;
+  /** AJAX select-list (typy karet) — na rootu Hut Builderu. */
+  selectListUrl: string;
   getLinesUrl: string;
   cardLogosBase: string;
   xfactorIconsBase: string;
@@ -36,6 +38,7 @@ function cfg(
     chemistryCombosReferer: chemistryCombosUrl,
     comboFinderUrl: `${base}/combo-finder.php`.replace(/([^:]\/)\/+/g, "$1"),
     comboFinderReferer: `${base}/combo-finder.php`.replace(/([^:]\/)\/+/g, "$1"),
+    selectListUrl: `${HUTBUILDER_ORIGIN}/ajax/select-list.php`,
     getLinesUrl: `${HUTBUILDER_ORIGIN}/php/get_lines.php`,
     cardLogosBase: `${HUTBUILDER_ORIGIN}/images/card_logos`,
     xfactorIconsBase: `${HUTBUILDER_ORIGIN}/images/xfactor_icons/`,
