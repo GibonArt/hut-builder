@@ -27,6 +27,7 @@ import {
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
 import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { kodNarodnostiPodleLabelu, vlajkaZeme, vsechnyNarodnostiCS } from "@/lib/narodnosti";
+import { filtrujKartyPodleOvr, parseOvrVolitelne } from "@/lib/optimalizatorFormaci";
 import { formatovatPlatVMil } from "@/lib/platMiliony";
 import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 import { urlLogaTymu } from "@/lib/tymLoga";
@@ -44,6 +45,9 @@ const pillClass = (aktivni: boolean) =>
       ? "border-[var(--hut-focus)]/60 bg-[var(--hut-focus)]/15 text-white"
       : "border-[var(--hut-border)] text-[var(--hut-muted)] hover:border-zinc-500 hover:text-zinc-200",
   ].join(" ");
+
+const ovrInputClass =
+  "box-border min-h-9 w-[4.25rem] max-w-full rounded-lg border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)] px-2 py-1.5 text-base tabular-nums text-white outline-none transition-[border-color,box-shadow] focus:border-[var(--hut-focus)]/70 focus:ring-2 focus:ring-[var(--hut-focus-ring)] sm:min-h-8 sm:text-sm";
 
 type DruhFiltr = "vse" | DruhDoporuceneFormace;
 type ChybiFiltr = "vse" | "1" | "2";
@@ -252,6 +256,8 @@ export function DoporuceneFormace() {
   const [loadingData, setLoadingData] = useState(false);
   const [chybaDat, setChybaDat] = useState<string | null>(null);
 
+  const [minOvrStr, setMinOvrStr] = useState("");
+  const [maxOvrStr, setMaxOvrStr] = useState("");
   const [maxChybi, setMaxChybi] = useState<1 | 2>(2);
   const [druhFiltr, setDruhFiltr] = useState<DruhFiltr>("vse");
   const [chybiFiltr, setChybiFiltr] = useState<ChybiFiltr>("vse");
@@ -332,6 +338,19 @@ export function DoporuceneFormace() {
   }, [supabase, authLoading, user, session]);
 
   const aktivniKarty = useMemo(() => karty.filter((k) => !k.prodano), [karty]);
+  const minOvr = useMemo(() => parseOvrVolitelne(minOvrStr), [minOvrStr]);
+  const maxOvr = useMemo(() => parseOvrVolitelne(maxOvrStr), [maxOvrStr]);
+  const chybaOvrRozsah =
+    minOvr !== null && maxOvr !== null && minOvr > maxOvr
+      ? "Minimální OVR nesmí být vyšší než maximální."
+      : null;
+  const neplatnyOvr =
+    (minOvrStr.trim() !== "" && minOvr === null) ||
+    (maxOvrStr.trim() !== "" && maxOvr === null);
+  const kartyVeFiltru = useMemo(
+    () => filtrujKartyPodleOvr(aktivniKarty, minOvr, maxOvr),
+    [aktivniKarty, minOvr, maxOvr],
+  );
 
   const zobrazene = useMemo(() => {
     return vysledky.filter((v) => {
@@ -350,7 +369,7 @@ export function DoporuceneFormace() {
   );
 
   async function spustitHledani() {
-    if (!user || hledam) return;
+    if (!user || hledam || neplatnyOvr || chybaOvrRozsah) return;
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -360,7 +379,7 @@ export function DoporuceneFormace() {
     try {
       const nalezene = await hledejDoporuceneFormace(
         {
-          vlastnene: aktivniKarty,
+          vlastnene: kartyVeFiltru,
           utocne: utocneRadky,
           obranne: obranneRadky,
           narodnosti,
@@ -423,8 +442,11 @@ export function DoporuceneFormace() {
             <section className="mt-6 rounded-xl border border-[var(--hut-border)] bg-[var(--hut-bg-elevated)]/40 p-4">
               <h3 className="text-sm font-semibold text-white">Hledání</h3>
               <p className="mt-1 text-xs leading-relaxed text-[var(--hut-muted)]">
-                Aktivních karet: {loadingData ? "…" : aktivniKarty.length}. Kombinací z DB: útok{" "}
-                {utocneRadky.length}, obrana {obranneRadky.length}
+                Aktivních karet: {loadingData ? "…" : aktivniKarty.length}
+                {!loadingData && (minOvr !== null || maxOvr !== null)
+                  ? ` (ve filtru OVR ${kartyVeFiltru.length})`
+                  : ""}
+                . Kombinací z DB: útok {utocneRadky.length}, obrana {obranneRadky.length}
                 {utocneRadky.length === 0 && obranneRadky.length === 0
                   ? " — správce je načte v Nastavení bonusů z Hut Builderu."
                   : "."}{" "}
@@ -445,6 +467,43 @@ export function DoporuceneFormace() {
               <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
                 <div>
                   <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+                    OVR tvých karet
+                  </span>
+                  <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Filtr OVR">
+                    <div>
+                      <label htmlFor="dop-min-ovr" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                        Min.
+                      </label>
+                      <input
+                        id="dop-min-ovr"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="—"
+                        value={minOvrStr}
+                        onChange={(e) => setMinOvrStr(e.target.value)}
+                        className={ovrInputClass}
+                        aria-invalid={minOvrStr.trim() !== "" && minOvr === null}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="dop-max-ovr" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                        Max.
+                      </label>
+                      <input
+                        id="dop-max-ovr"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="—"
+                        value={maxOvrStr}
+                        onChange={(e) => setMaxOvrStr(e.target.value)}
+                        className={ovrInputClass}
+                        aria-invalid={maxOvrStr.trim() !== "" && maxOvr === null}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
                     Chybějící karty
                   </span>
                   <div className="flex flex-wrap gap-2" role="group" aria-label="Kolik karet sehnat">
@@ -463,6 +522,8 @@ export function DoporuceneFormace() {
                     hledam ||
                     loadingData ||
                     authLoading ||
+                    neplatnyOvr ||
+                    Boolean(chybaOvrRozsah) ||
                     (utocneRadky.length === 0 && obranneRadky.length === 0)
                   }
                   onClick={() => void spustitHledani()}
@@ -470,6 +531,16 @@ export function DoporuceneFormace() {
                   {hledam ? "Hledám…" : "Hledat doporučení"}
                 </button>
               </div>
+              {neplatnyOvr ? (
+                <p className="mt-2 text-xs text-amber-200">OVR zadej jako celé číslo 0–99, nebo pole nech prázdná.</p>
+              ) : null}
+              {chybaOvrRozsah ? (
+                <p className="mt-2 text-xs text-amber-200">{chybaOvrRozsah}</p>
+              ) : null}
+              <p className="mt-2 text-[11px] leading-relaxed text-[var(--hut-muted)]/90">
+                OVR filtruje jen tvoje karty ve formaci (prázdné = bez limitu). Na doporučený profil k sehnání se
+                nevztahuje.
+              </p>
               {hledam && progress ? (
                 <p className="mt-3 text-sm text-[var(--hut-muted)]" role="status">
                   {progress}
