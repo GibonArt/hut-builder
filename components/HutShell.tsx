@@ -38,6 +38,12 @@ const NAV_OPTIMALIZATOR = {
   hint: "Sestavení lajn",
 };
 
+const NAV_DOPORUCENE = {
+  path: "/doporucene-formace" as const,
+  label: "Doporučené formace",
+  hint: "Karty, které se vyplatí sehnat",
+};
+
 const NAV_UCET = {
   href: "/nastaveni-uctu" as const,
   label: "Nastavení účtu",
@@ -115,6 +121,7 @@ export function HutShell({
   /** Domovská stránka sezóny `/nhl26` nebo `/nhl27` (inventář + optimalizátor). */
   const naDomovske = pathname === cesta() || pathname === `/${sezona}`;
   const naMojeKarty = pathname === cesta("/moje-karty");
+  const naDoporucene = pathname === cesta(NAV_DOPORUCENE.path);
   const naNastaveniBonusu = pathname === cesta("/nastaveni-bonusu");
   const naNastaveniUctu = pathname === "/nastaveni-uctu";
   const naAdminUzivatele = pathname === "/admin/uzivatele";
@@ -138,6 +145,9 @@ export function HutShell({
     }
     if (naDomovske && homeActiveSection === "optimalizator") {
       return "Optimalizátor: hledání sestav z tvých karet a uložených bonusů.";
+    }
+    if (naDoporucene) {
+      return "Doporučené formace: skoro hotové lajny podle kombinací z Nastavení bonusů.";
     }
     return null;
   })();
@@ -360,6 +370,27 @@ export function HutShell({
               {NAV_OPTIMALIZATOR.hint}
             </span>
           </button>
+
+          <Link
+            href={cesta(NAV_DOPORUCENE.path)}
+            onClick={zavritMobilniMenu}
+            className={[
+              "group rounded-xl px-3 py-3 text-left transition-colors",
+              naDoporucene
+                ? "bg-[var(--hut-surface-raised)] text-white shadow-[0_0_28px_var(--hut-focus-glow)] ring-1 ring-[var(--hut-focus)]/55"
+                : "text-[var(--hut-muted)] hover:bg-[var(--hut-surface-raised)]/60 hover:text-zinc-200",
+            ].join(" ")}
+          >
+            <span className="block text-sm font-medium">{NAV_DOPORUCENE.label}</span>
+            <span
+              className={[
+                "mt-0.5 block text-xs transition-colors",
+                naDoporucene ? "text-[var(--hut-muted)]" : "text-[var(--hut-muted)]/70",
+              ].join(" ")}
+            >
+              {NAV_DOPORUCENE.hint}
+            </span>
+          </Link>
         </nav>
 
         <div className="mt-auto border-t border-[var(--hut-border)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">

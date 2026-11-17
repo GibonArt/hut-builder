@@ -27,6 +27,11 @@ const nextConfig: NextConfig = {
     return [
       { source: "/moje-karty", destination: "/nhl26/moje-karty", permanent: false },
       {
+        source: "/doporucene-formace",
+        destination: "/nhl26/doporucene-formace",
+        permanent: false,
+      },
+      {
         source: "/nastaveni-bonusu",
         destination: "/nhl26/nastaveni-bonusu",
         permanent: false,

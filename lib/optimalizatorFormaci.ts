@@ -29,7 +29,7 @@ const PERMUTACE2: readonly (readonly [number, number])[] = [
 
 type NarodnostKodMap = ReadonlyMap<string, string>;
 
-function vytvorNarodnostKodMap(narodnostiVolby: readonly NarodnostVolba[]): NarodnostKodMap {
+export function vytvorNarodnostKodMap(narodnostiVolby: readonly NarodnostVolba[]): NarodnostKodMap {
   const m = new Map<string, string>();
   for (const v of narodnostiVolby) {
     m.set(v.label.trim(), v.code.trim());
@@ -105,7 +105,7 @@ function typKartySplnujeBonus(
   return Boolean(a) && a === b;
 }
 
-function kartaSplnujeParametrRychle(
+export function kartaSplnujeParametrRychle(
   k: HutCard,
   p: BonusKombinaceParametr,
   narodnostKodMap: NarodnostKodMap,
