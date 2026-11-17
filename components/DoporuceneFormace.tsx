@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { FloatingZpetNahoru } from "@/components/FloatingZpetNahoru";
 import { HutShell } from "@/components/HutShell";
+import { InventarKartaHledac } from "@/components/InventarKartaHledac";
 import { useSezona } from "@/components/SezonaProvider";
 import { TypKartyMiniLogo } from "@/components/TypKartyIkona";
 import { TymLogo } from "@/components/TymLogo";
@@ -17,6 +18,7 @@ import {
 } from "@/lib/bonusKombinaceDb";
 import { nactiKartyUzivatele } from "@/lib/cardsDb";
 import {
+  filtrujDoporuceniPodleHrace,
   hledejDoporuceneFormace,
   slotyDoporuceni,
   type DruhDoporuceneFormace,
@@ -299,6 +301,8 @@ export function DoporuceneFormace() {
 
   const [minOvrStr, setMinOvrStr] = useState("");
   const [maxOvrStr, setMaxOvrStr] = useState("");
+  const [hracKartaId, setHracKartaId] = useState("");
+  const [hracKartaIdAplikovany, setHracKartaIdAplikovany] = useState("");
   const [maxChybi, setMaxChybi] = useState<1 | 2>(2);
   const [druhFiltr, setDruhFiltr] = useState<DruhFiltr>("vse");
   const [chybiFiltr, setChybiFiltr] = useState<ChybiFiltr>("vse");
@@ -397,6 +401,21 @@ export function DoporuceneFormace() {
   }, [supabase, authLoading, user, session]);
 
   const aktivniKarty = useMemo(() => karty.filter((k) => !k.prodano), [karty]);
+  const kartyProVyberHrace = useMemo(
+    () =>
+      [...aktivniKarty].sort(
+        (a, b) =>
+          a.jmeno.localeCompare(b.jmeno, "cs") || b.ovr - a.ovr || a.id.localeCompare(b.id),
+      ),
+    [aktivniKarty],
+  );
+  useEffect(() => {
+    if (!hracKartaId) return;
+    if (!kartyProVyberHrace.some((k) => k.id === hracKartaId)) {
+      setHracKartaId("");
+    }
+  }, [kartyProVyberHrace, hracKartaId]);
+
   const minOvr = useMemo(() => parseOvrVolitelne(minOvrStr), [minOvrStr]);
   const maxOvr = useMemo(() => parseOvrVolitelne(maxOvrStr), [maxOvrStr]);
   const chybaOvrRozsah =
@@ -410,6 +429,10 @@ export function DoporuceneFormace() {
     () => filtrujKartyPodleOvr(aktivniKarty, minOvr, maxOvr),
     [aktivniKarty, minOvr, maxOvr],
   );
+  const vybranaKartaAplikovana = useMemo(() => {
+    if (!hracKartaIdAplikovany) return null;
+    return aktivniKarty.find((k) => k.id === hracKartaIdAplikovany) ?? null;
+  }, [hracKartaIdAplikovany, aktivniKarty]);
 
   const prikladyProProfil = useMemo(() => {
     const cache = new Map<string, HutCard[]>();
@@ -449,6 +472,19 @@ export function DoporuceneFormace() {
 
   async function spustitHledani() {
     if (!user || hledam || neplatnyOvr || chybaOvrRozsah) return;
+    if (hracKartaId) {
+      const k = aktivniKarty.find((c) => c.id === hracKartaId);
+      if (!k) {
+        setChybaVypoctu("Vybraná karta už není v inventáři (nebo je prodaná).");
+        return;
+      }
+      if (filtrujKartyPodleOvr([k], minOvr, maxOvr).length === 0) {
+        setChybaVypoctu(
+          "Vybraná karta neprochází filtrem OVR — uprav OVR nebo zruš výběr hráče.",
+        );
+        return;
+      }
+    }
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -474,7 +510,8 @@ export function DoporuceneFormace() {
         },
       );
       if (ac.signal.aborted) return;
-      setVysledky(nalezene);
+      setVysledky(filtrujDoporuceniPodleHrace(nalezene, hracKartaId));
+      setHracKartaIdAplikovany(hracKartaId.trim());
       setHledaniProbehlo(true);
       setStranka(0);
       setVarianty({});
@@ -545,72 +582,89 @@ export function DoporuceneFormace() {
                   se tu objeví doporučení.
                 </p>
               ) : null}
-              <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
-                <div>
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
-                    OVR tvých karet
-                  </span>
-                  <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Filtr OVR">
-                    <div>
-                      <label htmlFor="dop-min-ovr" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
-                        Min.
-                      </label>
-                      <input
-                        id="dop-min-ovr"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="—"
-                        value={minOvrStr}
-                        onChange={(e) => setMinOvrStr(e.target.value)}
-                        className={ovrInputClass}
-                        aria-invalid={minOvrStr.trim() !== "" && minOvr === null}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="dop-max-ovr" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
-                        Max.
-                      </label>
-                      <input
-                        id="dop-max-ovr"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="—"
-                        value={maxOvrStr}
-                        onChange={(e) => setMaxOvrStr(e.target.value)}
-                        className={ovrInputClass}
-                        aria-invalid={maxOvrStr.trim() !== "" && maxOvr === null}
-                      />
+              <div className="mt-4 flex flex-col gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+                  <div>
+                    <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+                      OVR tvých karet
+                    </span>
+                    <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Filtr OVR">
+                      <div>
+                        <label htmlFor="dop-min-ovr" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                          Min.
+                        </label>
+                        <input
+                          id="dop-min-ovr"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="—"
+                          value={minOvrStr}
+                          onChange={(e) => setMinOvrStr(e.target.value)}
+                          className={ovrInputClass}
+                          aria-invalid={minOvrStr.trim() !== "" && minOvr === null}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="dop-max-ovr" className="mb-1 block text-[10px] text-[var(--hut-muted)]">
+                          Max.
+                        </label>
+                        <input
+                          id="dop-max-ovr"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="—"
+                          value={maxOvrStr}
+                          onChange={(e) => setMaxOvrStr(e.target.value)}
+                          className={ovrInputClass}
+                          aria-invalid={maxOvrStr.trim() !== "" && maxOvr === null}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div>
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
-                    Chybějící karty
-                  </span>
-                  <div className="flex flex-wrap gap-2" role="group" aria-label="Kolik karet sehnat">
-                    <button type="button" className={pillClass(maxChybi === 1)} onClick={() => setMaxChybi(1)}>
-                      Jen 1
-                    </button>
-                    <button type="button" className={pillClass(maxChybi === 2)} onClick={() => setMaxChybi(2)}>
-                      1 nebo 2
-                    </button>
+                  <div className="min-w-0 flex-1 sm:min-w-[16rem] sm:max-w-md">
+                    <label
+                      htmlFor="dop-hrac"
+                      className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]"
+                    >
+                      Hráč z inventáře
+                    </label>
+                    <InventarKartaHledac
+                      id="dop-hrac"
+                      karty={kartyProVyberHrace}
+                      value={hracKartaId}
+                      onChange={setHracKartaId}
+                      disabled={loadingData || kartyProVyberHrace.length === 0}
+                    />
                   </div>
+                  <div>
+                    <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--hut-muted)]">
+                      Chybějící karty
+                    </span>
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Kolik karet sehnat">
+                      <button type="button" className={pillClass(maxChybi === 1)} onClick={() => setMaxChybi(1)}>
+                        Jen 1
+                      </button>
+                      <button type="button" className={pillClass(maxChybi === 2)} onClick={() => setMaxChybi(2)}>
+                        1 nebo 2
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={btnHledatClass}
+                    disabled={
+                      hledam ||
+                      loadingData ||
+                      authLoading ||
+                      neplatnyOvr ||
+                      Boolean(chybaOvrRozsah) ||
+                      (utocneRadky.length === 0 && obranneRadky.length === 0)
+                    }
+                    onClick={() => void spustitHledani()}
+                  >
+                    {hledam ? "Hledám…" : "Hledat doporučení"}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className={btnHledatClass}
-                  disabled={
-                    hledam ||
-                    loadingData ||
-                    authLoading ||
-                    neplatnyOvr ||
-                    Boolean(chybaOvrRozsah) ||
-                    (utocneRadky.length === 0 && obranneRadky.length === 0)
-                  }
-                  onClick={() => void spustitHledani()}
-                >
-                  {hledam ? "Hledám…" : "Hledat doporučení"}
-                </button>
               </div>
               {neplatnyOvr ? (
                 <p className="mt-2 text-xs text-amber-200">OVR zadej jako celé číslo 0–99, nebo pole nech prázdná.</p>
@@ -619,8 +673,8 @@ export function DoporuceneFormace() {
                 <p className="mt-2 text-xs text-amber-200">{chybaOvrRozsah}</p>
               ) : null}
               <p className="mt-2 text-[11px] leading-relaxed text-[var(--hut-muted)]/90">
-                OVR filtruje jen tvoje karty ve formaci (prázdné = bez limitu). Na doporučený profil k sehnání se
-                nevztahuje.
+                OVR filtruje jen tvoje karty ve formaci (prázdné = bez limitu). Hráč z inventáře nechá jen formace,
+                kde už je tahle karta. Na doporučený profil k sehnání se OVR nevztahuje.
               </p>
               {hledam && progress ? (
                 <p className="mt-3 text-sm text-[var(--hut-muted)]" role="status">
@@ -641,6 +695,11 @@ export function DoporuceneFormace() {
                 <h3 className="text-lg font-medium text-white">
                   {zobrazene.length}{" "}
                   {sklonuj(zobrazene.length, "formace", "formace", "formací")}
+                  {hracKartaIdAplikovany && vybranaKartaAplikovana
+                    ? ` · s hráčem ${vybranaKartaAplikovana.jmeno}`
+                    : hracKartaIdAplikovany
+                      ? " · s vybraným hráčem"
+                      : ""}
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {(

@@ -559,6 +559,16 @@ function porovnejVystup(a: SkupinaDoporuceni, b: SkupinaDoporuceni): number {
   return ovrB - ovrA;
 }
 
+/** Nechá jen formace, kde je vybraná karta z inventáře už mezi vlastněnými. */
+export function filtrujDoporuceniPodleHrace(
+  skupiny: readonly SkupinaDoporuceni[],
+  kartaId: string | null | undefined,
+): SkupinaDoporuceni[] {
+  const id = kartaId?.trim() ?? "";
+  if (!id) return [...skupiny];
+  return skupiny.filter((s) => s.vlastnene.some((k) => k.id === id));
+}
+
 /**
  * Skoro hotové formace podle kombinací z Nastavení bonusů (import Hut Builder).
  * Chybějící 1–2 karty jsou popsané symboly chemie (národnost / tým / typ karty),
