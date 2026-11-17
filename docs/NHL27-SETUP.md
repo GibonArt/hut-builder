@@ -33,6 +33,7 @@ Spusť v SQL Editoru NHL27 (nebo `psql`) — **bez** datové migrace z NHL26:
 | 5 | `supabase/bonus_kombinace_nastaveni.sql` | Uživatelská nastavení bonusů |
 | 6 | `supabase/hut_typy_karet_dynamic.sql` | Dynamické typy karet |
 | 7 | `supabase/hut_typy_karet_dynamic_extend.sql` | `popis_cs`, aliases |
+| 7b | `supabase/hutbuilder_katalog_karet.sql` | Katalog karet z Hut Builderu (mimo inventář) |
 | 8 | `supabase/fix_sync_hut_typy_karet_service_role.sql` | Sync typů přes service role |
 | 9 | `supabase/ea_hraci_napoveda.sql` | Nápověda jmen (prázdná — naplnit až budou EA ratings NHL27) |
 | 10 | Self-hosted: `supabase/fix_selfhosted_hut_grants.sql`, `data_api_grants_doplneni.sql` | Grants |

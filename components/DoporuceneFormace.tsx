@@ -25,9 +25,17 @@ import {
   type SlotDoporuceni,
 } from "@/lib/doporuceneFormace";
 import { HUT_FORM_PAGE_BG } from "@/lib/hutFormBackground";
+import {
+  filtrujKatalogPodleProfilu,
+  nactiHutbuilderKatalogKaret,
+} from "@/lib/hutbuilderKatalogKaret";
 import type { NajdiMetaTypuKartyOpts } from "@/lib/hutdbTypKaret";
 import { kodNarodnostiPodleLabelu, vlajkaZeme, vsechnyNarodnostiCS } from "@/lib/narodnosti";
-import { filtrujKartyPodleOvr, parseOvrVolitelne } from "@/lib/optimalizatorFormaci";
+import {
+  filtrujKartyPodleOvr,
+  kartaSplnujeParametr,
+  parseOvrVolitelne,
+} from "@/lib/optimalizatorFormaci";
 import { formatovatPlatVMil } from "@/lib/platMiliony";
 import { ceskaZpravaAuthNeboDb } from "@/lib/supabaseChybyCs";
 import { urlLogaTymu } from "@/lib/tymLoga";
@@ -193,9 +201,11 @@ function BunkaVlastnena({
 function BunkaSehnat({
   slot,
   narodnosti,
+  priklady,
 }: {
   slot: Extract<SlotDoporuceni, { druh: "sehnat" }>;
   narodnosti: ReturnType<typeof vsechnyNarodnostiCS>;
+  priklady: readonly HutCard[];
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-amber-400/50 bg-amber-950/35 px-2.5 py-2">
@@ -208,7 +218,7 @@ function BunkaSehnat({
         </span>
       </div>
       <p className="text-[11px] leading-snug text-amber-50/90">
-        Karta, která zároveň sedí na:
+        Karta, která zároveň sedí na (+ = AND):
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
         {slot.profil.pozadavky.map((p, i) => (
@@ -223,6 +233,27 @@ function BunkaSehnat({
         ))}
       </div>
       <p className="text-[11px] text-amber-100/80">{popisProfilu(slot.profil, narodnosti)}</p>
+      {priklady.length > 0 ? (
+        <div className="mt-1 border-t border-amber-400/20 pt-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">
+            Ve hře (katalog Hut Builder)
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {priklady.map((k) => (
+              <li key={k.id} className="truncate text-[11px] text-amber-50/95">
+                {k.jmeno}{" "}
+                <span className="tabular-nums text-amber-100/70">
+                  {k.ovr} · {k.typKarty} · {formatovatPlatVMil(k.plat)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-[10px] text-amber-200/70">
+          V katalogu Hut Builder zatím žádná shoda (nebo katalog ještě není stažený).
+        </p>
+      )}
     </div>
   );
 }
@@ -230,14 +261,22 @@ function BunkaSehnat({
 function BunkaSlotu({
   slot,
   narodnosti,
+  prikladyProProfil,
 }: {
   slot: SlotDoporuceni;
   narodnosti: ReturnType<typeof vsechnyNarodnostiCS>;
+  prikladyProProfil: (profil: ProfilKartyKSehnani) => HutCard[];
 }) {
   if (slot.druh === "vlastnena") {
     return <BunkaVlastnena k={slot.karta} role={slot.role} narodnosti={narodnosti} />;
   }
-  return <BunkaSehnat slot={slot} narodnosti={narodnosti} />;
+  return (
+    <BunkaSehnat
+      slot={slot}
+      narodnosti={narodnosti}
+      priklady={prikladyProProfil(slot.profil)}
+    />
+  );
 }
 
 export function DoporuceneFormace() {
@@ -251,6 +290,8 @@ export function DoporuceneFormace() {
   );
 
   const [karty, setKarty] = useState<HutCard[]>([]);
+  const [katalogHb, setKatalogHb] = useState<HutCard[]>([]);
+  const [katalogHbPocet, setKatalogHbPocet] = useState(0);
   const [utocneRadky, setUtocneRadky] = useState<RadekBonusKombinaceUi[]>([]);
   const [obranneRadky, setObranneRadky] = useState<RadekBonusKombinaceUi[]>([]);
   const [loadingData, setLoadingData] = useState(false);
@@ -279,6 +320,8 @@ export function DoporuceneFormace() {
     if (!user?.id) {
       startTransition(() => {
         setKarty([]);
+        setKatalogHb([]);
+        setKatalogHbPocet(0);
         setLoadingData(false);
         setChybaDat(null);
       });
@@ -289,18 +332,34 @@ export function DoporuceneFormace() {
       setLoadingData(true);
       setChybaDat(null);
     });
-    void nactiKartyUzivatele(supabase, user.id).then(({ data, error }) => {
+    void (async () => {
+      const [moje, kat] = await Promise.all([
+        nactiKartyUzivatele(supabase, user.id),
+        nactiHutbuilderKatalogKaret(supabase),
+      ]);
       if (zruseno) return;
       startTransition(() => {
         setLoadingData(false);
-        if (error) {
-          setChybaDat(ceskaZpravaAuthNeboDb(error.message));
+        if (moje.error) {
+          setChybaDat(ceskaZpravaAuthNeboDb(moje.error.message));
           setKarty([]);
-          return;
+        } else {
+          setKarty(moje.data);
         }
-        setKarty(data);
+        // Katalog je oddělená tabulka — chyba jen upozornění, inventář běží dál
+        if (kat.error) {
+          setKatalogHb([]);
+          setKatalogHbPocet(0);
+          setChybaDat((prev) =>
+            prev ??
+            `Katalog Hut Builder: ${ceskaZpravaAuthNeboDb(kat.error!.message)} (tabulka hutbuilder_katalog_karet?)`,
+          );
+        } else {
+          setKatalogHb(kat.data);
+          setKatalogHbPocet(kat.pocet);
+        }
       });
-    });
+    })();
     return () => {
       zruseno = true;
     };
@@ -351,6 +410,26 @@ export function DoporuceneFormace() {
     () => filtrujKartyPodleOvr(aktivniKarty, minOvr, maxOvr),
     [aktivniKarty, minOvr, maxOvr],
   );
+
+  const prikladyProProfil = useMemo(() => {
+    const cache = new Map<string, HutCard[]>();
+    return (profil: ProfilKartyKSehnani): HutCard[] => {
+      const hit = cache.get(profil.klic);
+      if (hit) return hit;
+      if (!katalogHb.length) {
+        cache.set(profil.klic, []);
+        return [];
+      }
+      const found = filtrujKatalogPodleProfilu(
+        katalogHb,
+        profil.pozadavky,
+        (k, p) => kartaSplnujeParametr(k, p, narodnosti, typKartyMetaOpts),
+        4,
+      );
+      cache.set(profil.klic, found);
+      return found;
+    };
+  }, [katalogHb, narodnosti, typKartyMetaOpts]);
 
   const zobrazene = useMemo(() => {
     return vysledky.filter((v) => {
@@ -423,7 +502,8 @@ export function DoporuceneFormace() {
             Z tvých aktivních karet a{" "}
             <span className="font-medium text-zinc-300">kombinací z Nastavení bonusů</span> (import z
             Hut Builderu) hledá skoro hotové formace s aspoň dvěma bonusy najednou. U každé ukáže, jakou
-            kartu sehnat — podle symbolů chemie (národnost, tým, typ karty), ne podle katalogu komunity.
+            kartu sehnat podle chemie. Když je stažený katalog Hut Builderu, ukáže i konkrétní karty ve hře
+            (oddělená tabulka — ne inventář).
           </p>
 
           {!user && !authLoading ? (
@@ -450,7 +530,8 @@ export function DoporuceneFormace() {
                 {utocneRadky.length === 0 && obranneRadky.length === 0
                   ? " — správce je načte v Nastavení bonusů z Hut Builderu."
                   : "."}{" "}
-                Typy karet: {typyKaret.length}.
+                Typy karet: {typyKaret.length}. Katalog Hut Builder (mimo inventář):{" "}
+                {loadingData ? "…" : katalogHbPocet}.
               </p>
               {utocneRadky.length === 0 && obranneRadky.length === 0 && !loadingData ? (
                 <p className="mt-2 text-xs text-amber-200">
@@ -712,6 +793,7 @@ export function DoporuceneFormace() {
                               key={`${slot.role}-${i}-${slot.druh === "vlastnena" ? slot.karta.id : slot.profil.klic}`}
                               slot={slot}
                               narodnosti={narodnosti}
+                              prikladyProProfil={prikladyProProfil}
                             />
                           ))}
                         </div>

@@ -14,6 +14,11 @@ export type HutbuilderSezonaConfig = {
   /** AJAX select-list (typy karet) — na rootu Hut Builderu. */
   selectListUrl: string;
   getLinesUrl: string;
+  /** POST — stránkovaný seznam karet (HTML). */
+  findCardsUrl: string;
+  /** GET — detail karty (HTML popup). */
+  playerCardPopupUrl: string;
+  cardsPageUrl: string;
   cardLogosBase: string;
   xfactorIconsBase: string;
   builderUrl: string;
@@ -40,6 +45,9 @@ function cfg(
     comboFinderReferer: `${base}/combo-finder.php`.replace(/([^:]\/)\/+/g, "$1"),
     selectListUrl: `${HUTBUILDER_ORIGIN}/ajax/select-list.php`,
     getLinesUrl: `${HUTBUILDER_ORIGIN}/php/get_lines.php`,
+    findCardsUrl: `${HUTBUILDER_ORIGIN}/includes/find_cards.php`,
+    playerCardPopupUrl: `${HUTBUILDER_ORIGIN}/ajax/player-card-popup.php`,
+    cardsPageUrl: `${base}/cards.php`.replace(/([^:]\/)\/+/g, "$1"),
     cardLogosBase: `${HUTBUILDER_ORIGIN}/images/card_logos`,
     xfactorIconsBase: `${HUTBUILDER_ORIGIN}/images/xfactor_icons/`,
     builderUrl: `${base}/builder.php`.replace(/([^:]\/)\/+/g, "$1"),

@@ -96,6 +96,7 @@ SQL_FILES=(
   migrate_bonus_typ_sal_ap_to_plat_bs.sql
   hut_typy_karet_dynamic.sql
   hut_typy_karet_dynamic_extend.sql
+  hutbuilder_katalog_karet.sql
   cards_duplikat_obsah_rpc.sql
   cards_najdi_obnova.sql
   cards_katalog_kopie_rpc.sql

@@ -493,6 +493,10 @@ export function NastaveniBonusu() {
   const [importHbChyba, setImportHbChyba] = useState<string | null>(null);
   const [importHbLog, setImportHbLog] = useState<string | null>(null);
   const importHbAbortRef = useRef<AbortController | null>(null);
+  const [syncKartyBezi, setSyncKartyBezi] = useState(false);
+  const [syncKartyChyba, setSyncKartyChyba] = useState<string | null>(null);
+  const [syncKartyLog, setSyncKartyLog] = useState<string | null>(null);
+  const syncKartyAbortRef = useRef<AbortController | null>(null);
 
   const pristup = jeBonusAdmin(user?.email);
 
@@ -671,6 +675,97 @@ export function NastaveniBonusu() {
   const zrusImportHutbuilder = useCallback(() => {
     importHbAbortRef.current?.abort();
   }, []);
+
+  const zrusSyncHutbuilderKarty = useCallback(() => {
+    syncKartyAbortRef.current?.abort();
+  }, []);
+
+  const synchronizujKartyZHutbuilder = useCallback(async () => {
+    if (!user?.id) return;
+    const ok = window.confirm(
+      "Stáhnout katalog karet z NHL HUT Builder (Cards)?\n\n" +
+        "• Uloží se do tabulky hutbuilder_katalog_karet (NE do inventáře)\n" +
+        "• V Můj inventář / Moje karty se tyto karty NEZOBRAZÍ\n" +
+        "• Slouží pro Doporučené formace (reálné karty ve hře)\n" +
+        "• Trvá déle (tisíce karet, stránkovaně)\n\n" +
+        "Nejdřív v Supabase spusť hutbuilder_katalog_karet.sql (nebo migrate-selfhosted).",
+    );
+    if (!ok) return;
+
+    syncKartyAbortRef.current?.abort();
+    syncKartyAbortRef.current = new AbortController();
+    const sig = syncKartyAbortRef.current.signal;
+
+    setSyncKartyBezi(true);
+    setSyncKartyChyba(null);
+    setSyncKartyLog("Spouštím sync katalogu…");
+
+    let page = 1;
+    let totalUpserted = 0;
+    let totalPages = 1;
+
+    try {
+      while (true) {
+        if (sig.aborted) throw new DOMException("Aborted", "AbortError");
+        setSyncKartyLog(
+          `Stránka ${page}${totalPages > 1 ? ` / ${totalPages}` : ""} — stahuji detaily karet… (uloženo ${totalUpserted})`,
+        );
+        const res = await fetch(
+          `/api/admin/sync-hutbuilder-karty?sezona=${encodeURIComponent(sezona)}&page=${page}&limit=40`,
+          { method: "POST", signal: sig, cache: "no-store" },
+        );
+        const rawText = await res.text();
+        let data: {
+          page?: number;
+          totalPages?: number;
+          naStrance?: number;
+          upserted?: number;
+          chyby?: string[];
+          hotovo?: boolean;
+          error?: string;
+        };
+        try {
+          data = JSON.parse(rawText) as typeof data;
+        } catch {
+          throw new Error(rawText.slice(0, 280));
+        }
+        if (!res.ok) {
+          throw new Error(data.error ?? `HTTP ${res.status}`);
+        }
+
+        totalPages = Math.max(1, data.totalPages ?? totalPages);
+        totalUpserted += data.upserted ?? 0;
+        if (data.chyby?.length) {
+          setSyncKartyLog(
+            `Stránka ${page}/${totalPages}: +${data.upserted ?? 0} (celkem ${totalUpserted}). Varování: ${data.chyby[0]}`,
+          );
+        }
+
+        if (data.hotovo || (data.naStrance ?? 0) === 0 || page >= totalPages) {
+          break;
+        }
+        page += 1;
+      }
+
+      const check = await fetch(
+        `/api/admin/sync-hutbuilder-karty?sezona=${encodeURIComponent(sezona)}`,
+        { signal: sig, cache: "no-store" },
+      );
+      const checkJson = (await check.json()) as { pocet?: number };
+      setSyncKartyLog(
+        `Hotovo — v hutbuilder_katalog_karet je ${checkJson.pocet ?? totalUpserted} karet (mimo inventář).`,
+      );
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setSyncKartyChyba("Sync katalogu zrušen.");
+      } else {
+        setSyncKartyChyba(String(e instanceof Error ? e.message : e));
+      }
+    } finally {
+      setSyncKartyBezi(false);
+      syncKartyAbortRef.current = null;
+    }
+  }, [user?.id, sezona]);
 
   const importujKombinaceZHutbuilder = useCallback(async () => {
     if (!user?.id) return;
@@ -1041,10 +1136,10 @@ export function NastaveniBonusu() {
       <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Nastavení bonusů</h2>
       <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--hut-muted)] sm:text-[15px]">
         Úprava <span className="font-medium text-zinc-300">sdílených kombinací</span> v databázi (útok =
-        trojice symbolů, obrana = dvojice; bonus PLAT / CLK / BS). První blok synchronizuje{" "}
-        <span className="font-medium text-zinc-300">typy karet</span> z NHL HUT Builderu do Supabase; druhý
-        načte jejich <span className="font-medium text-zinc-300">chemii (jen typ karty)</span> a připojí řádky
-        k už uloženým. Statický katalog v kódu (
+        trojice symbolů, obrana = dvojice; bonus PLAT / CLK / BS). Bloky níže stahují z NHL HUT Builderu typy
+        karet, chemii a volitelně <span className="font-medium text-zinc-300">katalog karet ve hře</span>{" "}
+        (ten jde do oddělené tabulky — <span className="font-medium text-amber-100/90">ne do inventáře</span>
+        ). Statický katalog typů v kódu (
         <code className="rounded bg-black/30 px-1 font-mono text-[11px] text-zinc-300">
           lib/hutdbTypKaret.ts
         </code>
@@ -1095,7 +1190,7 @@ export function NastaveniBonusu() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  disabled={syncTypyBezi || importHbBezi || ukladam}
+                  disabled={syncTypyBezi || importHbBezi || syncKartyBezi || ukladam}
                   onClick={() => void synchronizujTypyKaretZHutbuilder()}
                   className="rounded-full border border-zinc-600 bg-[var(--hut-btn)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-zinc-500 hover:bg-[var(--hut-btn-hover)] disabled:opacity-45"
                 >
@@ -1145,7 +1240,7 @@ export function NastaveniBonusu() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  disabled={importHbBezi || syncTypyBezi || ukladam}
+                  disabled={importHbBezi || syncTypyBezi || syncKartyBezi || ukladam}
                   onClick={() => void importujKombinaceZHutbuilder()}
                   className="rounded-full border border-zinc-600 bg-[var(--hut-btn)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-zinc-500 hover:bg-[var(--hut-btn-hover)] disabled:opacity-45"
                 >
@@ -1167,6 +1262,68 @@ export function NastaveniBonusu() {
               {importHbChyba ? (
                 <p className="mt-2 text-xs text-amber-200" role="alert">
                   {importHbChyba}
+                </p>
+              ) : null}
+            </section>
+
+            <section
+              id="bonus-nastroje-katalog-karet"
+              className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 sm:p-5 lg:col-span-2"
+              aria-labelledby="bonus-hlavicka-katalog-karet"
+            >
+              <h3
+                id="bonus-hlavicka-katalog-karet"
+                className="text-[11px] font-semibold uppercase tracking-wider text-amber-200"
+              >
+                3 — Katalog karet z Hut Builderu (mimo inventář)
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-[var(--hut-muted)] sm:text-sm">
+                Stáhne karty ze stránky{" "}
+                <a
+                  href={hutbuilder.cardsPageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[var(--hut-lime)] underline-offset-2 hover:underline"
+                >
+                  Cards
+                </a>{" "}
+                ({sezonaLabel}) do tabulky{" "}
+                <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
+                  hutbuilder_katalog_karet
+                </code>
+                .{" "}
+                <span className="font-medium text-amber-100/95">
+                  Nejde o inventář — řádky nemají user_id a v Můj inventář / Moje karty se neobjeví.
+                </span>{" "}
+                Použití: Doporučené formace ověří, že na chemický profil ve hře existuje reálná karta.
+                Před prvním syncem spusť SQL{" "}
+                <code className="font-mono text-[11px] text-zinc-300">hutbuilder_katalog_karet.sql</code>.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={syncKartyBezi || syncTypyBezi || importHbBezi || ukladam}
+                  onClick={() => void synchronizujKartyZHutbuilder()}
+                  className="rounded-full border border-amber-500/45 bg-amber-500/15 px-5 py-2.5 text-sm font-semibold text-amber-50 shadow-sm transition-colors hover:bg-amber-500/25 disabled:opacity-45"
+                >
+                  {syncKartyBezi ? "Stahuji katalog…" : "Stáhnout katalog karet"}
+                </button>
+                {syncKartyBezi ? (
+                  <button
+                    type="button"
+                    onClick={zrusSyncHutbuilderKarty}
+                    className={`${btnUpravitClass} border-red-500/40 text-red-100`}
+                  >
+                    Zrušit sync
+                  </button>
+                ) : null}
+              </div>
+              {syncKartyLog ? (
+                <p className="mt-3 font-mono text-[11px] text-[var(--hut-muted)]">{syncKartyLog}</p>
+              ) : null}
+              {syncKartyChyba ? (
+                <p className="mt-2 text-xs text-amber-200" role="alert">
+                  {syncKartyChyba}
                 </p>
               ) : null}
             </section>
