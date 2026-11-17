@@ -747,11 +747,20 @@ export function NastaveniBonusu() {
         page += 1;
       }
 
+      if (totalUpserted === 0) {
+        throw new Error(
+          "Sync doběhl, ale neuložil žádnou kartu. Zkontroluj, že existuje tabulka hutbuilder_katalog_karet (SQL soubor) a že Hut Builder odpovídá.",
+        );
+      }
+
       const check = await fetch(
         `/api/admin/sync-hutbuilder-karty?sezona=${encodeURIComponent(sezona)}`,
         { signal: sig, cache: "no-store" },
       );
-      const checkJson = (await check.json()) as { pocet?: number };
+      const checkJson = (await check.json()) as { pocet?: number; error?: string };
+      if (!check.ok) {
+        throw new Error(checkJson.error ?? `Kontrola katalogu HTTP ${check.status}`);
+      }
       setSyncKartyLog(
         `Hotovo — v hutbuilder_katalog_karet je ${checkJson.pocet ?? totalUpserted} karet (mimo inventář).`,
       );

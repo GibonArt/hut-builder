@@ -48,6 +48,21 @@ export async function POST(req: Request) {
   }
 
   try {
+    const probe = await adminDb.from("hutbuilder_katalog_karet").select("hb_id").limit(1);
+    if (probe.error) {
+      const msg = probe.error.message.toLowerCase();
+      if (msg.includes("schema cache") || msg.includes("does not exist") || msg.includes("could not find")) {
+        return NextResponse.json(
+          {
+            error:
+              "V databázi chybí tabulka hutbuilder_katalog_karet. Spusť v Supabase SQL Editoru soubor supabase/hutbuilder_katalog_karet.sql (stejný projekt jako tato sezóna) a zkus sync znovu.",
+          },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({ error: probe.error.message }, { status: 500 });
+    }
+
     // Meta select-listů je levná; bere se pokaždé (stateless page sync).
     const meta: HutbuilderSelectMeta = await nactiHutbuilderSelectMeta(sezona);
     const vysledek = await synchronizujHutbuilderKatalogStranku(adminDb, {
@@ -57,6 +72,21 @@ export async function POST(req: Request) {
       concurrency: 6,
       meta,
     });
+
+    const dbChyba = vysledek.chyby.find((c) => c.startsWith("DB upsert:"));
+    if (dbChyba) {
+      const low = dbChyba.toLowerCase();
+      if (low.includes("schema cache") || low.includes("does not exist") || low.includes("could not find")) {
+        return NextResponse.json(
+          {
+            error:
+              "V databázi chybí tabulka hutbuilder_katalog_karet. Spusť supabase/hutbuilder_katalog_karet.sql a zkus sync znovu.",
+          },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({ error: dbChyba.replace(/^DB upsert:\s*/, "") }, { status: 500 });
+    }
 
     const cfg = hutbuilderConfigProSezonu(sezona);
     return NextResponse.json({
@@ -104,6 +134,17 @@ export async function GET(req: Request) {
     .select("hb_id", { count: "exact", head: true });
 
   if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("schema cache") || msg.includes("does not exist") || msg.includes("could not find")) {
+      return NextResponse.json(
+        {
+          error:
+            "V databázi chybí tabulka hutbuilder_katalog_karet. Spusť supabase/hutbuilder_katalog_karet.sql v SQL Editoru.",
+          pocet: 0,
+        },
+        { status: 500 },
+      );
+    }
     return NextResponse.json({ error: error.message, pocet: 0 }, { status: 500 });
   }
 
